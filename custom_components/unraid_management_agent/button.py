@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -18,9 +21,10 @@ from .const import (
     ERROR_CONTROL_FAILED,
     ICON_ARRAY,
     ICON_PARITY,
+    ICON_USER_SCRIPT,
     KEY_SYSTEM,
+    KEY_USER_SCRIPTS,
     MANUFACTURER,
-    MODEL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -40,6 +44,12 @@ async def async_setup_entry(
         UnraidParityCheckStartButton(coordinator, entry),
         UnraidParityCheckStopButton(coordinator, entry),
     ]
+
+    # Add user script buttons dynamically
+    user_scripts = coordinator.data.get(KEY_USER_SCRIPTS, [])
+    _LOGGER.debug("Creating button entities for %d user scripts", len(user_scripts))
+    for script in user_scripts:
+        entities.append(UnraidUserScriptButton(coordinator, entry, script))
 
     async_add_entities(entities)
 
@@ -62,13 +72,16 @@ class UnraidButtonBase(CoordinatorEntity, ButtonEntity):
         """Return device information."""
         system_data = self.coordinator.data.get(KEY_SYSTEM, {})
         hostname = system_data.get("hostname", "Unraid")
+        version = system_data.get("version", "Unknown")
+        host = self._entry.data.get(CONF_HOST, "")
 
         return {
             "identifiers": {(DOMAIN, self._entry.entry_id)},
-            "name": f"Unraid ({hostname})",
+            "name": hostname,
             "manufacturer": MANUFACTURER,
-            "model": MODEL,
-            "sw_version": system_data.get("version", "Unknown"),
+            "model": f"Unraid {version}",
+            "sw_version": version,
+            "configuration_url": f"http://{host}",
         }
 
 
@@ -175,4 +188,56 @@ class UnraidParityCheckStopButton(UnraidButtonBase):
             _LOGGER.error("Failed to stop parity check: %s", err)
             raise HomeAssistantError(
                 f"{ERROR_CONTROL_FAILED}: Failed to stop parity check"
+            ) from err
+
+
+# User Script Buttons
+
+
+class UnraidUserScriptButton(UnraidButtonBase):
+    """User script execution button."""
+
+    _attr_icon = ICON_USER_SCRIPT
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        entry: ConfigEntry,
+        script: dict[str, Any],
+    ) -> None:
+        """Initialize the user script button."""
+        super().__init__(coordinator, entry)
+        self._script_name = script.get("name", "")
+        self._script_description = script.get("description", "")
+
+        # Set entity name
+        self._attr_name = f"User Script {self._script_name}"
+
+    @property
+    def unique_id(self) -> str:
+        """Return unique ID."""
+        # Sanitize script name for unique ID
+        safe_name = re.sub(r"[^a-z0-9_]", "_", self._script_name.lower())
+        return f"{self._entry.entry_id}_user_script_{safe_name}"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        return {
+            "script_name": self._script_name,
+            "description": self._script_description or "No description",
+        }
+
+    async def async_press(self) -> None:
+        """Handle the button press."""
+        try:
+            await self.coordinator.client.execute_user_script(self._script_name)
+            _LOGGER.info("User script '%s' execution started", self._script_name)
+        except Exception as err:
+            _LOGGER.error(
+                "Failed to execute user script '%s': %s", self._script_name, err
+            )
+            raise HomeAssistantError(
+                f"{ERROR_CONTROL_FAILED}: Failed to execute user script '{self._script_name}'"
             ) from err

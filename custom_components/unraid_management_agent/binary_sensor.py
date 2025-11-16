@@ -11,6 +11,7 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
 )
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -29,7 +30,6 @@ from .const import (
     KEY_SYSTEM,
     KEY_UPS,
     MANUFACTURER,
-    MODEL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -112,13 +112,16 @@ class UnraidBinarySensorBase(CoordinatorEntity, BinarySensorEntity):
         """Return device information."""
         system_data = self.coordinator.data.get(KEY_SYSTEM, {})
         hostname = system_data.get("hostname", "Unraid")
+        version = system_data.get("version", "Unknown")
+        host = self._entry.data.get(CONF_HOST, "")
 
         return {
             "identifiers": {(DOMAIN, self._entry.entry_id)},
-            "name": f"Unraid ({hostname})",
+            "name": hostname,
             "manufacturer": MANUFACTURER,
-            "model": MODEL,
-            "sw_version": system_data.get("version", "Unknown"),
+            "model": f"Unraid {version}",
+            "sw_version": version,
+            "configuration_url": f"http://{host}",
         }
 
 

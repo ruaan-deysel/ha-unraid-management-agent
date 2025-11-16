@@ -27,6 +27,8 @@ from .const import (
     EVENT_DISK_LIST_UPDATE,
     EVENT_GPU_UPDATE,
     EVENT_NETWORK_LIST_UPDATE,
+    EVENT_NOTIFICATION_UPDATE,
+    EVENT_SHARE_LIST_UPDATE,
     EVENT_SYSTEM_UPDATE,
     EVENT_UPS_STATUS_UPDATE,
     EVENT_VM_LIST_UPDATE,
@@ -35,8 +37,11 @@ from .const import (
     KEY_DISKS,
     KEY_GPU,
     KEY_NETWORK,
+    KEY_NOTIFICATIONS,
+    KEY_SHARES,
     KEY_SYSTEM,
     KEY_UPS,
+    KEY_USER_SCRIPTS,
     KEY_VMS,
 )
 from .websocket_client import UnraidWebSocketClient
@@ -367,6 +372,9 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator):
                 self.client.get_ups_status(),
                 self.client.get_gpu_metrics(),
                 self.client.get_network_interfaces(),
+                self.client.get_shares(),
+                self.client.get_notifications(),
+                self.client.get_user_scripts(),
                 return_exceptions=True,
             )
 
@@ -383,6 +391,13 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator):
                 KEY_GPU: results[6] if not isinstance(results[6], Exception) else [],
                 KEY_NETWORK: (
                     results[7] if not isinstance(results[7], Exception) else []
+                ),
+                KEY_SHARES: results[8] if not isinstance(results[8], Exception) else [],
+                KEY_NOTIFICATIONS: (
+                    results[9] if not isinstance(results[9], Exception) else []
+                ),
+                KEY_USER_SCRIPTS: (
+                    results[10] if not isinstance(results[10], Exception) else []
                 ),
             }
 
@@ -422,6 +437,10 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator):
             self.data[KEY_CONTAINERS] = data if isinstance(data, list) else [data]
         elif event_type == EVENT_VM_LIST_UPDATE:
             self.data[KEY_VMS] = data if isinstance(data, list) else [data]
+        elif event_type == EVENT_SHARE_LIST_UPDATE:
+            self.data[KEY_SHARES] = data if isinstance(data, list) else [data]
+        elif event_type == EVENT_NOTIFICATION_UPDATE:
+            self.data[KEY_NOTIFICATIONS] = data if isinstance(data, list) else [data]
 
         # Notify listeners of data update
         self.async_set_updated_data(self.data)

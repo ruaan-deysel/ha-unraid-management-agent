@@ -20,6 +20,7 @@ from .const import (
     API_GPU,
     API_HEALTH,
     API_NETWORK,
+    API_NOTIFICATIONS,
     API_PARITY_CHECK_PAUSE,
     API_PARITY_CHECK_RESUME,
     API_PARITY_CHECK_START,
@@ -27,6 +28,8 @@ from .const import (
     API_SHARES,
     API_SYSTEM,
     API_UPS,
+    API_USER_SCRIPT_EXECUTE,
+    API_USER_SCRIPTS,
     API_VM,
     API_VM_FORCE_STOP,
     API_VM_HIBERNATE,
@@ -167,6 +170,11 @@ class UnraidAPIClient:
         """Get list of shares."""
         return await self._get(API_SHARES)
 
+    # Notifications
+    async def get_notifications(self) -> list[dict[str, Any]]:
+        """Get list of notifications."""
+        return await self._get(API_NOTIFICATIONS)
+
     # Docker containers
     async def get_containers(self) -> list[dict[str, Any]]:
         """Get list of Docker containers."""
@@ -251,6 +259,16 @@ class UnraidAPIClient:
     async def get_network_interfaces(self) -> list[dict[str, Any]]:
         """Get network interfaces."""
         return await self._get(API_NETWORK)
+
+    # User scripts
+    async def get_user_scripts(self) -> list[dict[str, Any]]:
+        """Get list of user scripts."""
+        return await self._get(API_USER_SCRIPTS)
+
+    async def execute_user_script(self, script_name: str) -> None:
+        """Execute a user script."""
+        endpoint = API_USER_SCRIPT_EXECUTE.format(name=script_name)
+        await self._post(endpoint)
 
 
 class UnraidAPIError(Exception):

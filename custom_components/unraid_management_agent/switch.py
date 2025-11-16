@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -16,6 +18,7 @@ from . import UnraidDataUpdateCoordinator
 from .const import (
     ATTR_CONTAINER_IMAGE,
     ATTR_CONTAINER_PORTS,
+    ATTR_VM_MEMORY,
     ATTR_VM_VCPUS,
     DOMAIN,
     ERROR_CONTROL_FAILED,
@@ -25,7 +28,6 @@ from .const import (
     KEY_SYSTEM,
     KEY_VMS,
     MANUFACTURER,
-    MODEL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -78,13 +80,16 @@ class UnraidSwitchBase(CoordinatorEntity, SwitchEntity):
         """Return device information."""
         system_data = self.coordinator.data.get(KEY_SYSTEM, {})
         hostname = system_data.get("hostname", "Unraid")
+        version = system_data.get("version", "Unknown")
+        host = self._entry.data.get(CONF_HOST, "")
 
         return {
             "identifiers": {(DOMAIN, self._entry.entry_id)},
-            "name": f"Unraid ({hostname})",
+            "name": hostname,
             "manufacturer": MANUFACTURER,
-            "model": MODEL,
-            "sw_version": system_data.get("version", "Unknown"),
+            "model": f"Unraid {version}",
+            "sw_version": version,
+            "configuration_url": f"http://{host}",
         }
 
 
@@ -158,7 +163,28 @@ class UnraidContainerSwitch(UnraidSwitchBase):
             # Request immediate update
             await self.coordinator.async_request_refresh()
 
-            # Clear optimistic state after refresh completes
+            # Wait for state to actually change or timeout after 10 seconds
+            # This prevents the switch from bouncing back to "off" before the container starts
+            for _ in range(20):  # 20 attempts * 0.5s = 10 seconds max
+                await asyncio.sleep(0.5)
+                # Check if actual state matches optimistic state
+                for container in self.coordinator.data.get(KEY_CONTAINERS, []):
+                    cid = container.get("id") or container.get("container_id")
+                    if cid == self._container_id:
+                        state = container.get("state", "").lower()
+                        if state == "running":
+                            # State confirmed, clear optimistic state
+                            self._optimistic_state = None
+                            self.async_write_ha_state()
+                            return
+                # Trigger another refresh to get latest state
+                await self.coordinator.async_request_refresh()
+
+            # Timeout reached, clear optimistic state anyway
+            _LOGGER.warning(
+                "Container %s start command sent but state not confirmed after 10s",
+                self._container_name,
+            )
             self._optimistic_state = None
             self.async_write_ha_state()
         except Exception as err:
@@ -184,7 +210,28 @@ class UnraidContainerSwitch(UnraidSwitchBase):
             # Request immediate update
             await self.coordinator.async_request_refresh()
 
-            # Clear optimistic state after refresh completes
+            # Wait for state to actually change or timeout after 10 seconds
+            # This prevents the switch from bouncing back to "on" before the container stops
+            for _ in range(20):  # 20 attempts * 0.5s = 10 seconds max
+                await asyncio.sleep(0.5)
+                # Check if actual state matches optimistic state
+                for container in self.coordinator.data.get(KEY_CONTAINERS, []):
+                    cid = container.get("id") or container.get("container_id")
+                    if cid == self._container_id:
+                        state = container.get("state", "").lower()
+                        if state != "running":
+                            # State confirmed, clear optimistic state
+                            self._optimistic_state = None
+                            self.async_write_ha_state()
+                            return
+                # Trigger another refresh to get latest state
+                await self.coordinator.async_request_refresh()
+
+            # Timeout reached, clear optimistic state anyway
+            _LOGGER.warning(
+                "Container %s stop command sent but state not confirmed after 10s",
+                self._container_name,
+            )
             self._optimistic_state = None
             self.async_write_ha_state()
         except Exception as err:
@@ -248,11 +295,51 @@ class UnraidVMSwitch(UnraidSwitchBase):
             vid = vm.get("id") or vm.get("name")
             if vid == self._vm_id:
                 state = vm.get("state", "").lower()
+
+                # Format CPU percentages
+                guest_cpu = vm.get("guest_cpu_percent")
+                host_cpu = vm.get("host_cpu_percent")
+                guest_cpu_str = f"{guest_cpu:.1f}%" if guest_cpu is not None else "0.0%"
+                host_cpu_str = f"{host_cpu:.1f}%" if host_cpu is not None else "0.0%"
+
+                # Format memory display
+                memory_display = vm.get("memory_display", "Unknown")
+
+                # Format disk I/O
+                disk_read = vm.get("disk_read_bytes", 0)
+                disk_write = vm.get("disk_write_bytes", 0)
+                disk_io_str = f"Rd: {self._format_bytes(disk_read)}/s Wr: {self._format_bytes(disk_write)}/s"
+
                 return {
                     "status": "running" if state == "running" else "stopped",
-                    ATTR_VM_VCPUS: vm.get("vcpus"),
+                    ATTR_VM_VCPUS: vm.get(
+                        "cpu_count"
+                    ),  # Fixed: use cpu_count instead of vcpus
+                    "guest_cpu": guest_cpu_str,
+                    "host_cpu": host_cpu_str,
+                    ATTR_VM_MEMORY: memory_display,
+                    "disk_io": disk_io_str,
                 }
         return {}
+
+    @staticmethod
+    def _format_bytes(bytes_value: int) -> str:
+        """Format bytes into human-readable string."""
+        if bytes_value == 0:
+            return "0B"
+
+        units = ["B", "KiB", "MiB", "GiB", "TiB"]
+        unit_index = 0
+        value = float(bytes_value)
+
+        while value >= 1024 and unit_index < len(units) - 1:
+            value /= 1024
+            unit_index += 1
+
+        # Format with appropriate precision
+        if value < 10:
+            return f"{value:.1f}{units[unit_index]}"
+        return f"{value:.0f}{units[unit_index]}"
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the VM."""
@@ -267,7 +354,31 @@ class UnraidVMSwitch(UnraidSwitchBase):
             # Request immediate update
             await self.coordinator.async_request_refresh()
 
-            # Clear optimistic state after refresh completes
+            # Wait for state to actually change or timeout after 30 seconds
+            # VMs take longer to start than containers, so we use a longer timeout
+            for _ in range(60):  # 60 attempts * 0.5s = 30 seconds max
+                await asyncio.sleep(0.5)
+                # Check if actual state matches optimistic state
+                for vm in self.coordinator.data.get(KEY_VMS, []):
+                    vid = vm.get("id") or vm.get("name")
+                    if vid == self._vm_id:
+                        state = vm.get("state", "").lower()
+                        if state == "running":
+                            # State confirmed, clear optimistic state
+                            self._optimistic_state = None
+                            self.async_write_ha_state()
+                            _LOGGER.info(
+                                "VM %s state confirmed as running", self._vm_name
+                            )
+                            return
+                # Trigger another refresh to get latest state
+                await self.coordinator.async_request_refresh()
+
+            # Timeout reached, clear optimistic state anyway
+            _LOGGER.warning(
+                "VM %s start command sent but state not confirmed after 30s",
+                self._vm_name,
+            )
             self._optimistic_state = None
             self.async_write_ha_state()
         except Exception as err:
@@ -293,7 +404,31 @@ class UnraidVMSwitch(UnraidSwitchBase):
             # Request immediate update
             await self.coordinator.async_request_refresh()
 
-            # Clear optimistic state after refresh completes
+            # Wait for state to actually change or timeout after 30 seconds
+            # VMs take longer to stop than containers, so we use a longer timeout
+            for _ in range(60):  # 60 attempts * 0.5s = 30 seconds max
+                await asyncio.sleep(0.5)
+                # Check if actual state matches optimistic state
+                for vm in self.coordinator.data.get(KEY_VMS, []):
+                    vid = vm.get("id") or vm.get("name")
+                    if vid == self._vm_id:
+                        state = vm.get("state", "").lower()
+                        if state != "running":
+                            # State confirmed, clear optimistic state
+                            self._optimistic_state = None
+                            self.async_write_ha_state()
+                            _LOGGER.info(
+                                "VM %s state confirmed as stopped", self._vm_name
+                            )
+                            return
+                # Trigger another refresh to get latest state
+                await self.coordinator.async_request_refresh()
+
+            # Timeout reached, clear optimistic state anyway
+            _LOGGER.warning(
+                "VM %s stop command sent but state not confirmed after 30s",
+                self._vm_name,
+            )
             self._optimistic_state = None
             self.async_write_ha_state()
         except Exception as err:

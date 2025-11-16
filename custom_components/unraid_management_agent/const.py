@@ -42,6 +42,8 @@ API_VM: Final = f"{API_BASE}/vm"
 API_UPS: Final = f"{API_BASE}/ups"
 API_GPU: Final = f"{API_BASE}/gpu"
 API_NETWORK: Final = f"{API_BASE}/network"
+API_NOTIFICATIONS: Final = f"{API_BASE}/notifications"
+API_USER_SCRIPTS: Final = f"{API_BASE}/user-scripts"
 API_WEBSOCKET: Final = f"{API_BASE}/ws"
 
 # Control endpoints
@@ -66,6 +68,8 @@ API_PARITY_CHECK_STOP: Final = f"{API_ARRAY}/parity-check/stop"
 API_PARITY_CHECK_PAUSE: Final = f"{API_ARRAY}/parity-check/pause"
 API_PARITY_CHECK_RESUME: Final = f"{API_ARRAY}/parity-check/resume"
 
+API_USER_SCRIPT_EXECUTE: Final = f"{API_USER_SCRIPTS}/{{name}}/execute"
+
 # Event types
 EVENT_SYSTEM_UPDATE: Final = "system_update"
 EVENT_ARRAY_STATUS_UPDATE: Final = "array_status_update"
@@ -76,6 +80,7 @@ EVENT_VM_LIST_UPDATE: Final = "vm_list_update"
 EVENT_UPS_STATUS_UPDATE: Final = "ups_status_update"
 EVENT_GPU_UPDATE: Final = "gpu_update"
 EVENT_NETWORK_LIST_UPDATE: Final = "network_list_update"
+EVENT_NOTIFICATION_UPDATE: Final = "notification_update"
 
 # Entity keys
 KEY_SYSTEM: Final = "system"
@@ -87,6 +92,8 @@ KEY_VMS: Final = "vms"
 KEY_UPS: Final = "ups"
 KEY_GPU: Final = "gpu"
 KEY_NETWORK: Final = "network"
+KEY_NOTIFICATIONS: Final = "notifications"
+KEY_USER_SCRIPTS: Final = "user_scripts"
 
 # Sensor types
 SENSOR_CPU_USAGE: Final = "cpu_usage"
@@ -172,6 +179,9 @@ ICON_POWER: Final = "mdi:power"
 ICON_START: Final = "mdi:play"
 ICON_STOP: Final = "mdi:stop"
 ICON_RESTART: Final = "mdi:restart"
+ICON_SHARE: Final = "mdi:folder-network"
+ICON_NOTIFICATION: Final = "mdi:bell-alert"
+ICON_USER_SCRIPT: Final = "mdi:script-text"
 
 # Error messages
 ERROR_CANNOT_CONNECT: Final = "cannot_connect"

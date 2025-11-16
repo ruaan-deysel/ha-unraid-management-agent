@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2025.11.2] - 2025-11-16
+
+### Fixed
+
+- Fixed VM switch attributes showing "Unknown" values for vCPUs
+- Fixed missing import for `ATTR_VM_MEMORY` constant causing integration errors
+- Fixed vCPUs attribute to use correct API field name (`cpu_count` instead of `vcpus`)
+
+### Added
+
+- Added comprehensive VM switch attributes:
+  - Guest CPU percentage
+  - Host CPU percentage
+  - Memory display (formatted string)
+  - Disk I/O (read/write rates with human-readable formatting)
+- Added `_format_bytes()` helper method for human-readable byte formatting
+
 ### Changed
 
 - **Major README.md improvements based on comprehensive audit**:

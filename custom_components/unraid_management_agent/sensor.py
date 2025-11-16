@@ -13,6 +13,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
+    CONF_HOST,
     PERCENTAGE,
     UnitOfDataRate,
     UnitOfPower,
@@ -49,8 +50,10 @@ from .const import (
     ICON_GPU,
     ICON_MEMORY,
     ICON_NETWORK,
+    ICON_NOTIFICATION,
     ICON_PARITY,
     ICON_POWER,
+    ICON_SHARE,
     ICON_TEMPERATURE,
     ICON_UPS,
     ICON_UPTIME,
@@ -58,10 +61,11 @@ from .const import (
     KEY_DISKS,
     KEY_GPU,
     KEY_NETWORK,
+    KEY_NOTIFICATIONS,
+    KEY_SHARES,
     KEY_SYSTEM,
     KEY_UPS,
     MANUFACTURER,
-    MODEL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -204,6 +208,15 @@ async def async_setup_entry(
                 ]
             )
 
+    # Share sensors (dynamic, one per share)
+    for share in coordinator.data.get(KEY_SHARES, []):
+        share_name = share.get("name", "unknown")
+        entities.append(UnraidShareUsageSensor(coordinator, entry, share_name))
+
+    # Notification sensor (if notifications available)
+    if coordinator.data.get(KEY_NOTIFICATIONS) is not None:
+        entities.append(UnraidNotificationsSensor(coordinator, entry))
+
     _LOGGER.debug("Adding %d Unraid sensor entities", len(entities))
     async_add_entities(entities)
 
@@ -226,13 +239,16 @@ class UnraidSensorBase(CoordinatorEntity, SensorEntity):
         """Return device information."""
         system_data = self.coordinator.data.get(KEY_SYSTEM, {})
         hostname = system_data.get("hostname", "Unraid")
+        version = system_data.get("version", "Unknown")
+        host = self._entry.data.get(CONF_HOST, "")
 
         return {
             "identifiers": {(DOMAIN, self._entry.entry_id)},
-            "name": f"Unraid ({hostname})",
+            "name": hostname,
             "manufacturer": MANUFACTURER,
-            "model": MODEL,
-            "sw_version": system_data.get("version", "Unknown"),
+            "model": f"Unraid {version}",
+            "sw_version": version,
+            "configuration_url": f"http://{host}",
         }
 
 
@@ -826,10 +842,10 @@ class UnraidUPSPowerSensor(UnraidSensorBase):
 class UnraidNetworkRXSensor(UnraidSensorBase):
     """Network inbound traffic sensor."""
 
-    _attr_native_unit_of_measurement = UnitOfDataRate.BITS_PER_SECOND
+    _attr_native_unit_of_measurement = UnitOfDataRate.KILOBITS_PER_SECOND
     _attr_device_class = SensorDeviceClass.DATA_RATE
     _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_suggested_display_precision = 2
+    _attr_suggested_display_precision = 1
 
     def __init__(
         self,
@@ -852,7 +868,7 @@ class UnraidNetworkRXSensor(UnraidSensorBase):
 
     @property
     def native_value(self) -> float | None:
-        """Return the state in bits per second."""
+        """Return the state in kilobits per second."""
         from datetime import datetime
 
         for interface in self.coordinator.data.get(KEY_NETWORK, []):
@@ -869,16 +885,17 @@ class UnraidNetworkRXSensor(UnraidSensorBase):
                     time_diff = (now - self._last_update).total_seconds()
                     if time_diff > 0:
                         bytes_diff = bytes_received - self._last_bytes
-                        # Calculate bytes per second, then convert to bits per second
+                        # Calculate bytes per second, then convert to kilobits per second
                         bytes_per_second = bytes_diff / time_diff
                         bits_per_second = bytes_per_second * 8
+                        kilobits_per_second = bits_per_second / 1000
 
                         # Update tracking variables
                         self._last_bytes = bytes_received
                         self._last_update = now
 
                         # Return rate (can be negative if counter reset, return 0 in that case)
-                        return max(0.0, bits_per_second)
+                        return max(0.0, kilobits_per_second)
 
                 # First run or after reset - store values and return 0
                 self._last_bytes = bytes_received
@@ -921,10 +938,10 @@ class UnraidNetworkRXSensor(UnraidSensorBase):
 class UnraidNetworkTXSensor(UnraidSensorBase):
     """Network outbound traffic sensor."""
 
-    _attr_native_unit_of_measurement = UnitOfDataRate.BITS_PER_SECOND
+    _attr_native_unit_of_measurement = UnitOfDataRate.KILOBITS_PER_SECOND
     _attr_device_class = SensorDeviceClass.DATA_RATE
     _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_suggested_display_precision = 2
+    _attr_suggested_display_precision = 1
 
     def __init__(
         self,
@@ -947,7 +964,7 @@ class UnraidNetworkTXSensor(UnraidSensorBase):
 
     @property
     def native_value(self) -> float | None:
-        """Return the state in bits per second."""
+        """Return the state in kilobits per second."""
         from datetime import datetime
 
         for interface in self.coordinator.data.get(KEY_NETWORK, []):
@@ -964,16 +981,17 @@ class UnraidNetworkTXSensor(UnraidSensorBase):
                     time_diff = (now - self._last_update).total_seconds()
                     if time_diff > 0:
                         bytes_diff = bytes_sent - self._last_bytes
-                        # Calculate bytes per second, then convert to bits per second
+                        # Calculate bytes per second, then convert to kilobits per second
                         bytes_per_second = bytes_diff / time_diff
                         bits_per_second = bytes_per_second * 8
+                        kilobits_per_second = bits_per_second / 1000
 
                         # Update tracking variables
                         self._last_bytes = bytes_sent
                         self._last_update = now
 
                         # Return rate (can be negative if counter reset, return 0 in that case)
-                        return max(0.0, bits_per_second)
+                        return max(0.0, kilobits_per_second)
 
                 # First run or after reset - store values and return 0
                 self._last_bytes = bytes_sent
@@ -1321,3 +1339,104 @@ class UnraidLogFilesystemUsageSensor(UnraidSensorBase):
                     "free": free_str if free_bytes > 0 else "Unknown",
                 }
         return {}
+
+
+class UnraidShareUsageSensor(UnraidSensorBase):
+    """Sensor for share usage."""
+
+    _attr_device_class = SensorDeviceClass.POWER_FACTOR
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = ICON_SHARE
+    _attr_suggested_display_precision = 1
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        entry: ConfigEntry,
+        share_name: str,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry)
+        self._share_name = share_name
+        self._attr_name = f"Share {share_name} Usage"
+
+    @property
+    def unique_id(self) -> str:
+        """Return unique ID."""
+        # Sanitize share name for use in unique ID
+        safe_name = self._share_name.replace(" ", "_").replace("/", "_").lower()
+        return f"{self._entry.entry_id}_share_{safe_name}_usage"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state."""
+        for share in self.coordinator.data.get(KEY_SHARES, []):
+            if share.get("name") == self._share_name:
+                usage_percent = share.get("usage_percent")
+                if usage_percent is not None:
+                    return round(usage_percent, 1)
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra attributes."""
+        for share in self.coordinator.data.get(KEY_SHARES, []):
+            if share.get("name") == self._share_name:
+                size_bytes = share.get("size_bytes", 0)
+                used_bytes = share.get("used_bytes", 0)
+                free_bytes = share.get("free_bytes", 0)
+
+                return {
+                    "size": f"{size_bytes / (1024**3):.2f} GB"
+                    if size_bytes > 0
+                    else "Unknown",
+                    "used": f"{used_bytes / (1024**3):.2f} GB"
+                    if used_bytes > 0
+                    else "Unknown",
+                    "free": f"{free_bytes / (1024**3):.2f} GB"
+                    if free_bytes > 0
+                    else "Unknown",
+                }
+        return {}
+
+
+class UnraidNotificationsSensor(UnraidSensorBase):
+    """Sensor for active notifications count."""
+
+    _attr_name = "Active Notifications"
+    _attr_icon = ICON_NOTIFICATION
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_native_unit_of_measurement = "notifications"
+
+    @property
+    def unique_id(self) -> str:
+        """Return unique ID."""
+        return f"{self._entry.entry_id}_active_notifications"
+
+    @property
+    def native_value(self) -> int:
+        """Return the state."""
+        notifications = self.coordinator.data.get(KEY_NOTIFICATIONS, [])
+        return len(notifications) if isinstance(notifications, list) else 0
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra attributes."""
+        notifications = self.coordinator.data.get(KEY_NOTIFICATIONS, [])
+        if not isinstance(notifications, list):
+            return {"notifications": []}
+
+        # Return list of notifications with relevant details
+        notification_list = []
+        for notification in notifications:
+            notification_list.append(
+                {
+                    "message": notification.get("message", ""),
+                    "severity": notification.get("severity", "info"),
+                    "timestamp": notification.get("timestamp", ""),
+                    "source": notification.get("source", ""),
+                }
+            )
+
+        return {"notifications": notification_list}
