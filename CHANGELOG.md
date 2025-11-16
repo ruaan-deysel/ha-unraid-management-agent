@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2025.11.3] - 2025-11-17
+
+### Fixed
+
+- **CRITICAL**: Fixed multiple WebSocket event detection bugs causing delayed real-time updates
+  - **VM Event Detection**: Changed from checking for `vcpus` field to `cpu_count` field
+    - VM state changes were delayed by up to 30 seconds instead of updating in real-time
+    - VM events were being incorrectly classified as "unknown" and ignored
+  - **GPU Event Detection**: Fixed to handle GPU data as arrays instead of single objects
+    - GPU events were being incorrectly classified as "unknown" and ignored
+    - GPU metrics now update in real-time via WebSocket instead of relying on 30-second polling
+  - **Disk Event Detection**: Changed from checking for non-existent `mount_point` field to `status` and `filesystem` fields
+    - Disk events were being incorrectly classified as "unknown" and ignored
+    - Disk state changes now update in real-time via WebSocket
+  - **Share Event Detection**: Changed from checking for `size_bytes` field to `total_bytes` field
+    - Share events were being incorrectly classified as "unknown" and ignored
+    - Share usage now updates in real-time via WebSocket
+
+### Impact
+
+- Users on v2025.11.2 experiencing delayed state updates for VMs, GPUs, disks, and shares should upgrade immediately
+- All affected entities now receive real-time updates via WebSocket instead of waiting for the 30-second polling interval
+- This significantly improves responsiveness for automations and dashboards monitoring these entities
+
+### Technical Details
+
+- The bugs were introduced when the Unraid Management Agent API field names changed
+- The switch.py and sensor.py files were updated in v2025.11.2 to use the new field names, but the WebSocket event detection logic was not updated
+- GPU events come as arrays from the API, but the detection logic was expecting single objects
+- All four event types are now correctly identified and processed in real-time
+
 ## [2025.11.2] - 2025-11-16
 
 ### Fixed

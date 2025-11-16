@@ -48,7 +48,11 @@ def identify_event_type(data: Any) -> str:
             return "unknown"
 
         # Disk list (array of disks)
-        if "device" in first_item and "mount_point" in first_item:
+        if (
+            "device" in first_item
+            and "status" in first_item
+            and "filesystem" in first_item
+        ):
             return EVENT_DISK_LIST_UPDATE
 
         # Container list (array of containers)
@@ -60,7 +64,7 @@ def identify_event_type(data: Any) -> str:
             return EVENT_CONTAINER_LIST_UPDATE
 
         # VM list (array of VMs)
-        if "state" in first_item and "vcpus" in first_item:
+        if "state" in first_item and "cpu_count" in first_item:
             return EVENT_VM_LIST_UPDATE
 
         # Network interface list (array of interfaces)
@@ -68,8 +72,20 @@ def identify_event_type(data: Any) -> str:
             return EVENT_NETWORK_LIST_UPDATE
 
         # Share list (array of shares)
-        if "name" in first_item and "path" in first_item and "size_bytes" in first_item:
+        if (
+            "name" in first_item
+            and "path" in first_item
+            and "total_bytes" in first_item
+        ):
             return EVENT_SHARE_LIST_UPDATE
+
+        # GPU list (array of GPUs)
+        if (
+            "available" in first_item
+            and "driver_version" in first_item
+            and "utilization_gpu_percent" in first_item
+        ):
+            return EVENT_GPU_UPDATE
 
         return "unknown"
 
@@ -88,14 +104,6 @@ def identify_event_type(data: Any) -> str:
     # UPS status
     if "connected" in data and "battery_charge_percent" in data:
         return EVENT_UPS_STATUS_UPDATE
-
-    # GPU metrics
-    if (
-        "available" in data
-        and "driver_version" in data
-        and "utilization_gpu_percent" in data
-    ):
-        return EVENT_GPU_UPDATE
 
     return "unknown"
 
