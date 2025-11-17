@@ -79,7 +79,10 @@ async def async_setup_entry(
     )
 
     # UPS binary sensor (if UPS exists)
-    if coordinator.data.get(KEY_UPS):
+    # Only create if UPS data exists and is not an empty dict
+    # When no UPS hardware is present, the API returns null/error and coordinator sets KEY_UPS to {}
+    ups_data = coordinator.data.get(KEY_UPS, {})
+    if ups_data and isinstance(ups_data, dict) and len(ups_data) > 0:
         entities.append(UnraidUPSConnectedBinarySensor(coordinator, entry))
 
     # Network interface binary sensors (only physical interfaces)

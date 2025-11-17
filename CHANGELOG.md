@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2025.11.7] - 2025-11-17
+
+### Fixed
+
+- **UPS Sensor Creation Bug**: Fixed UPS sensors being incorrectly created when no UPS hardware is connected to Unraid server
+  - UPS sensors (battery, load, runtime, power, energy) are now only created when a UPS is actually present and connected
+  - UPS Connected binary sensor is now only created when UPS hardware is detected
+  - Improved detection logic to properly distinguish between "no UPS hardware" vs "UPS disconnected"
+  - When the Unraid Management Agent API returns null or error for the UPS endpoint (no UPS present), the integration now correctly skips UPS entity creation
+  - Added validation to check that UPS data is not an empty dictionary before creating entities
+  - This prevents phantom UPS entities from appearing in Home Assistant for users without UPS hardware
+
+### Changed
+
+- **UPS Detection Logic**: Enhanced UPS presence detection with more robust validation
+  - Now checks that UPS data exists, is a non-empty dictionary, and contains valid UPS information
+  - Sensor creation requires both non-empty UPS data AND `connected: true` status
+  - Binary sensor creation requires non-empty UPS data (will show connection status)
+  - Prevents entity creation when API returns empty dict `{}` due to missing UPS hardware
+
 ## [2025.11.6] - 2025-11-17
 
 ### Added

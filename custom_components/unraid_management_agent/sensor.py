@@ -188,7 +188,15 @@ async def async_setup_entry(
         )
 
     # UPS sensors (if UPS connected)
-    if coordinator.data.get(KEY_UPS, {}).get("connected"):
+    # Only create if UPS data exists, is not empty, and UPS is connected
+    # When no UPS hardware is present, the API returns null/error and coordinator sets KEY_UPS to {}
+    ups_data = coordinator.data.get(KEY_UPS, {})
+    if (
+        ups_data
+        and isinstance(ups_data, dict)
+        and len(ups_data) > 0
+        and ups_data.get("connected")
+    ):
         entities.extend(
             [
                 UnraidUPSBatterySensor(coordinator, entry),

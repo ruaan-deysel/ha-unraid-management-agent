@@ -212,7 +212,7 @@ With `_attr_has_entity_name = True`, entity names are set via `_attr_name`:
 
 **Unique ID Pattern**: `{entry_id}_ups_battery`, `{entry_id}_ups_load`, `{entry_id}_ups_runtime`, `{entry_id}_ups_power`, `{entry_id}_ups_energy`
 
-**Conditional Creation**: All UPS sensors are created only when `coordinator.data.get(KEY_UPS, {}).get("connected")` is True. This differs from the UPS Connected binary sensor, which is created whenever UPS data exists (using `coordinator.data.get(KEY_UPS)`), allowing it to show connection status even when the UPS is disconnected.
+**Conditional Creation**: All UPS sensors are created only when UPS data exists, is not empty, and `connected` is True. The check is: `ups_data and isinstance(ups_data, dict) and len(ups_data) > 0 and ups_data.get("connected")`. This ensures sensors are only created when a UPS is actually present and connected. When no UPS hardware is present, the API returns null/error and the coordinator sets `KEY_UPS` to an empty dict `{}`, which prevents sensor creation.
 
 **Energy Dashboard**: UPS Energy sensor is compatible with Home Assistant Energy Dashboard and uses trapezoidal integration to convert UPS Power (W) to cumulative energy consumption (kWh)
 
@@ -526,7 +526,7 @@ This section documents EVERY attribute for EVERY entity type based on the actual
 **Device Class**: `connectivity`
 **Entity Category**: `diagnostic`
 
-**Conditional Creation**: Only created when UPS data is available (`coordinator.data.get(KEY_UPS)` is not None). This differs from UPS sensors (battery, load, runtime, power), which are only created when the UPS is actually connected (`coordinator.data.get(KEY_UPS, {}).get("connected")` is True). The binary sensor exists whenever UPS data is available so it can show the connection status even when the UPS is disconnected.
+**Conditional Creation**: Only created when UPS data exists and is not an empty dict. The check is: `ups_data and isinstance(ups_data, dict) and len(ups_data) > 0`. This ensures the binary sensor is only created when UPS hardware is actually present. When no UPS hardware is present, the API returns null/error and the coordinator sets `KEY_UPS` to an empty dict `{}`, which prevents binary sensor creation. When UPS hardware is present but disconnected, the binary sensor will show `off` state.
 
 #### Container Binary Sensor
 
