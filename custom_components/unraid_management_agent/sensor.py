@@ -586,7 +586,6 @@ class UnraidParityProgressSensor(UnraidSensorBase):
     _attr_device_class = SensorDeviceClass.POWER_FACTOR
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = ICON_PARITY
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_suggested_display_precision = 1
 
     @property
@@ -823,18 +822,66 @@ class UnraidUPSPowerSensor(UnraidSensorBase):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return extra attributes."""
+        """Return extra attributes with user-friendly formatting."""
         ups_data = self.coordinator.data.get(KEY_UPS, {})
 
         attributes = {
             ATTR_UPS_STATUS: ups_data.get("status"),
             ATTR_UPS_MODEL: ups_data.get("model"),
+            "energy_dashboard_ready": True,
         }
 
-        # Add load percentage
+        # Add nominal power (rated power)
+        nominal_power = ups_data.get("nominal_power_watts")
+        if nominal_power is not None:
+            attributes["rated_power"] = f"{nominal_power}W"
+
+        # Add load percentage with status description
         load_percent = ups_data.get("load_percent")
         if load_percent is not None:
             attributes["load_percent"] = load_percent
+            attributes["current_load"] = f"{load_percent}%"
+
+            # Add load status description
+            if load_percent >= 90:
+                attributes["load_status"] = "Very High - Check connected devices"
+            elif load_percent >= 70:
+                attributes["load_status"] = "High"
+            elif load_percent >= 50:
+                attributes["load_status"] = "Moderate"
+            elif load_percent >= 25:
+                attributes["load_status"] = "Light"
+            else:
+                attributes["load_status"] = "Very Light"
+
+        # Add battery information with status description
+        battery_charge = ups_data.get("battery_charge_percent")
+        if battery_charge is not None:
+            attributes["battery_charge"] = f"{battery_charge}%"
+
+            # Add battery status description
+            if battery_charge >= 90:
+                attributes["battery_status"] = "Excellent"
+            elif battery_charge >= 70:
+                attributes["battery_status"] = "Good"
+            elif battery_charge >= 50:
+                attributes["battery_status"] = "Fair"
+            elif battery_charge >= 25:
+                attributes["battery_status"] = "Low"
+            else:
+                attributes["battery_status"] = "Critical"
+
+        # Add runtime information with formatting
+        runtime_seconds = ups_data.get("runtime_left_seconds")
+        if runtime_seconds is not None:
+            runtime_minutes = runtime_seconds / 60
+            if runtime_minutes >= 60:
+                hours = int(runtime_minutes // 60)
+                minutes = int(runtime_minutes % 60)
+                attributes["estimated_runtime"] = f"{hours}h {minutes}m"
+            else:
+                attributes["estimated_runtime"] = f"{int(runtime_minutes)}m"
+            attributes["runtime_seconds"] = runtime_seconds
 
         # Add input/output voltage if available
         input_voltage = ups_data.get("input_voltage")
@@ -1250,7 +1297,6 @@ class UnraidDockerVDiskUsageSensor(UnraidSensorBase):
     _attr_device_class = SensorDeviceClass.POWER_FACTOR
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = ICON_CONTAINER
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_suggested_display_precision = 1
 
     @property
@@ -1306,7 +1352,6 @@ class UnraidLogFilesystemUsageSensor(UnraidSensorBase):
     _attr_device_class = SensorDeviceClass.POWER_FACTOR
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:file-document-outline"
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_suggested_display_precision = 1
 
     @property
@@ -1395,13 +1440,13 @@ class UnraidShareUsageSensor(UnraidSensorBase):
         """Return extra attributes."""
         for share in self.coordinator.data.get(KEY_SHARES, []):
             if share.get("name") == self._share_name:
-                size_bytes = share.get("size_bytes", 0)
+                total_bytes = share.get("total_bytes", 0)
                 used_bytes = share.get("used_bytes", 0)
                 free_bytes = share.get("free_bytes", 0)
 
                 return {
-                    "size": f"{size_bytes / (1024**3):.2f} GB"
-                    if size_bytes > 0
+                    "size": f"{total_bytes / (1024**3):.2f} GB"
+                    if total_bytes > 0
                     else "Unknown",
                     "used": f"{used_bytes / (1024**3):.2f} GB"
                     if used_bytes > 0

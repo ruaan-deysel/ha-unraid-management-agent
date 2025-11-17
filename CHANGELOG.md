@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2025.11.5] - 2025-11-17
+
+### Fixed
+
+- **Share Sensor Attributes**: Fixed incorrect attribute values in file share sensors
+  - Changed from using `size_bytes` field to `total_bytes` field to match the actual API response
+  - Share sensors now correctly display `size`, `used`, and `free` attributes in GB
+  - Previously, share sensors would show "Unknown" for all size attributes due to field name mismatch
+
+### Added
+
+- **UPS Power Sensor Enhancements**: Enhanced UPS Power sensor with rich, user-friendly attributes for better Energy Dashboard integration
+  - Added `energy_dashboard_ready` indicator for easy identification
+  - Added `rated_power` attribute showing UPS nominal power (e.g., "800W")
+  - Added `load_status` with user-friendly descriptions ("Very Light", "Light", "Moderate", "High", "Very High - Check connected devices")
+  - Added `battery_status` with user-friendly descriptions ("Excellent", "Good", "Fair", "Low", "Critical")
+  - Added `estimated_runtime` with human-readable formatting (e.g., "1h 40m" or "100m")
+  - Added `current_load` attribute showing load percentage (e.g., "13%")
+  - Added `battery_charge` attribute showing battery percentage (e.g., "100%")
+  - Retained raw `runtime_seconds` value for automation purposes
+  - Improved Energy Dashboard compatibility with comprehensive power monitoring attributes
+
+### Changed
+
+- **Entity Categories**: Moved Docker vDisk Usage, Log Filesystem Usage, and Parity Check Progress sensors from Diagnostic category to main Sensors category
+  - These sensors are now more prominently displayed in the Home Assistant UI
+  - Users can more easily monitor these important system metrics without navigating to diagnostic entities
+
 ## [2025.11.4] - 2025-11-17
 
 ### Added
