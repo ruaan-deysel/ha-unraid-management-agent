@@ -186,31 +186,35 @@ With `_attr_has_entity_name = True`, entity names are set via `_attr_name`:
 
 ### 5.3 GPU Sensors Group (Conditional)
 
-| Entity Class                    | Entity Name         | Device Class   | Unit | State Class   | Icon                 | Notes                             |
-| ------------------------------- | ------------------- | -------------- | ---- | ------------- | -------------------- | --------------------------------- |
-| `UnraidGPUNameSensor`           | GPU Name            | None           | None | None          | `mdi:expansion-card` | Conditional: only if GPU detected |
-| `UnraidGPUUtilizationSensor`    | GPU Utilization     | `power_factor` | `%`  | `measurement` | `mdi:expansion-card` | Conditional: only if GPU detected |
-| `UnraidGPUCPUTemperatureSensor` | GPU CPU Temperature | `temperature`  | `°C` | `measurement` | `mdi:thermometer`    | Conditional: only if GPU detected |
-| `UnraidGPUPowerSensor`          | GPU Power           | `power`        | `W`  | `measurement` | `mdi:lightning-bolt` | Conditional: only if GPU detected |
+| Entity Class                    | Entity Name         | Device Class   | Unit  | State Class        | Icon                 | Notes                                                          |
+| ------------------------------- | ------------------- | -------------- | ----- | ------------------ | -------------------- | -------------------------------------------------------------- |
+| `UnraidGPUNameSensor`           | GPU Name            | None           | None  | None               | `mdi:expansion-card` | Conditional: only if GPU detected                              |
+| `UnraidGPUUtilizationSensor`    | GPU Utilization     | `power_factor` | `%`   | `measurement`      | `mdi:expansion-card` | Conditional: only if GPU detected                              |
+| `UnraidGPUCPUTemperatureSensor` | GPU CPU Temperature | `temperature`  | `°C`  | `measurement`      | `mdi:thermometer`    | Conditional: only if GPU detected                              |
+| `UnraidGPUPowerSensor`          | GPU Power           | `power`        | `W`   | `measurement`      | `mdi:lightning-bolt` | Conditional: only if GPU detected                              |
+| `UnraidGPUEnergySensor`         | GPU Energy          | `energy`       | `kWh` | `total_increasing` | `mdi:power`          | Conditional: only if GPU detected, Energy Dashboard compatible |
 
-**Unique ID Pattern**: `{entry_id}_gpu_name`, `{entry_id}_gpu_utilization`, `{entry_id}_gpu_cpu_temperature`, `{entry_id}_gpu_power`
+**Unique ID Pattern**: `{entry_id}_gpu_name`, `{entry_id}_gpu_utilization`, `{entry_id}_gpu_cpu_temperature`, `{entry_id}_gpu_power`, `{entry_id}_gpu_energy`
 
 **Conditional Creation**: All GPU sensors are created only when `coordinator.data.get(KEY_GPU, [])` is not empty
 
+**Energy Dashboard**: GPU Energy sensor is compatible with Home Assistant Energy Dashboard and uses trapezoidal integration to convert GPU Power (W) to cumulative energy consumption (kWh)
+
 ### 5.4 UPS Sensors Group (Conditional)
 
-| Entity Class             | Entity Name | Device Class   | Unit | State Class   | Icon                 | Notes                             |
-| ------------------------ | ----------- | -------------- | ---- | ------------- | -------------------- | --------------------------------- |
-| `UnraidUPSBatterySensor` | UPS Battery | `battery`      | `%`  | `measurement` | `mdi:battery`        | Conditional: only if UPS detected |
-| `UnraidUPSLoadSensor`    | UPS Load    | `power_factor` | `%`  | `measurement` | `mdi:battery`        | Conditional: only if UPS detected |
-| `UnraidUPSRuntimeSensor` | UPS Runtime | `duration`     | `s`  | `measurement` | `mdi:battery`        | Conditional: only if UPS detected |
-| `UnraidUPSPowerSensor`   | UPS Power   | `power`        | `W`  | `measurement` | `mdi:lightning-bolt` | Conditional: only if UPS detected |
+| Entity Class             | Entity Name | Device Class   | Unit  | State Class        | Icon                 | Notes                                                          |
+| ------------------------ | ----------- | -------------- | ----- | ------------------ | -------------------- | -------------------------------------------------------------- |
+| `UnraidUPSBatterySensor` | UPS Battery | `battery`      | `%`   | `measurement`      | `mdi:battery`        | Conditional: only if UPS detected                              |
+| `UnraidUPSLoadSensor`    | UPS Load    | `power_factor` | `%`   | `measurement`      | `mdi:battery`        | Conditional: only if UPS detected                              |
+| `UnraidUPSRuntimeSensor` | UPS Runtime | `duration`     | `s`   | `measurement`      | `mdi:battery`        | Conditional: only if UPS detected                              |
+| `UnraidUPSPowerSensor`   | UPS Power   | `power`        | `W`   | `measurement`      | `mdi:lightning-bolt` | Conditional: only if UPS detected                              |
+| `UnraidUPSEnergySensor`  | UPS Energy  | `energy`       | `kWh` | `total_increasing` | `mdi:power`          | Conditional: only if UPS detected, Energy Dashboard compatible |
 
-**Unique ID Pattern**: `{entry_id}_ups_battery`, `{entry_id}_ups_load`, `{entry_id}_ups_runtime`, `{entry_id}_ups_power`
+**Unique ID Pattern**: `{entry_id}_ups_battery`, `{entry_id}_ups_load`, `{entry_id}_ups_runtime`, `{entry_id}_ups_power`, `{entry_id}_ups_energy`
 
 **Conditional Creation**: All UPS sensors are created only when `coordinator.data.get(KEY_UPS, {}).get("connected")` is True. This differs from the UPS Connected binary sensor, which is created whenever UPS data exists (using `coordinator.data.get(KEY_UPS)`), allowing it to show connection status even when the UPS is disconnected.
 
-**Energy Dashboard**: UPS Power sensor is compatible with Home Assistant Energy Dashboard
+**Energy Dashboard**: UPS Energy sensor is compatible with Home Assistant Energy Dashboard and uses trapezoidal integration to convert UPS Power (W) to cumulative energy consumption (kWh)
 
 ### 5.5 Network Sensors Group (Dynamic)
 

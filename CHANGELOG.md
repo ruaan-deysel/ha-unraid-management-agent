@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2025.11.6] - 2025-11-17
+
+### Added
+
+- **Energy Dashboard Compatibility**: Added UPS Energy and GPU Energy sensors for Home Assistant Energy Dashboard
+  - New `sensor.{hostname}_ups_energy` - Tracks cumulative UPS energy consumption in kWh
+  - New `sensor.{hostname}_gpu_energy` - Tracks cumulative GPU energy consumption in kWh
+  - Both sensors use trapezoidal integration to convert instantaneous power (W) to cumulative energy (kWh)
+  - Sensors have `device_class: energy` and `state_class: total_increasing` for Energy Dashboard compatibility
+  - Users can now add UPS and GPU to the "Individual Devices" section of the Energy Dashboard
+  - Energy sensors automatically integrate power readings over time with high accuracy
+  - Includes `integration_method: trapezoidal` and `source_sensor` attributes for transparency
+  - Compatible with Home Assistant's long-term statistics and energy tracking features
+
+### Technical Details
+
+- Energy sensors use the trapezoidal rule for numerical integration: `energy = (power1 + power2) / 2 * time_delta`
+- Integration happens on every coordinator update, providing accurate energy tracking
+- Sensors maintain internal state for cumulative energy calculation across Home Assistant restarts
+- Zero point automatically set by Home Assistant recorder for statistics compilation
+
 ## [2025.11.5] - 2025-11-17
 
 ### Fixed

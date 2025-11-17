@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -16,6 +17,7 @@ from homeassistant.const import (
     CONF_HOST,
     PERCENTAGE,
     UnitOfDataRate,
+    UnitOfEnergy,
     UnitOfPower,
     UnitOfTemperature,
 )
@@ -181,6 +183,7 @@ async def async_setup_entry(
                 UnraidGPUUtilizationSensor(coordinator, entry),
                 UnraidGPUCPUTemperatureSensor(coordinator, entry),
                 UnraidGPUPowerSensor(coordinator, entry),
+                UnraidGPUEnergySensor(coordinator, entry),
             ]
         )
 
@@ -192,6 +195,7 @@ async def async_setup_entry(
                 UnraidUPSLoadSensor(coordinator, entry),
                 UnraidUPSRuntimeSensor(coordinator, entry),
                 UnraidUPSPowerSensor(coordinator, entry),
+                UnraidUPSEnergySensor(coordinator, entry),
             ]
         )
 
@@ -707,6 +711,81 @@ class UnraidGPUPowerSensor(UnraidSensorBase):
         return {}
 
 
+class UnraidGPUEnergySensor(UnraidSensorBase):
+    """GPU energy consumption sensor for Energy Dashboard (integrates power over time)."""
+
+    _attr_name = "GPU Energy"
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_icon = ICON_POWER
+    _attr_suggested_display_precision = 3
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry)
+        self._total_energy = 0.0  # Total energy in kWh
+        self._last_power = None  # Last power reading in W
+        self._last_update = None  # Last update timestamp
+
+    @property
+    def unique_id(self) -> str:
+        """Return unique ID."""
+        return f"{self._entry.entry_id}_gpu_energy"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state."""
+        gpu_list = self.coordinator.data.get(KEY_GPU, [])
+        if not gpu_list or len(gpu_list) == 0:
+            return self._total_energy if self._total_energy > 0 else None
+
+        power_watts = gpu_list[0].get("power_draw_watts")
+        if power_watts is None:
+            return self._total_energy if self._total_energy > 0 else None
+
+        now = datetime.now()
+
+        # If we have previous data, calculate energy consumed since last update
+        if self._last_power is not None and self._last_update is not None:
+            time_diff_hours = (now - self._last_update).total_seconds() / 3600
+            if time_diff_hours > 0:
+                # Use trapezoidal rule for integration (average of two power readings)
+                avg_power = (self._last_power + power_watts) / 2
+                energy_kwh = (avg_power * time_diff_hours) / 1000  # Convert W*h to kWh
+                self._total_energy += energy_kwh
+
+        # Update tracking variables
+        self._last_power = power_watts
+        self._last_update = now
+
+        return round(self._total_energy, 3) if self._total_energy > 0 else 0.0
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra attributes."""
+        gpu_list = self.coordinator.data.get(KEY_GPU, [])
+        attributes = {
+            "integration_method": "trapezoidal",
+            "source_sensor": "GPU Power",
+        }
+
+        if gpu_list and len(gpu_list) > 0:
+            gpu_name = gpu_list[0].get("name")
+            if gpu_name:
+                attributes[ATTR_GPU_NAME] = gpu_name
+
+            driver_version = gpu_list[0].get("driver_version")
+            if driver_version:
+                attributes[ATTR_GPU_DRIVER_VERSION] = driver_version
+
+        return attributes
+
+
 # UPS Sensors
 
 
@@ -891,6 +970,79 @@ class UnraidUPSPowerSensor(UnraidSensorBase):
         output_voltage = ups_data.get("output_voltage")
         if output_voltage is not None:
             attributes["output_voltage"] = output_voltage
+
+        return attributes
+
+
+class UnraidUPSEnergySensor(UnraidSensorBase):
+    """UPS energy consumption sensor for Energy Dashboard (integrates power over time)."""
+
+    _attr_name = "UPS Energy"
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_icon = ICON_POWER
+    _attr_suggested_display_precision = 3
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry)
+        self._total_energy = 0.0  # Total energy in kWh
+        self._last_power = None  # Last power reading in W
+        self._last_update = None  # Last update timestamp
+
+    @property
+    def unique_id(self) -> str:
+        """Return unique ID."""
+        return f"{self._entry.entry_id}_ups_energy"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state."""
+        ups_data = self.coordinator.data.get(KEY_UPS, {})
+        power_watts = ups_data.get("power_watts")
+
+        if power_watts is None:
+            return self._total_energy if self._total_energy > 0 else None
+
+        now = datetime.now()
+
+        # If we have previous data, calculate energy consumed since last update
+        if self._last_power is not None and self._last_update is not None:
+            time_diff_hours = (now - self._last_update).total_seconds() / 3600
+            if time_diff_hours > 0:
+                # Use trapezoidal rule for integration (average of two power readings)
+                avg_power = (self._last_power + power_watts) / 2
+                energy_kwh = (avg_power * time_diff_hours) / 1000  # Convert W*h to kWh
+                self._total_energy += energy_kwh
+
+        # Update tracking variables
+        self._last_power = power_watts
+        self._last_update = now
+
+        return round(self._total_energy, 3) if self._total_energy > 0 else 0.0
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra attributes."""
+        ups_data = self.coordinator.data.get(KEY_UPS, {})
+        attributes = {
+            "integration_method": "trapezoidal",
+            "source_sensor": "UPS Power",
+        }
+
+        # Add UPS status for context
+        ups_status = ups_data.get("status")
+        if ups_status:
+            attributes["ups_status"] = ups_status
+
+        ups_model = ups_data.get("model")
+        if ups_model:
+            attributes["ups_model"] = ups_model
 
         return attributes
 
