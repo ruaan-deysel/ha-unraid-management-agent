@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2025.11.4] - 2025-11-17
+
+### Added
+
+- **Management Agent Version Support**: Added support for the new `agent_version` field from Unraid Management Agent API v2025.11.22+
+  - Device info now includes Management Agent version in the `hw_version` field
+  - Uptime sensor attributes now include `management_agent_version` for diagnostics
+  - Enables version-specific compatibility checks and better troubleshooting
+  - Automatically displays both Unraid OS version and Management Agent version in device information
+
+### Fixed
+
+- **Motherboard Temperature Sensor**: Fixed conditional creation logic to properly handle `0°C` readings
+  - Changed from `if system_data.get("motherboard_temp_celsius"):` to `if system_data.get("motherboard_temp_celsius") is not None:`
+  - Previously, the sensor would not be created when the motherboard temperature was exactly `0°C` (a valid reading)
+  - Now correctly distinguishes between field not existing (`None`) and field existing with value `0`
+
+### Changed
+
+- Device information now displays Management Agent version alongside Unraid OS version for complete version tracking
+- Enhanced diagnostics with Management Agent version information in Uptime sensor attributes
+
+### Technical Details
+
+- The `agent_version` field was added to the Unraid Management Agent API in v2025.11.22 (GitHub issue #26)
+- The integration automatically detects and uses the `agent_version` field when available
+- Backward compatible with older Management Agent versions that don't provide `agent_version`
+- The motherboard temperature sensor fix ensures proper sensor creation regardless of temperature value
+
+### Requirements
+
+- **Recommended**: Unraid Management Agent v2025.11.22 or later for full feature support
+- **Minimum**: Unraid Management Agent v2025.11.0 (earlier versions will work but won't display Management Agent version)
+
 ## [2025.11.3] - 2025-11-17
 
 ### Fixed

@@ -121,7 +121,7 @@ async def async_setup_entry(
 
     # Motherboard temperature sensor (if available)
     system_data = coordinator.data.get(KEY_SYSTEM, {})
-    if system_data.get("motherboard_temp_celsius"):
+    if system_data.get("motherboard_temp_celsius") is not None:
         entities.append(UnraidMotherboardTemperatureSensor(coordinator, entry))
 
     # Fan sensors (dynamic, one per fan)
@@ -240,9 +240,10 @@ class UnraidSensorBase(CoordinatorEntity, SensorEntity):
         system_data = self.coordinator.data.get(KEY_SYSTEM, {})
         hostname = system_data.get("hostname", "Unraid")
         version = system_data.get("version", "Unknown")
+        agent_version = system_data.get("agent_version")
         host = self._entry.data.get(CONF_HOST, "")
 
-        return {
+        device_info_dict = {
             "identifiers": {(DOMAIN, self._entry.entry_id)},
             "name": hostname,
             "manufacturer": MANUFACTURER,
@@ -250,6 +251,12 @@ class UnraidSensorBase(CoordinatorEntity, SensorEntity):
             "sw_version": version,
             "configuration_url": f"http://{host}",
         }
+
+        # Add Management Agent version if available
+        if agent_version:
+            device_info_dict["hw_version"] = agent_version
+
+        return device_info_dict
 
 
 # System Sensors
@@ -527,6 +534,11 @@ class UnraidUptimeSensor(UnraidSensorBase):
         # Include raw seconds value for use in automations/templates
         if uptime_seconds is not None:
             attributes["uptime_seconds"] = uptime_seconds
+
+        # Include Management Agent version for diagnostics
+        agent_version = system_data.get("agent_version")
+        if agent_version:
+            attributes["management_agent_version"] = agent_version
 
         return attributes
 
