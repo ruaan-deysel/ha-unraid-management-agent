@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2025.11.8] - 2025-11-18
+
+### Added
+
+- **ZFS Storage Pool Monitoring**: Comprehensive ZFS storage pool support with real-time monitoring
+  - New `sensor.{hostname}_zfs_pool_{pool_name}_usage` - ZFS pool capacity usage percentage
+    - Attributes: pool_name, pool_guid, health, state, size, allocated, free, fragmentation_percent, dedup_ratio, readonly, autoexpand, autotrim
+  - New `sensor.{hostname}_zfs_pool_{pool_name}_health` - ZFS pool health status
+    - Attributes: state, has_problem (boolean), read_errors, write_errors, checksum_errors, scan_errors, vdevs (array with per-vdev details)
+  - New `sensor.{hostname}_zfs_arc_hit_ratio` - ZFS ARC cache hit ratio percentage
+    - Attributes: size (GB), target_size (GB), min_size (GB), max_size (GB), mru_hit_ratio_percent, mfu_hit_ratio_percent, hits, misses
+  - New `binary_sensor.{hostname}_zfs_available` - Indicates if ZFS is installed and detected on the Unraid server
+    - Attributes: pool_count (number of ZFS pools detected)
+  - Dynamic entity creation: One set of sensors created per ZFS pool
+  - Conditional entity creation: ZFS sensors only created when ZFS pools are detected (prevents phantom entities)
+  - Real-time updates via WebSocket for instant pool status changes
+  - Comprehensive vdev (virtual device) information including per-vdev health and error counts
+
+### Technical Details
+
+- **ZFS API Integration**: Added support for new Unraid Management Agent ZFS API endpoints
+  - `/api/v1/zfs/pools` - List all ZFS pools with detailed metrics
+  - `/api/v1/zfs/datasets` - List all ZFS datasets
+  - `/api/v1/zfs/snapshots` - List all ZFS snapshots
+  - `/api/v1/zfs/arc` - ZFS ARC (Adaptive Replacement Cache) statistics
+- **ZFS Metrics Tracked**:
+  - Pool capacity: size, allocated, free space in bytes and GB
+  - Pool health: health status, state, error counts (read, write, checksum, scan)
+  - Pool fragmentation: percentage of fragmented space
+  - Pool configuration: dedup ratio, readonly status, autoexpand, autotrim settings
+  - ARC cache: hit ratio, size metrics (current, target, min, max), MRU/MFU hit ratios
+  - Vdev details: per-vdev name, type, state, and error counts
+- **Conditional Creation Logic**: ZFS entities only created when `zfs_pools` data exists, is a non-empty list, and contains valid pool information
+- **WebSocket Events**: Added handlers for `zfs_pool_update`, `zfs_dataset_update`, `zfs_snapshot_update`, `zfs_arc_update` events
+- **Entity Organization**: All ZFS sensors follow the same naming and attribute patterns as existing disk sensors for consistency
+
+### Changed
+
+- **Sensor Organization**: Streamlined ZFS sensor structure for better usability
+  - Moved ZFS pool fragmentation from separate sensor to attribute of pool usage sensor
+  - Moved ZFS ARC size from separate sensor to attribute of ARC hit ratio sensor
+  - Moved ZFS pool problem status from binary sensor to `has_problem` attribute of pool health sensor
+  - Reduced total sensor count while maintaining all functionality through comprehensive attributes
+
 ## [2025.11.7] - 2025-11-17
 
 ### Fixed

@@ -38,6 +38,11 @@ from .const import (
     API_VM_RESUME,
     API_VM_START,
     API_VM_STOP,
+    API_ZFS_ARC,
+    API_ZFS_DATASETS,
+    API_ZFS_POOL,
+    API_ZFS_POOLS,
+    API_ZFS_SNAPSHOTS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -269,6 +274,28 @@ class UnraidAPIClient:
         """Execute a user script."""
         endpoint = API_USER_SCRIPT_EXECUTE.format(name=script_name)
         await self._post(endpoint)
+
+    # ZFS storage pools
+    async def get_zfs_pools(self) -> list[dict[str, Any]]:
+        """Get all ZFS pools."""
+        return await self._get(API_ZFS_POOLS)
+
+    async def get_zfs_pool(self, pool_name: str) -> dict[str, Any]:
+        """Get specific ZFS pool details."""
+        endpoint = API_ZFS_POOL.format(name=pool_name)
+        return await self._get(endpoint)
+
+    async def get_zfs_datasets(self) -> list[dict[str, Any]]:
+        """Get all ZFS datasets."""
+        return await self._get(API_ZFS_DATASETS)
+
+    async def get_zfs_snapshots(self) -> list[dict[str, Any]]:
+        """Get all ZFS snapshots."""
+        return await self._get(API_ZFS_SNAPSHOTS)
+
+    async def get_zfs_arc(self) -> dict[str, Any]:
+        """Get ZFS ARC statistics."""
+        return await self._get(API_ZFS_ARC)
 
 
 class UnraidAPIError(Exception):

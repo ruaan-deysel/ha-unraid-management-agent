@@ -25,10 +25,12 @@ from .const import (
     ICON_NETWORK,
     ICON_PARITY,
     ICON_UPS,
+    ICON_ZFS,
     KEY_ARRAY,
     KEY_NETWORK,
     KEY_SYSTEM,
     KEY_UPS,
+    KEY_ZFS_POOLS,
     MANUFACTURER,
 )
 
@@ -93,6 +95,13 @@ async def async_setup_entry(
             entities.append(
                 UnraidNetworkInterfaceBinarySensor(coordinator, entry, interface_name)
             )
+
+    # ZFS binary sensors (if ZFS pools available)
+    # Only create if ZFS pools data exists and is not empty
+    zfs_pools = coordinator.data.get(KEY_ZFS_POOLS, [])
+    if zfs_pools and isinstance(zfs_pools, list) and len(zfs_pools) > 0:
+        # ZFS Available binary sensor (indicates ZFS is installed/detected)
+        entities.append(UnraidZFSAvailableBinarySensor(coordinator, entry))
 
     async_add_entities(entities)
 
@@ -263,3 +272,34 @@ class UnraidNetworkInterfaceBinarySensor(UnraidBinarySensorBase):
                 state = interface.get("state", "down")
                 return state == "up"
         return False
+
+
+# ZFS Binary Sensors
+
+
+class UnraidZFSAvailableBinarySensor(UnraidBinarySensorBase):
+    """Binary sensor indicating if ZFS is available/installed."""
+
+    _attr_name = "ZFS Available"
+    _attr_device_class = BinarySensorDeviceClass.RUNNING
+    _attr_icon = ICON_ZFS
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def unique_id(self) -> str:
+        """Return unique ID."""
+        return f"{self._entry.entry_id}_zfs_available"
+
+    @property
+    def is_on(self) -> bool:
+        """Return true if ZFS is available."""
+        zfs_pools = self.coordinator.data.get(KEY_ZFS_POOLS, [])
+        return isinstance(zfs_pools, list) and len(zfs_pools) > 0
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra attributes."""
+        zfs_pools = self.coordinator.data.get(KEY_ZFS_POOLS, [])
+        return {
+            "pool_count": len(zfs_pools) if isinstance(zfs_pools, list) else 0,
+        }

@@ -32,6 +32,10 @@ from .const import (
     EVENT_SYSTEM_UPDATE,
     EVENT_UPS_STATUS_UPDATE,
     EVENT_VM_LIST_UPDATE,
+    EVENT_ZFS_ARC_UPDATE,
+    EVENT_ZFS_DATASET_UPDATE,
+    EVENT_ZFS_POOL_UPDATE,
+    EVENT_ZFS_SNAPSHOT_UPDATE,
     KEY_ARRAY,
     KEY_CONTAINERS,
     KEY_DISKS,
@@ -43,6 +47,10 @@ from .const import (
     KEY_UPS,
     KEY_USER_SCRIPTS,
     KEY_VMS,
+    KEY_ZFS_ARC,
+    KEY_ZFS_DATASETS,
+    KEY_ZFS_POOLS,
+    KEY_ZFS_SNAPSHOTS,
 )
 from .websocket_client import UnraidWebSocketClient
 
@@ -375,6 +383,10 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator):
                 self.client.get_shares(),
                 self.client.get_notifications(),
                 self.client.get_user_scripts(),
+                self.client.get_zfs_pools(),
+                self.client.get_zfs_datasets(),
+                self.client.get_zfs_snapshots(),
+                self.client.get_zfs_arc(),
                 return_exceptions=True,
             )
 
@@ -399,6 +411,18 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator):
                 KEY_USER_SCRIPTS: (
                     results[10] if not isinstance(results[10], Exception) else []
                 ),
+                KEY_ZFS_POOLS: (
+                    results[11] if not isinstance(results[11], Exception) else []
+                ),
+                KEY_ZFS_DATASETS: (
+                    results[12] if not isinstance(results[12], Exception) else []
+                ),
+                KEY_ZFS_SNAPSHOTS: (
+                    results[13] if not isinstance(results[13], Exception) else []
+                ),
+                KEY_ZFS_ARC: results[14]
+                if not isinstance(results[14], Exception)
+                else {},
             }
 
             # Log any errors
@@ -441,6 +465,14 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator):
             self.data[KEY_SHARES] = data if isinstance(data, list) else [data]
         elif event_type == EVENT_NOTIFICATION_UPDATE:
             self.data[KEY_NOTIFICATIONS] = data if isinstance(data, list) else [data]
+        elif event_type == EVENT_ZFS_POOL_UPDATE:
+            self.data[KEY_ZFS_POOLS] = data if isinstance(data, list) else [data]
+        elif event_type == EVENT_ZFS_DATASET_UPDATE:
+            self.data[KEY_ZFS_DATASETS] = data if isinstance(data, list) else [data]
+        elif event_type == EVENT_ZFS_SNAPSHOT_UPDATE:
+            self.data[KEY_ZFS_SNAPSHOTS] = data if isinstance(data, list) else [data]
+        elif event_type == EVENT_ZFS_ARC_UPDATE:
+            self.data[KEY_ZFS_ARC] = data
 
         # Notify listeners of data update
         self.async_set_updated_data(self.data)

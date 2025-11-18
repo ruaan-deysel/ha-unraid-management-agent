@@ -59,6 +59,8 @@ from .const import (
     ICON_TEMPERATURE,
     ICON_UPS,
     ICON_UPTIME,
+    ICON_ZFS_ARC,
+    ICON_ZFS_POOL,
     KEY_ARRAY,
     KEY_DISKS,
     KEY_GPU,
@@ -67,6 +69,8 @@ from .const import (
     KEY_SHARES,
     KEY_SYSTEM,
     KEY_UPS,
+    KEY_ZFS_ARC,
+    KEY_ZFS_POOLS,
     MANUFACTURER,
 )
 
@@ -224,6 +228,25 @@ async def async_setup_entry(
     for share in coordinator.data.get(KEY_SHARES, []):
         share_name = share.get("name", "unknown")
         entities.append(UnraidShareUsageSensor(coordinator, entry, share_name))
+
+    # ZFS pool sensors (if ZFS pools available)
+    # Only create if ZFS pools data exists and is not empty
+    zfs_pools = coordinator.data.get(KEY_ZFS_POOLS, [])
+    if zfs_pools and isinstance(zfs_pools, list) and len(zfs_pools) > 0:
+        for pool in zfs_pools:
+            pool_name = pool.get("name", "unknown")
+            entities.extend(
+                [
+                    UnraidZFSPoolUsageSensor(coordinator, entry, pool_name),
+                    UnraidZFSPoolHealthSensor(coordinator, entry, pool_name),
+                ]
+            )
+
+    # ZFS ARC sensors (if ZFS ARC data available)
+    # Only create if ZFS ARC data exists and is not empty
+    zfs_arc = coordinator.data.get(KEY_ZFS_ARC, {})
+    if zfs_arc and isinstance(zfs_arc, dict) and len(zfs_arc) > 0:
+        entities.append(UnraidZFSARCHitRatioSensor(coordinator, entry))
 
     # Notification sensor (if notifications available)
     if coordinator.data.get(KEY_NOTIFICATIONS) is not None:
@@ -1657,3 +1680,186 @@ class UnraidNotificationsSensor(UnraidSensorBase):
             )
 
         return {"notifications": notification_list}
+
+
+# ZFS Pool Sensors
+
+
+class UnraidZFSPoolUsageSensor(UnraidSensorBase):
+    """Sensor for ZFS pool usage percentage."""
+
+    _attr_device_class = SensorDeviceClass.POWER_FACTOR
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = ICON_ZFS_POOL
+    _attr_suggested_display_precision = 1
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        entry: ConfigEntry,
+        pool_name: str,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry)
+        self._pool_name = pool_name
+        self._attr_name = f"ZFS Pool {pool_name} Usage"
+
+    @property
+    def unique_id(self) -> str:
+        """Return unique ID."""
+        safe_name = self._pool_name.replace(" ", "_").lower()
+        return f"{self._entry.entry_id}_zfs_pool_{safe_name}_usage"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state."""
+        pools = self.coordinator.data.get(KEY_ZFS_POOLS, [])
+        for pool in pools:
+            if pool.get("name") == self._pool_name:
+                return pool.get("capacity_percent")
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra attributes."""
+        pools = self.coordinator.data.get(KEY_ZFS_POOLS, [])
+        for pool in pools:
+            if pool.get("name") == self._pool_name:
+                size_bytes = pool.get("size_bytes", 0)
+                allocated_bytes = pool.get("allocated_bytes", 0)
+                free_bytes = pool.get("free_bytes", 0)
+
+                return {
+                    "pool_name": pool.get("name"),
+                    "pool_guid": pool.get("guid"),
+                    "health": pool.get("health"),
+                    "state": pool.get("state"),
+                    "size": f"{size_bytes / (1024**3):.2f} GB",
+                    "allocated": f"{allocated_bytes / (1024**3):.2f} GB",
+                    "free": f"{free_bytes / (1024**3):.2f} GB",
+                    "fragmentation_percent": pool.get("fragmentation_percent"),
+                    "dedup_ratio": pool.get("dedup_ratio"),
+                    "readonly": pool.get("readonly"),
+                    "autoexpand": pool.get("autoexpand"),
+                    "autotrim": pool.get("autotrim"),
+                }
+        return {}
+
+
+class UnraidZFSPoolHealthSensor(UnraidSensorBase):
+    """Sensor for ZFS pool health status."""
+
+    _attr_icon = ICON_ZFS_POOL
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        entry: ConfigEntry,
+        pool_name: str,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry)
+        self._pool_name = pool_name
+        self._attr_name = f"ZFS Pool {pool_name} Health"
+
+    @property
+    def unique_id(self) -> str:
+        """Return unique ID."""
+        safe_name = self._pool_name.replace(" ", "_").lower()
+        return f"{self._entry.entry_id}_zfs_pool_{safe_name}_health"
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the state."""
+        pools = self.coordinator.data.get(KEY_ZFS_POOLS, [])
+        for pool in pools:
+            if pool.get("name") == self._pool_name:
+                return pool.get("health")
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra attributes."""
+        pools = self.coordinator.data.get(KEY_ZFS_POOLS, [])
+        for pool in pools:
+            if pool.get("name") == self._pool_name:
+                vdevs = pool.get("vdevs", [])
+                vdev_info = []
+                for vdev in vdevs:
+                    vdev_info.append(
+                        {
+                            "name": vdev.get("name"),
+                            "type": vdev.get("type"),
+                            "state": vdev.get("state"),
+                            "read_errors": vdev.get("read_errors", 0),
+                            "write_errors": vdev.get("write_errors", 0),
+                            "checksum_errors": vdev.get("checksum_errors", 0),
+                        }
+                    )
+
+                # Calculate if pool has problems
+                health = pool.get("health", "UNKNOWN")
+                state = pool.get("state", "UNKNOWN")
+                read_errors = pool.get("read_errors", 0)
+                write_errors = pool.get("write_errors", 0)
+                checksum_errors = pool.get("checksum_errors", 0)
+                has_errors = read_errors > 0 or write_errors > 0 or checksum_errors > 0
+                has_problem = health != "ONLINE" or state != "ONLINE" or has_errors
+
+                return {
+                    "state": pool.get("state"),
+                    "has_problem": has_problem,
+                    "read_errors": read_errors,
+                    "write_errors": write_errors,
+                    "checksum_errors": checksum_errors,
+                    "scan_errors": pool.get("scan_errors", 0),
+                    "vdevs": vdev_info,
+                }
+        return {}
+
+
+# ZFS ARC Sensors
+
+
+class UnraidZFSARCHitRatioSensor(UnraidSensorBase):
+    """Sensor for ZFS ARC cache hit ratio."""
+
+    _attr_name = "ZFS ARC Hit Ratio"
+    _attr_device_class = SensorDeviceClass.POWER_FACTOR
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = ICON_ZFS_ARC
+    _attr_suggested_display_precision = 2
+
+    @property
+    def unique_id(self) -> str:
+        """Return unique ID."""
+        return f"{self._entry.entry_id}_zfs_arc_hit_ratio"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state."""
+        arc_data = self.coordinator.data.get(KEY_ZFS_ARC, {})
+        return arc_data.get("hit_ratio_percent")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra attributes."""
+        arc_data = self.coordinator.data.get(KEY_ZFS_ARC, {})
+        size_bytes = arc_data.get("size_bytes", 0)
+        target_size = arc_data.get("target_size_bytes", 0)
+        min_size = arc_data.get("min_size_bytes", 0)
+        max_size = arc_data.get("max_size_bytes", 0)
+
+        return {
+            "size": f"{size_bytes / (1024**3):.2f} GB",
+            "target_size": f"{target_size / (1024**3):.2f} GB",
+            "min_size": f"{min_size / (1024**3):.2f} GB",
+            "max_size": f"{max_size / (1024**3):.2f} GB",
+            "mru_hit_ratio_percent": arc_data.get("mru_hit_ratio_percent"),
+            "mfu_hit_ratio_percent": arc_data.get("mfu_hit_ratio_percent"),
+            "hits": arc_data.get("hits"),
+            "misses": arc_data.get("misses"),
+        }

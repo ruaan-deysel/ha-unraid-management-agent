@@ -12,6 +12,7 @@ Complete Home Assistant custom integration for monitoring and controlling Unraid
 
 - **System Metrics**: CPU usage, RAM usage, CPU temperature, uptime
 - **Array Status**: Array state, disk usage, parity check progress
+- **ZFS Storage**: Pool capacity, health, fragmentation, ARC cache statistics
 - **GPU Metrics**: GPU utilization, temperature, power consumption (Intel/NVIDIA/AMD)
 - **Network**: Interface status, bandwidth monitoring (RX/TX)
 - **UPS**: Battery level, load, runtime estimation
