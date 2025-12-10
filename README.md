@@ -97,6 +97,40 @@ Ensure your firewall allows:
 
 ---
 
+## 👨‍💻 Development
+
+This project uses a modern DevContainer setup with UV-based dependency management and an interactive menu system.
+
+### Quick Start
+
+1. **Open in VS Code** with Dev Containers extension
+2. **Reopen in Container** (automatic prompt or Cmd+Shift+P)
+3. **Wait for setup** - Container auto-configures and HA starts
+4. **See the menu** - Interactive menu appears in terminal
+5. **Access HA** - Open http://localhost:8123
+
+### Key Commands
+
+```bash
+./scripts/menu          # 🎯 Interactive menu (recommended)
+./scripts/start         # Start Home Assistant (background)
+./scripts/stop          # Stop Home Assistant
+./scripts/restart       # Restart Home Assistant
+./scripts/develop       # Run HA in foreground (debug mode)
+./scripts/lint          # Run code quality checks
+./scripts/setup         # Sync dependencies with UV
+```
+
+### Tech Stack
+
+- **Python 3.13** - Latest Python version
+- **UV 0.9.17** - Modern, fast package manager (replaces pip)
+- **Home Assistant 2025.12.2** - Latest HA version
+- **GitHub CLI & Copilot CLI** - Command-line developer tools
+- **VS Code Extensions** - Copilot, GitHub integration, Python tooling
+
+---
+
 ## Installation
 
 ### Via HACS (Recommended)

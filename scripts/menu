@@ -1,0 +1,4 @@
+#!/bin/bash
+# Launch the interactive devcontainer menu
+
+exec bash .devcontainer/menu.sh

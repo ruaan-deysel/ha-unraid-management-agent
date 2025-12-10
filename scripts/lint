@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-ruff format .
-ruff check . --fix
+export UV_PROJECT_ENVIRONMENT=${UV_PROJECT_ENVIRONMENT:-.venv}
+
+uv sync --extra dev --frozen
+uv run ruff format .
+uv run ruff check . --fix

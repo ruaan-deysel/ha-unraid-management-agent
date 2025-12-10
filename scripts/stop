@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+PID_FILE="${PWD}/.ha-pid"
+LOCK_FILE="${PWD}/config/.ha_run.lock"
+
+if [[ -f "${PID_FILE}" ]]; then
+    PID=$(cat "${PID_FILE}")
+    if kill -0 "$PID" 2>/dev/null; then
+        echo "Stopping Home Assistant (PID: $PID)..."
+        kill "$PID"
+        sleep 2
+        # Force kill if still running
+        if kill -0 "$PID" 2>/dev/null; then
+            echo "Force stopping..."
+            kill -9 "$PID" 2>/dev/null || true
+        fi
+        rm -f "${PID_FILE}"
+        rm -f "${LOCK_FILE}"
+        echo "Home Assistant stopped"
+    else
+        echo "Home Assistant not running (stale PID file)"
+        rm -f "${PID_FILE}"
+        rm -f "${LOCK_FILE}"
+    fi
+else
+    # Check for lock file even if PID file doesn't exist
+    if [[ -f "${LOCK_FILE}" ]]; then
+        echo "Found stale lock file, removing..."
+        rm -f "${LOCK_FILE}"
+    fi
+    echo "Home Assistant not running (no PID file found)"
+fi

@@ -1,0 +1,60 @@
+{
+  "name": "ha-unraid-management-agent-dev",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "..",
+    "options": ["--tag", "ha-unraid-management-agent-dev"]
+  },
+  "remoteUser": "vscode",
+  "containerEnv": {
+    "UV_PROJECT_ENVIRONMENT": ".venv",
+    "UV_PYTHON": "3.13"
+  },
+  "remoteEnv": {
+    "PATH": "/home/vscode/.local/bin:${containerEnv:PATH}${PATH}"
+  },
+    // Run commands after container is created
+  "postCreateCommand": "rm -rf .venv && uv sync --extra dev --frozen && ./scripts/start && chmod +x .devcontainer/menu.sh scripts/menu",
+  
+  // Launch menu when opening new terminal
+  "postStartCommand": "echo '\nWelcome! Run \"./scripts/menu\" to see available commands.\n' && bash .devcontainer/menu.sh",
+  "forwardPorts": [8123],
+  "portsAttributes": {
+    "8123": {
+      "label": "Home Assistant",
+      "onAutoForward": "notify"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anthropic.claude-dev",
+        "astral-sh.ruff",
+        "esbenp.prettier-vscode",
+        "github.copilot",
+        "github.copilot-chat",
+        "github.vscode-github-actions",
+        "github.vscode-pull-request-github",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "redhat.vscode-yaml",
+        "oderwat.indent-rainbow",
+        "PKief.material-icon-theme",
+        "ryanluker.vscode-coverage-gutters",
+        "kevinrose.vsc-python-indent",
+        "charliermarsh.ruff"
+      ],
+      "settings": {
+        "files.eol": "\n",
+        "editor.tabSize": 4,
+        "editor.formatOnPaste": true,
+        "editor.formatOnSave": true,
+        "editor.formatOnType": false,
+        "files.trimTrailingWhitespace": true,
+        "python.analysis.typeCheckingMode": "basic",
+        "python.analysis.autoImportCompletions": true,
+        "python.defaultInterpreterPath": "${containerWorkspaceFolder}/.venv/bin/python"
+      }
+    }
+  }
+}

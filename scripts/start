@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+export UV_PROJECT_ENVIRONMENT=${UV_PROJECT_ENVIRONMENT:-.venv}
+
+if ! command -v uv >/dev/null 2>&1; then
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="${HOME}/.local/bin:${PATH}"
+fi
+
+# Ensure dependencies are up to date
+uv sync --extra dev --frozen
+
+# Create config dir if not present
+if [[ ! -d "${PWD}/config" ]]; then
+    mkdir -p "${PWD}/config"
+    .venv/bin/hass --config "${PWD}/config" --script ensure_config
+fi
+
+# Set the path to custom_components
+export PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}${PWD}/custom_components"
+
+# Home Assistant has issues with spaces in paths, so we need to use a symlink workaround
+# or run from within the directory
+echo "Starting Home Assistant in debug mode..."
+echo "Access at: http://localhost:8123"
+echo "To view logs: tail -f config/home-assistant.log"
+echo "To restart: Run the 'Home Assistant: Restart' task or use ./scripts/restart"
+
+# Start Home Assistant in background, running from the project directory
+cd "${PWD}"
+bash -c "exec ${PWD}/.venv/bin/hass --config ./config --debug > ./config/home-assistant.log 2>&1" &
+echo $! > "./.ha-pid"
+
+echo "Home Assistant started with PID $(cat "./.ha-pid")"

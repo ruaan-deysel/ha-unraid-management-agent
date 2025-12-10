@@ -1,0 +1,32 @@
+[project]
+name = "ha-unraid-management-agent"
+description = "Home Assistant Unraid Management Agent development environment"
+version = "0.0.0"
+requires-python = ">=3.13"
+dependencies = [
+    "colorlog>=6.9.0",
+    "home-assistant-frontend>=20251203.0",
+    "homeassistant>=2024.12.0",
+]
+
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+package = false
+
+[project.optional-dependencies]
+dev = [
+    "aiohttp>=3.10.10",
+    "black>=24.10.0",
+    "isort>=5.13.2",
+    "mypy>=1.13.0",
+    "pytest>=8.3.3",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=4.1.0",
+    "pytest-homeassistant-custom-component>=0.13.0",
+    "pytest-timeout>=2.2.0",
+    "pytest-xdist>=3.6.1",
+    "ruff>=0.7.0",
+]

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+echo "Restarting Home Assistant..."
+
+# Stop existing instance
+./scripts/stop
+
+# Wait a moment
+sleep 1
+
+# Start new instance
+./scripts/start
