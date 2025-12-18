@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2025.12.0] - 2025-12-18
+
+### Fixed
+
+- **Sensor Setup Crash**: Fixed 'NoneType' object is not iterable error when fan data is None
+  - Added null-safe guards for system and fans data in sensor setup
+  - Fan sensor lookup now tolerates missing or None fan arrays
+  - Regression test ensures setup succeeds gracefully when fans data is None
+
 ## [2025.11.8] - 2025-11-18
 
 ### Added
