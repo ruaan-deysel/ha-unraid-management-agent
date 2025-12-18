@@ -12,6 +12,8 @@ from custom_components.unraid_management_agent.sensor import (
     _is_physical_network_interface,
 )
 
+from .const import MOCK_SYSTEM_DATA
+
 
 async def test_sensor_setup(
     hass: HomeAssistant, mock_config_entry, mock_api_client, mock_websocket_client
@@ -52,6 +54,43 @@ async def test_sensor_setup(
 
     for sensor_id in expected_sensors:
         assert sensor_id in sensor_entities, f"Expected sensor {sensor_id} not found"
+
+
+async def test_sensor_setup_handles_none_fans(
+    hass: HomeAssistant, mock_config_entry, mock_api_client, mock_websocket_client
+) -> None:
+    """Ensure setup succeeds when fans data is None."""
+    mock_api_client.get_system_info.return_value = {
+        **MOCK_SYSTEM_DATA,
+        "fans": None,
+    }
+
+    with (
+        patch(
+            "custom_components.unraid_management_agent.UnraidAPIClient",
+            return_value=mock_api_client,
+        ),
+        patch(
+            "custom_components.unraid_management_agent.UnraidWebSocketClient",
+            return_value=mock_websocket_client,
+        ),
+        patch(
+            "custom_components.unraid_management_agent.async_setup_services",
+            new=AsyncMock(),
+        ),
+    ):
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.unraid_unraid_test_cpu_usage")
+    assert state is not None
+
+    fan_entities = [
+        entity_id
+        for entity_id in hass.states.async_entity_ids("sensor")
+        if "fan" in entity_id
+    ]
+    assert not fan_entities
 
 
 async def test_cpu_usage_sensor(
