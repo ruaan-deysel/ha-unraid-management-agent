@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Home Assistant Community
+    url: https://community.home-assistant.io
+    about: Ask questions in the Home Assistant community
+  - name: Home Assistant Discord
+    url: https://discord.gg/home-assistant
+    about: Chat with other Home Assistant users
