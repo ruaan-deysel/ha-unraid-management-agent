@@ -126,12 +126,12 @@ async def async_setup_entry(
     )
 
     # Motherboard temperature sensor (if available)
-    system_data = coordinator.data.get(KEY_SYSTEM, {})
+    system_data = coordinator.data.get(KEY_SYSTEM) or {}
     if system_data.get("motherboard_temp_celsius") is not None:
         entities.append(UnraidMotherboardTemperatureSensor(coordinator, entry))
 
     # Fan sensors (dynamic, one per fan)
-    fans = system_data.get("fans", [])
+    fans = system_data.get("fans") or []
     for fan in fans:
         fan_name = fan.get("name", "unknown")
         entities.append(UnraidFanSensor(coordinator, entry, fan_name))
@@ -493,7 +493,8 @@ class UnraidFanSensor(UnraidSensorBase):
     @property
     def native_value(self) -> int | None:
         """Return the state."""
-        fans = self.coordinator.data.get(KEY_SYSTEM, {}).get("fans", [])
+        system_data = self.coordinator.data.get(KEY_SYSTEM) or {}
+        fans = system_data.get("fans") or []
         for fan in fans:
             if fan.get("name") == self._fan_name:
                 return fan.get("rpm")
