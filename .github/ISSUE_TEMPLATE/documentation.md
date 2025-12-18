@@ -8,16 +8,39 @@ assignees: ''
 ---
 
 ## Documentation Issue
-A clear and concise description of the documentation issue.
+A clear and concise description of what's missing or unclear in the documentation.
+
+## Affected Area
+- [ ] Installation/Setup guide
+- [ ] Configuration
+- [ ] Entity reference
+- [ ] Troubleshooting
+- [ ] API integration requirements
+- [ ] README
+- [ ] Other: ___
 
 ## Location
-Where in the documentation is this issue? (link or file path)
+Where in the documentation is this issue?
+- Link: 
+- File: 
 
-## Current Content
-What does the documentation currently say? (paste the relevant section)
+## Current Documentation
+What does it currently say? (paste the relevant section)
+```
+[Paste here]
+```
+
+## Problem
+Why is this confusing or incomplete?
 
 ## Suggested Improvement
 What should the documentation say instead?
+```
+[Paste suggested text here]
+```
 
-## Additional Context
-Add any other context here.
+## Context
+Does this relate to a specific setup scenario or configuration?
+- Unraid version: 
+- Integration version: 
+- Specific component: 
