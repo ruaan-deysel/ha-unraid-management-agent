@@ -1,5 +1,33 @@
-# https://www.home-assistant.io/integrations/default_config/
-default_config:
+# Minimal core setup without default_config to avoid go2rtc dependency
+frontend:
+api:
+http:
+system_health:
+websocket_api:
+config:
+automation:
+scene:
+script:
+person:
+sun:
+energy:
+input_boolean:
+input_text:
+input_number:
+input_datetime:
+tag:
+counter:
+timer:
+application_credentials:
+zeroconf:
+ssdp:
+dhcp:
+device_automation:
+repairs:
+search:
+backup:
+cloud:
+mobile_app:
 
 # https://www.home-assistant.io/integrations/homeassistant/
 homeassistant:

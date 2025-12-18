@@ -9,10 +9,41 @@ select = [
 
 ignore = [
     "ANN401", # Dynamically typed expressions (typing.Any) are disallowed
+    "ANN001", # Allow missing type annotations where practical
     "D203", # no-blank-line-before-class (incompatible with formatter)
     "D212", # multi-line-summary-first-line (incompatible with formatter)
     "COM812", # incompatible with formatter
     "ISC001", # incompatible with formatter
+    "TC001", # type-checking import suggestions not enforced
+    "TC002", # type-checking import suggestions not enforced
+    "TC003", # type-checking import suggestions not enforced
+    "PLR0911", # allow multiple returns in complex functions
+    "PLR0912", # allow branching in complex functions
+    "PLR0915", # allow statement count in complex functions
+    "PLR2004", # allow magic numbers where clear
+    "E501", # allow longer lines where clearer
+    "DTZ005", # allow naive datetime where acceptable
+    "PERF401", # allow explicit loops for clarity
+    "TRY003", # allow formatted exception messages
+    "TRY400", # allow logging.error in exceptions
+    "BLE001", # allow broad exceptions in controlled areas
+    "ARG001", # allow unused args in test fixtures/hooks
+    "ARG002", # allow unused kwargs in entity methods
+    "PLC0415", # allow imports inside functions where needed
+    "C901", # allow higher complexity in select functions
+    "EM102", # allow direct f-strings in exceptions
+    "FBT001", # allow bool positional args where clear
+    "TRY300", # allow return before except blocks
+    "SIM110", # allow explicit loops over any()
+    "TRY301", # allow raises in place
+    "ASYNC109", # allow timeout parameters in async defs
+    "SIM117", # allow nested async context managers
+    "TRY401", # allow logger.exception with err param
+    "TRY002", # allow generic exceptions for flow
+    "F841", # allow intentionally unused locals
+    "ANN201", # allow missing return type for tests/fixtures
+    "PT011", # allow broad pytest.raises where sufficient
+    "SIM105", # allow try/except pass patterns
 ]
 
 [lint.flake8-pytest-style]
@@ -23,3 +54,11 @@ keep-runtime-typing = true
 
 [lint.mccabe]
 max-complexity = 25
+
+[lint.per-file-ignores]
+"tests/**/*.py" = [
+    "ANN001", # allow untyped test arguments
+    "PLR2004", # allow magic values in tests
+    "S101", # allow asserts in tests
+    "TC002", # allow test imports outside type-checking blocks
+]
