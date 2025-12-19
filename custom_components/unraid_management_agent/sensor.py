@@ -150,10 +150,18 @@ async def async_setup_entry(
         disk_id = disk.get("id", disk.get("name", "unknown"))
         disk_name = disk.get("name", disk_id)
         disk_role = disk.get("role", "")
+        disk_device = disk.get("device")
 
         # Create health sensor for physical disks only (skip virtual filesystems)
         # Virtual filesystems like docker_vdisk and log don't have SMART data
+        # Also skip parity slots that have no device assigned (e.g., parity2 when only 1 parity configured)
         if disk_role not in ("docker_vdisk", "log"):
+            # For parity disks, only create sensor if device is assigned
+            if disk_name in ("parity", "parity2") and not disk_device:
+                _LOGGER.debug(
+                    "Skipping %s health sensor - no device assigned", disk_name
+                )
+                continue
             entities.append(
                 UnraidDiskHealthSensor(coordinator, entry, disk_id, disk_name)
             )
