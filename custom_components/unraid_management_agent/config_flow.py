@@ -119,18 +119,14 @@ class UnraidConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(
-        config_entry: config_entries.ConfigEntry,
+        _config_entry: config_entries.ConfigEntry,
     ) -> UnraidOptionsFlowHandler:
         """Get the options flow for this handler."""
-        return UnraidOptionsFlowHandler(config_entry)
+        return UnraidOptionsFlowHandler()
 
 
 class UnraidOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for Unraid Management Agent."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        self.config_entry = config_entry
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
