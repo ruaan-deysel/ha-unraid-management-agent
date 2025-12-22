@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Unraid Management Agent (backend)
+    url: https://github.com/ruaan-deysel/unraid-management-agent/issues/new/choose
+    about: Issues for the Unraid Management Agent plugin/API belong here (not the Home Assistant integration)
   - name: Home Assistant Community
     url: https://community.home-assistant.io
     about: Ask questions in the Home Assistant community

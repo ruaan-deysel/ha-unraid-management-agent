@@ -7,6 +7,8 @@ assignees: ''
 
 ---
 
+> Important: If this bug is for the Unraid Management Agent backend/plugin/API (not the Home Assistant integration), please open it here instead: https://github.com/ruaan-deysel/unraid-management-agent/issues/new/choose
+
 ## Describe the Bug
 A clear and concise description of what the bug is.
 

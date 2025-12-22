@@ -7,6 +7,8 @@ assignees: ''
 
 ---
 
+> Important: If this feature request is for the Unraid Management Agent backend/plugin/API (not the Home Assistant integration), please open it here instead: https://github.com/ruaan-deysel/unraid-management-agent/issues/new/choose
+
 ## What Unraid Component?
 Select what you want to monitor/control:
 - [ ] System metrics (CPU, RAM, temp)
