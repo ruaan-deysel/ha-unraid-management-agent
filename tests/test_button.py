@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from homeassistant.core import HomeAssistant
@@ -22,10 +22,6 @@ async def test_button_setup(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
             return_value=mock_websocket_client,
         ),
-        patch(
-            "custom_components.unraid_management_agent.async_setup_services",
-            new=AsyncMock(),
-        ),
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
@@ -41,10 +37,10 @@ async def test_button_setup(
 
     # Check for all button entities
     expected_buttons = [
-        "button.unraid_unraid_test_start_array",
-        "button.unraid_unraid_test_stop_array",
-        "button.unraid_unraid_test_start_parity_check",
-        "button.unraid_unraid_test_stop_parity_check",
+        "button.unraid_test_start_array",
+        "button.unraid_test_stop_array",
+        "button.unraid_test_start_parity_check",
+        "button.unraid_test_stop_parity_check",
     ]
 
     for button_id in expected_buttons:
@@ -64,23 +60,19 @@ async def test_start_array_button(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
             return_value=mock_websocket_client,
         ),
-        patch(
-            "custom_components.unraid_management_agent.async_setup_services",
-            new=AsyncMock(),
-        ),
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 
     # Verify button exists
-    state = hass.states.get("button.unraid_unraid_test_start_array")
+    state = hass.states.get("button.unraid_test_start_array")
     assert state is not None
 
     # Press the button
     await hass.services.async_call(
         "button",
         "press",
-        {"entity_id": "button.unraid_unraid_test_start_array"},
+        {"entity_id": "button.unraid_test_start_array"},
         blocking=True,
     )
 
@@ -101,23 +93,19 @@ async def test_stop_array_button(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
             return_value=mock_websocket_client,
         ),
-        patch(
-            "custom_components.unraid_management_agent.async_setup_services",
-            new=AsyncMock(),
-        ),
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 
     # Verify button exists
-    state = hass.states.get("button.unraid_unraid_test_stop_array")
+    state = hass.states.get("button.unraid_test_stop_array")
     assert state is not None
 
     # Press the button
     await hass.services.async_call(
         "button",
         "press",
-        {"entity_id": "button.unraid_unraid_test_stop_array"},
+        {"entity_id": "button.unraid_test_stop_array"},
         blocking=True,
     )
 
@@ -138,23 +126,19 @@ async def test_start_parity_check_button(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
             return_value=mock_websocket_client,
         ),
-        patch(
-            "custom_components.unraid_management_agent.async_setup_services",
-            new=AsyncMock(),
-        ),
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 
     # Verify button exists
-    state = hass.states.get("button.unraid_unraid_test_start_parity_check")
+    state = hass.states.get("button.unraid_test_start_parity_check")
     assert state is not None
 
     # Press the button
     await hass.services.async_call(
         "button",
         "press",
-        {"entity_id": "button.unraid_unraid_test_start_parity_check"},
+        {"entity_id": "button.unraid_test_start_parity_check"},
         blocking=True,
     )
 
@@ -176,23 +160,19 @@ async def test_stop_parity_check_button(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
             return_value=mock_websocket_client,
         ),
-        patch(
-            "custom_components.unraid_management_agent.async_setup_services",
-            new=AsyncMock(),
-        ),
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 
     # Verify button exists
-    state = hass.states.get("button.unraid_unraid_test_stop_parity_check")
+    state = hass.states.get("button.unraid_test_stop_parity_check")
     assert state is not None
 
     # Press the button
     await hass.services.async_call(
         "button",
         "press",
-        {"entity_id": "button.unraid_unraid_test_stop_parity_check"},
+        {"entity_id": "button.unraid_test_stop_parity_check"},
         blocking=True,
     )
 
@@ -216,10 +196,6 @@ async def test_start_array_button_error(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
             return_value=mock_websocket_client,
         ),
-        patch(
-            "custom_components.unraid_management_agent.async_setup_services",
-            new=AsyncMock(),
-        ),
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
@@ -229,7 +205,7 @@ async def test_start_array_button_error(
         await hass.services.async_call(
             "button",
             "press",
-            {"entity_id": "button.unraid_unraid_test_start_array"},
+            {"entity_id": "button.unraid_test_start_array"},
             blocking=True,
         )
 
@@ -250,10 +226,6 @@ async def test_stop_array_button_error(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
             return_value=mock_websocket_client,
         ),
-        patch(
-            "custom_components.unraid_management_agent.async_setup_services",
-            new=AsyncMock(),
-        ),
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
@@ -263,7 +235,7 @@ async def test_stop_array_button_error(
         await hass.services.async_call(
             "button",
             "press",
-            {"entity_id": "button.unraid_unraid_test_stop_array"},
+            {"entity_id": "button.unraid_test_stop_array"},
             blocking=True,
         )
 
@@ -281,35 +253,31 @@ async def test_button_attributes(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
             return_value=mock_websocket_client,
         ),
-        patch(
-            "custom_components.unraid_management_agent.async_setup_services",
-            new=AsyncMock(),
-        ),
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 
     # Check start array button attributes
-    state = hass.states.get("button.unraid_unraid_test_start_array")
+    state = hass.states.get("button.unraid_test_start_array")
     assert state is not None
     # Friendly name includes device name in newer HA versions
     assert "Start Array" in state.attributes.get("friendly_name")
     assert state.attributes.get("icon") == "mdi:harddisk"
 
     # Check stop array button attributes
-    state = hass.states.get("button.unraid_unraid_test_stop_array")
+    state = hass.states.get("button.unraid_test_stop_array")
     assert state is not None
     assert "Stop Array" in state.attributes.get("friendly_name")
     assert state.attributes.get("icon") == "mdi:harddisk"
 
     # Check start parity check button attributes
-    state = hass.states.get("button.unraid_unraid_test_start_parity_check")
+    state = hass.states.get("button.unraid_test_start_parity_check")
     assert state is not None
     assert "Start Parity Check" in state.attributes.get("friendly_name")
     assert state.attributes.get("icon") == "mdi:shield-check"
 
     # Check stop parity check button attributes
-    state = hass.states.get("button.unraid_unraid_test_stop_parity_check")
+    state = hass.states.get("button.unraid_test_stop_parity_check")
     assert state is not None
     assert "Stop Parity Check" in state.attributes.get("friendly_name")
     assert state.attributes.get("icon") == "mdi:shield-check"

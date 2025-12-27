@@ -10,6 +10,16 @@
           "update_interval": "Update interval (seconds)",
           "enable_websocket": "Enable WebSocket for real-time updates"
         }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Unraid Server",
+        "description": "Update the connection details for your Unraid Management Agent",
+        "data": {
+          "host": "Host (IP address or hostname)",
+          "port": "Port",
+          "update_interval": "Update interval (seconds)",
+          "enable_websocket": "Enable WebSocket for real-time updates"
+        }
       }
     },
     "error": {
@@ -20,7 +30,8 @@
       "unknown": "An unknown error occurred. Please check the logs."
     },
     "abort": {
-      "already_configured": "This Unraid server is already configured."
+      "already_configured": "This Unraid server is already configured.",
+      "unique_id_mismatch": "The server at this address has a different unique ID. Create a new entry instead."
     }
   },
   "options": {

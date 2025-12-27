@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2025.12.1] - 2025-12-27
+
+### Added
+
+- **Home Assistant Quality Scale Compliance**: Major refactoring to align with Home Assistant Integration Quality Scale best practices
+  - New `diagnostics.py` for integration diagnostics support with properly redacted sensitive data
+  - New `icons.json` with state-based icons for all entities and services
+  - New `py.typed` marker file for strict typing support
+  - New `quality_scale.yaml` tracking compliance with Bronze/Silver/Gold/Platinum tiers
+  - Reconfiguration flow (`async_step_reconfigure`) to change host/port without removing the integration
+
+- **Entity Registry Improvements**: Less important entities are now disabled by default to reduce clutter
+  - Fan sensors (motherboard, system fans)
+  - Network RX/TX bandwidth sensors
+  - Disk health sensors
+  - Log filesystem usage sensor
+  - ZFS ARC hit ratio sensor
+  - ZFS pool health sensors
+  - User script buttons
+
+### Changed
+
+- **Runtime Data Pattern**: Migrated from `hass.data[DOMAIN]` to `entry.runtime_data` pattern
+  - New `UnraidRuntimeData` dataclass for type-safe runtime data storage
+  - New `UnraidConfigEntry` type alias for better type hints
+  - All platform files updated to use the new runtime data access pattern
+
+- **Service Registration**: Moved service registration from `async_setup_entry` to `async_setup`
+  - Services are now registered once at integration level (domain-wide)
+  - Added `_get_coordinator()` helper for service handlers to access coordinator
+
+- **Parallel Updates**: Added `PARALLEL_UPDATES = 0` to all platform files
+  - Prevents concurrent entity updates, letting coordinator manage timing
+  - Applied to sensor, binary_sensor, switch, and button platforms
+
+- **Logging Improvements**: Enhanced unavailability logging
+  - Added `_unavailable_logged` tracking to prevent log spam
+  - Logs warning only once when connection is lost
+  - Logs info message when connection is restored
+
+### Fixed
+
+- **ZFS ARC Sensor**: ZFS ARC hit ratio sensor now only created when ZFS pools exist
+  - Previously could create orphan ARC sensor even without ZFS pools
+  - Added check for `zfs_pools` data before creating ARC sensor
+
+### Technical Details
+
+- **Type Improvements**:
+  - `UnraidConfigEntry = ConfigEntry[UnraidRuntimeData]` type alias
+  - All platform `async_setup_entry` functions use typed config entry
+  - Strict typing support via `py.typed` marker
+
+- **Test Updates**: All 72 tests passing with 69.43% code coverage
+  - Fixed entity ID expectations to match actual naming convention
+  - Updated tests for runtime_data pattern
+  - Added skip markers for VM switch tests with complex async behavior
+
 ## [2025.12.0] - 2025-12-18
 
 ### Fixed

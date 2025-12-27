@@ -1,0 +1,176 @@
+{
+  "entity": {
+    "sensor": {
+      "cpu_usage": {
+        "default": "mdi:cpu-64-bit"
+      },
+      "ram_usage": {
+        "default": "mdi:memory"
+      },
+      "cpu_temperature": {
+        "default": "mdi:thermometer"
+      },
+      "uptime": {
+        "default": "mdi:clock-outline"
+      },
+      "motherboard_temperature": {
+        "default": "mdi:thermometer"
+      },
+      "array_usage": {
+        "default": "mdi:harddisk"
+      },
+      "array_size": {
+        "default": "mdi:harddisk"
+      },
+      "array_used": {
+        "default": "mdi:harddisk"
+      },
+      "array_free": {
+        "default": "mdi:harddisk"
+      },
+      "cache_usage": {
+        "default": "mdi:harddisk"
+      },
+      "cache_size": {
+        "default": "mdi:harddisk"
+      },
+      "active_containers": {
+        "default": "mdi:docker"
+      },
+      "total_containers": {
+        "default": "mdi:docker"
+      },
+      "notifications": {
+        "default": "mdi:bell"
+      },
+      "total_shares": {
+        "default": "mdi:folder-network"
+      },
+      "parity_errors": {
+        "default": "mdi:alert-circle"
+      },
+      "parity_progress": {
+        "default": "mdi:sync"
+      },
+      "parity_speed": {
+        "default": "mdi:speedometer"
+      },
+      "parity_eta": {
+        "default": "mdi:timer-sand"
+      },
+      "ups_status": {
+        "default": "mdi:battery"
+      },
+      "ups_battery": {
+        "default": "mdi:battery",
+        "state": {
+          "100": "mdi:battery",
+          "90": "mdi:battery-90",
+          "80": "mdi:battery-80",
+          "70": "mdi:battery-70",
+          "60": "mdi:battery-60",
+          "50": "mdi:battery-50",
+          "40": "mdi:battery-40",
+          "30": "mdi:battery-30",
+          "20": "mdi:battery-20",
+          "10": "mdi:battery-10",
+          "0": "mdi:battery-outline"
+        }
+      },
+      "ups_load": {
+        "default": "mdi:power-plug"
+      },
+      "ups_runtime": {
+        "default": "mdi:timer"
+      },
+      "ups_input_voltage": {
+        "default": "mdi:flash"
+      },
+      "ups_output_voltage": {
+        "default": "mdi:flash"
+      }
+    },
+    "binary_sensor": {
+      "array_started": {
+        "default": "mdi:harddisk"
+      },
+      "parity_check_running": {
+        "default": "mdi:sync"
+      },
+      "parity_valid": {
+        "default": "mdi:check-circle",
+        "state": {
+          "on": "mdi:check-circle",
+          "off": "mdi:alert-circle"
+        }
+      },
+      "ups_on_battery": {
+        "default": "mdi:battery",
+        "state": {
+          "on": "mdi:battery-alert",
+          "off": "mdi:power-plug"
+        }
+      },
+      "ups_online": {
+        "default": "mdi:power-plug",
+        "state": {
+          "on": "mdi:power-plug",
+          "off": "mdi:power-plug-off"
+        }
+      }
+    },
+    "switch": {
+      "container": {
+        "default": "mdi:docker",
+        "state": {
+          "on": "mdi:docker",
+          "off": "mdi:docker"
+        }
+      },
+      "vm": {
+        "default": "mdi:desktop-classic",
+        "state": {
+          "on": "mdi:desktop-classic",
+          "off": "mdi:desktop-classic"
+        }
+      }
+    },
+    "button": {
+      "array_start": {
+        "default": "mdi:play"
+      },
+      "array_stop": {
+        "default": "mdi:stop"
+      },
+      "parity_check_start": {
+        "default": "mdi:play-circle"
+      },
+      "parity_check_stop": {
+        "default": "mdi:stop-circle"
+      },
+      "user_script": {
+        "default": "mdi:script-text"
+      }
+    }
+  },
+  "services": {
+    "container_start": "mdi:play",
+    "container_stop": "mdi:stop",
+    "container_restart": "mdi:restart",
+    "container_pause": "mdi:pause",
+    "container_resume": "mdi:play",
+    "vm_start": "mdi:play",
+    "vm_stop": "mdi:stop",
+    "vm_restart": "mdi:restart",
+    "vm_pause": "mdi:pause",
+    "vm_resume": "mdi:play",
+    "vm_hibernate": "mdi:power-sleep",
+    "vm_force_stop": "mdi:close-circle",
+    "array_start": "mdi:play",
+    "array_stop": "mdi:stop",
+    "parity_check_start": "mdi:play-circle",
+    "parity_check_stop": "mdi:stop-circle",
+    "parity_check_pause": "mdi:pause-circle",
+    "parity_check_resume": "mdi:play-circle"
+  }
+}

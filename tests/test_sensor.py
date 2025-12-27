@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.const import PERCENTAGE
@@ -28,10 +28,6 @@ async def test_sensor_setup(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
             return_value=mock_websocket_client,
         ),
-        patch(
-            "custom_components.unraid_management_agent.async_setup_services",
-            new=AsyncMock(),
-        ),
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
@@ -47,9 +43,9 @@ async def test_sensor_setup(
 
     # Check for key sensor entities
     expected_sensors = [
-        "sensor.unraid_unraid_test_cpu_usage",
-        "sensor.unraid_unraid_test_ram_usage",
-        "sensor.unraid_unraid_test_array_usage",
+        "sensor.unraid_test_cpu_usage",
+        "sensor.unraid_test_ram_usage",
+        "sensor.unraid_test_array_usage",
     ]
 
     for sensor_id in expected_sensors:
@@ -74,15 +70,11 @@ async def test_sensor_setup_handles_none_fans(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
             return_value=mock_websocket_client,
         ),
-        patch(
-            "custom_components.unraid_management_agent.async_setup_services",
-            new=AsyncMock(),
-        ),
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 
-    state = hass.states.get("sensor.unraid_unraid_test_cpu_usage")
+    state = hass.states.get("sensor.unraid_test_cpu_usage")
     assert state is not None
 
     fan_entities = [
@@ -106,15 +98,11 @@ async def test_cpu_usage_sensor(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
             return_value=mock_websocket_client,
         ),
-        patch(
-            "custom_components.unraid_management_agent.async_setup_services",
-            new=AsyncMock(),
-        ),
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 
-    state = hass.states.get("sensor.unraid_unraid_test_cpu_usage")
+    state = hass.states.get("sensor.unraid_test_cpu_usage")
     assert state is not None
     assert state.state == "25.5"  # From MOCK_SYSTEM_DATA
     assert state.attributes.get("unit_of_measurement") == PERCENTAGE
@@ -134,15 +122,11 @@ async def test_ram_usage_sensor(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
             return_value=mock_websocket_client,
         ),
-        patch(
-            "custom_components.unraid_management_agent.async_setup_services",
-            new=AsyncMock(),
-        ),
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 
-    state = hass.states.get("sensor.unraid_unraid_test_ram_usage")
+    state = hass.states.get("sensor.unraid_test_ram_usage")
     assert state is not None
     assert state.state == "45.2"  # From MOCK_SYSTEM_DATA
     assert state.attributes.get("unit_of_measurement") == PERCENTAGE
@@ -162,15 +146,11 @@ async def test_temperature_sensor(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
             return_value=mock_websocket_client,
         ),
-        patch(
-            "custom_components.unraid_management_agent.async_setup_services",
-            new=AsyncMock(),
-        ),
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 
-    state = hass.states.get("sensor.unraid_unraid_test_cpu_temperature")
+    state = hass.states.get("sensor.unraid_test_cpu_temperature")
     assert state is not None
     assert state.state == "55.0"
     assert state.attributes.get("device_class") == SensorDeviceClass.TEMPERATURE
@@ -190,15 +170,11 @@ async def test_array_usage_sensor(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
             return_value=mock_websocket_client,
         ),
-        patch(
-            "custom_components.unraid_management_agent.async_setup_services",
-            new=AsyncMock(),
-        ),
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 
-    state = hass.states.get("sensor.unraid_unraid_test_array_usage")
+    state = hass.states.get("sensor.unraid_test_array_usage")
     assert state is not None
     assert state.state == "50.0"  # 8TB used / 16TB total = 50%
     assert state.attributes.get("unit_of_measurement") == PERCENTAGE
@@ -218,16 +194,12 @@ async def test_disk_usage_sensor(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
             return_value=mock_websocket_client,
         ),
-        patch(
-            "custom_components.unraid_management_agent.async_setup_services",
-            new=AsyncMock(),
-        ),
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 
     # Check for disk1 sensor (uses "name" field from mock data)
-    state = hass.states.get("sensor.unraid_unraid_test_disk_disk1_usage")
+    state = hass.states.get("sensor.unraid_test_disk_disk1_usage")
     assert state is not None
     assert state.state == "50.0"  # From MOCK_DISKS_DATA
     assert state.attributes.get("unit_of_measurement") == PERCENTAGE

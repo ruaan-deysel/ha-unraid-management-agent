@@ -1,0 +1,167 @@
+# Integration Quality Scale Assessment
+# https://developers.home-assistant.io/docs/core/integration-quality-scale/
+
+rules:
+  # Bronze
+  action-setup:
+    status: done
+    comment: Services registered in async_setup (domain-level, not per-entry)
+  appropriate-polling:
+    status: done
+    comment: DataUpdateCoordinator with configurable interval (5-300s)
+  brands:
+    status: todo
+    comment: No brand assets in HA brands repository
+  common-modules:
+    status: done
+    comment: Shared base classes, const.py, api_client.py
+  config-flow:
+    status: done
+    comment: Full UI config flow with options
+  config-flow-test-coverage:
+    status: done
+    comment: tests/test_config_flow.py covers success, errors, options
+  dependency-transparency:
+    status: done
+    comment: Only aiohttp>=3.9.0 in requirements
+  docs-actions:
+    status: todo
+    comment: README lacks detailed service action documentation
+  docs-high-level-description:
+    status: done
+    comment: README has project description
+  docs-installation-instructions:
+    status: todo
+    comment: README needs step-by-step HACS/manual install instructions
+  docs-removal-instructions:
+    status: todo
+    comment: No removal instructions in README
+  entity-event-setup:
+    status: done
+    comment: Uses CoordinatorEntity pattern correctly
+  entity-unique-id:
+    status: done
+    comment: All entities have unique_id property
+  has-entity-name:
+    status: done
+    comment: _attr_has_entity_name = True in all base classes
+  runtime-data:
+    status: done
+    comment: Uses entry.runtime_data with UnraidRuntimeData dataclass
+  test-before-configure:
+    status: done
+    comment: Calls get_system_info() before creating entry
+  test-before-setup:
+    status: done
+    comment: health_check() raises ConfigEntryNotReady on failure
+  unique-config-entry:
+    status: done
+    comment: Uses async_set_unique_id + _abort_if_unique_id_configured
+
+  # Silver
+  action-exceptions:
+    status: done
+    comment: Services raise HomeAssistantError on failure
+  config-entry-unloading:
+    status: done
+    comment: async_unload_entry properly implemented
+  docs-configuration-parameters:
+    status: todo
+    comment: Options in strings.json but not documented in README
+  docs-installation-parameters:
+    status: todo
+    comment: Host/port parameters not fully documented
+  entity-unavailable:
+    status: done
+    comment: Entities use CoordinatorEntity which handles unavailability
+  integration-owner:
+    status: done
+    comment: "@ruaan-deysel in manifest.json codeowners"
+  log-when-unavailable:
+    status: done
+    comment: Logs unavailability once with recovery message
+  parallel-updates:
+    status: done
+    comment: PARALLEL_UPDATES = 0 in all platform files
+  reauthentication-flow:
+    status: exempt
+    comment: No authentication required (local API without credentials)
+  test-coverage:
+    status: todo
+    comment: Tests exist but 95% coverage not verified
+
+  # Gold
+  devices:
+    status: done
+    comment: All entities grouped under single Unraid device
+  diagnostics:
+    status: done
+    comment: diagnostics.py with redacted config and coordinator data
+  discovery:
+    status: exempt
+    comment: Local push integration, manual setup appropriate
+  discovery-update-info:
+    status: exempt
+    comment: No discovery mechanism
+  docs-data-update:
+    status: todo
+    comment: No documentation about polling/websocket update mechanism
+  docs-examples:
+    status: todo
+    comment: No automation examples in documentation
+  docs-known-limitations:
+    status: todo
+    comment: No known limitations documented
+  docs-supported-devices:
+    status: todo
+    comment: No supported Unraid versions documented
+  docs-supported-functions:
+    status: todo
+    comment: No entity/platform list in documentation
+  docs-troubleshooting:
+    status: todo
+    comment: No troubleshooting section in documentation
+  docs-use-cases:
+    status: todo
+    comment: No use case examples in documentation
+  dynamic-devices:
+    status: exempt
+    comment: Single device per config entry, entities created at setup
+  entity-category:
+    status: done
+    comment: EntityCategory.DIAGNOSTIC used for status sensors
+  entity-device-class:
+    status: done
+    comment: Proper device classes (temperature, power, battery, etc.)
+  entity-disabled-by-default:
+    status: done
+    comment: Less important entities (fans, network RX/TX, ZFS ARC, disk health, user scripts) disabled by default
+  entity-translations:
+    status: done
+    comment: Entity translations defined in strings.json entity section
+  exception-translations:
+    status: todo
+    comment: Exception messages not translatable
+  icon-translations:
+    status: done
+    comment: icons.json with state-based icons for entities and services
+  reconfiguration-flow:
+    status: done
+    comment: async_step_reconfigure implemented to change host/port
+  repair-issues:
+    status: done
+    comment: repairs.py implemented for issue detection
+  stale-devices:
+    status: exempt
+    comment: Single device per entry, removed on unload
+
+  # Platinum
+  async-dependency:
+    status: done
+    comment: aiohttp is fully async
+  inject-websession:
+    status: done
+    comment: Uses async_get_clientsession(hass)
+  strict-typing:
+    status: done
+    comment: Type hints present with py.typed marker

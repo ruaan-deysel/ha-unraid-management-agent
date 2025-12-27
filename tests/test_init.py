@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
@@ -23,17 +23,15 @@ async def test_setup_entry_success(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
             return_value=mock_websocket_client,
         ),
-        patch(
-            "custom_components.unraid_management_agent.async_setup_services",
-            new=AsyncMock(),
-        ),
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 
     assert mock_config_entry.state == ConfigEntryState.LOADED
-    assert DOMAIN in hass.data
-    assert mock_config_entry.entry_id in hass.data[DOMAIN]
+    # Verify runtime_data is set
+    assert mock_config_entry.runtime_data is not None
+    assert mock_config_entry.runtime_data.coordinator is not None
+    assert mock_config_entry.runtime_data.client is not None
 
     # Verify health check was called
     mock_api_client.health_check.assert_called_once()
@@ -84,10 +82,6 @@ async def test_unload_entry(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
             return_value=mock_websocket_client,
         ),
-        patch(
-            "custom_components.unraid_management_agent.async_setup_services",
-            new=AsyncMock(),
-        ),
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
@@ -98,7 +92,6 @@ async def test_unload_entry(
     await hass.async_block_till_done()
 
     assert mock_config_entry.state == ConfigEntryState.NOT_LOADED
-    assert mock_config_entry.entry_id not in hass.data[DOMAIN]
 
 
 async def test_reload_entry(
@@ -114,10 +107,6 @@ async def test_reload_entry(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
             return_value=mock_websocket_client,
         ),
-        patch(
-            "custom_components.unraid_management_agent.async_setup_services",
-            new=AsyncMock(),
-        ),
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
@@ -132,10 +121,6 @@ async def test_reload_entry(
         patch(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
             return_value=mock_websocket_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.async_setup_services",
-            new=AsyncMock(),
         ),
     ):
         await hass.config_entries.async_reload(mock_config_entry.entry_id)
@@ -156,10 +141,6 @@ async def test_setup_platforms(
         patch(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
             return_value=mock_websocket_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.async_setup_services",
-            new=AsyncMock(),
         ),
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
@@ -191,17 +172,13 @@ async def test_websocket_enabled(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
             return_value=mock_websocket_client,
         ),
-        patch(
-            "custom_components.unraid_management_agent.async_setup_services",
-            new=AsyncMock(),
-        ),
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 
-    # Verify coordinator exists
-    assert DOMAIN in hass.data
-    assert mock_config_entry.entry_id in hass.data[DOMAIN]
+    # Verify runtime_data is set
+    assert mock_config_entry.runtime_data is not None
+    assert mock_config_entry.runtime_data.coordinator is not None
 
 
 async def test_websocket_disabled(
@@ -222,17 +199,13 @@ async def test_websocket_disabled(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
             return_value=mock_websocket_client,
         ),
-        patch(
-            "custom_components.unraid_management_agent.async_setup_services",
-            new=AsyncMock(),
-        ),
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 
-    # Verify coordinator exists
-    assert DOMAIN in hass.data
-    assert mock_config_entry.entry_id in hass.data[DOMAIN]
+    # Verify runtime_data is set
+    assert mock_config_entry.runtime_data is not None
+    assert mock_config_entry.runtime_data.coordinator is not None
 
 
 async def test_update_listener(
@@ -247,10 +220,6 @@ async def test_update_listener(
         patch(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
             return_value=mock_websocket_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.async_setup_services",
-            new=AsyncMock(),
         ),
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
@@ -267,10 +236,6 @@ async def test_update_listener(
         patch(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
             return_value=mock_websocket_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.async_setup_services",
-            new=AsyncMock(),
         ),
     ):
         hass.config_entries.async_update_entry(
@@ -308,18 +273,13 @@ async def test_multiple_entries(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
             return_value=mock_websocket_client,
         ),
-        patch(
-            "custom_components.unraid_management_agent.async_setup_services",
-            new=AsyncMock(),
-        ),
     ):
         result1 = await hass.config_entries.async_setup(entry1.entry_id)
         await hass.async_block_till_done()
 
     assert result1 is True
     assert entry1.state == ConfigEntryState.LOADED
-    assert entry1.entry_id in hass.data[DOMAIN]
+    assert entry1.runtime_data is not None
 
-    # Verify that the domain data structure supports multiple entries
-    # (it's a dict keyed by entry_id, so it inherently supports multiple entries)
-    assert isinstance(hass.data[DOMAIN], dict)
+    # Verify that runtime_data supports multiple entries (each entry has its own)
+    assert entry1.runtime_data.coordinator is not None

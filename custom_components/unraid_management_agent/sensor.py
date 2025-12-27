@@ -26,7 +26,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from . import UnraidDataUpdateCoordinator
+from . import UnraidConfigEntry, UnraidDataUpdateCoordinator
 from .const import (
     ATTR_ARRAY_STATE,
     ATTR_CPU_CORES,
@@ -76,6 +76,9 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# Coordinator handles updates, so no parallel update limit
+PARALLEL_UPDATES = 0
+
 
 def _is_physical_network_interface(interface_name: str) -> bool:
     """
@@ -103,11 +106,11 @@ def _is_physical_network_interface(interface_name: str) -> bool:
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: UnraidConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Unraid sensor entities."""
-    coordinator: UnraidDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data.coordinator
 
     _LOGGER.debug(
         "Setting up Unraid sensors, coordinator data keys: %s", coordinator.data.keys()
@@ -250,11 +253,14 @@ async def async_setup_entry(
                 ]
             )
 
-    # ZFS ARC sensors (if ZFS ARC data available)
-    # Only create if ZFS ARC data exists and is not empty
+    # ZFS ARC sensors (only if ZFS pools exist)
+    # Only create if ZFS is actually being used (has pools)
+    zfs_pools = coordinator.data.get(KEY_ZFS_POOLS) or []
     zfs_arc = coordinator.data.get(KEY_ZFS_ARC, {})
-    if zfs_arc and isinstance(zfs_arc, dict) and len(zfs_arc) > 0:
+    if zfs_pools and zfs_arc and isinstance(zfs_arc, dict) and len(zfs_arc) > 0:
         entities.append(UnraidZFSARCHitRatioSensor(coordinator, entry))
+    elif not zfs_pools:
+        _LOGGER.debug("Skipping ZFS ARC sensor - no ZFS pools configured")
 
     # Notification sensor (if notifications available)
     if coordinator.data.get(KEY_NOTIFICATIONS) is not None:
@@ -445,6 +451,7 @@ class UnraidMotherboardTemperatureSensor(UnraidSensorBase):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = ICON_TEMPERATURE
     _attr_suggested_display_precision = 1
+    _attr_entity_registry_enabled_default = False
 
     @property
     def unique_id(self) -> str:
@@ -464,6 +471,7 @@ class UnraidFanSensor(UnraidSensorBase):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:fan"
     _attr_suggested_display_precision = 0
+    _attr_entity_registry_enabled_default = False
 
     def __init__(
         self,
@@ -1097,6 +1105,7 @@ class UnraidNetworkRXSensor(UnraidSensorBase):
     _attr_device_class = SensorDeviceClass.DATA_RATE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_suggested_display_precision = 1
+    _attr_entity_registry_enabled_default = False
 
     def __init__(
         self,
@@ -1193,6 +1202,7 @@ class UnraidNetworkTXSensor(UnraidSensorBase):
     _attr_device_class = SensorDeviceClass.DATA_RATE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_suggested_display_precision = 1
+    _attr_entity_registry_enabled_default = False
 
     def __init__(
         self,
@@ -1400,6 +1410,7 @@ class UnraidDiskHealthSensor(UnraidSensorBase):
     _attr_state_class = None
     _attr_icon = "mdi:heart-pulse"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
 
     def __init__(
         self,
@@ -1545,6 +1556,7 @@ class UnraidLogFilesystemUsageSensor(UnraidSensorBase):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:file-document-outline"
     _attr_suggested_display_precision = 1
+    _attr_entity_registry_enabled_default = False
 
     @property
     def unique_id(self) -> str:
@@ -1761,6 +1773,7 @@ class UnraidZFSPoolHealthSensor(UnraidSensorBase):
 
     _attr_icon = ICON_ZFS_POOL
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
 
     def __init__(
         self,
@@ -1841,6 +1854,7 @@ class UnraidZFSARCHitRatioSensor(UnraidSensorBase):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = ICON_ZFS_ARC
     _attr_suggested_display_precision = 2
+    _attr_entity_registry_enabled_default = False
 
     @property
     def unique_id(self) -> str:

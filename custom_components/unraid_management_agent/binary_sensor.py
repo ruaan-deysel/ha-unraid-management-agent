@@ -17,7 +17,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from . import UnraidDataUpdateCoordinator
+from . import UnraidConfigEntry, UnraidDataUpdateCoordinator
 from .const import (
     ATTR_PARITY_CHECK_STATUS,
     DOMAIN,
@@ -35,6 +35,9 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# Coordinator handles updates, so no parallel update limit
+PARALLEL_UPDATES = 0
 
 
 def _is_physical_network_interface(interface_name: str) -> bool:
@@ -63,11 +66,11 @@ def _is_physical_network_interface(interface_name: str) -> bool:
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: UnraidConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Unraid binary sensor entities."""
-    coordinator: UnraidDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data.coordinator
 
     entities: list[BinarySensorEntity] = []
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 
@@ -63,8 +64,25 @@ PLATFORMS: list[Platform] = [
     Platform.BUTTON,
 ]
 
+type UnraidConfigEntry = ConfigEntry[UnraidRuntimeData]
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+
+@dataclass
+class UnraidRuntimeData:
+    """Runtime data for Unraid Management Agent."""
+
+    coordinator: UnraidDataUpdateCoordinator
+    client: UnraidAPIClient
+
+
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """Set up Unraid Management Agent integration."""
+    # Register services once at integration level (not per entry)
+    await async_setup_services(hass)
+    return True
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: UnraidConfigEntry) -> bool:
     """Set up Unraid Management Agent from a config entry."""
     host = entry.data[CONF_HOST]
     port = entry.data[CONF_PORT]
@@ -94,15 +112,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Fetch initial data
     await coordinator.async_config_entry_first_refresh()
 
-    # Store coordinator
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = coordinator
+    # Store runtime data using the new pattern
+    entry.runtime_data = UnraidRuntimeData(coordinator=coordinator, client=client)
 
     # Set up platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
-    # Register services
-    await async_setup_services(hass, coordinator)
 
     # Start WebSocket for real-time updates
     if enable_websocket:
@@ -114,28 +128,39 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: UnraidConfigEntry) -> bool:
     """Unload a config entry."""
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        coordinator: UnraidDataUpdateCoordinator = hass.data[DOMAIN].pop(entry.entry_id)
         # Stop WebSocket if running
-        await coordinator.async_stop_websocket()
+        await entry.runtime_data.coordinator.async_stop_websocket()
 
     return unload_ok
 
 
-async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+async def async_reload_entry(hass: HomeAssistant, entry: UnraidConfigEntry) -> None:
     """Reload config entry when options change."""
     await hass.config_entries.async_reload(entry.entry_id)
 
 
-async def async_setup_services(
-    hass: HomeAssistant, coordinator: UnraidDataUpdateCoordinator
-) -> None:
+async def async_setup_services(hass: HomeAssistant) -> None:
     """Set up services for Unraid Management Agent."""
+    # Check if services are already registered
+    if hass.services.has_service(DOMAIN, "container_start"):
+        return
+
+    def _get_coordinator(call: ServiceCall) -> UnraidDataUpdateCoordinator:
+        """Get coordinator from any config entry."""
+        entries = hass.config_entries.async_entries(DOMAIN)
+        if not entries:
+            msg = "No Unraid Management Agent entries configured"
+            raise HomeAssistantError(msg)
+        # Use the first entry's coordinator (services are domain-wide)
+        entry: UnraidConfigEntry = entries[0]
+        return entry.runtime_data.coordinator
 
     async def handle_container_start(call: ServiceCall) -> None:
         """Handle container start service."""
+        coordinator = _get_coordinator(call)
         container_id = call.data["container_id"]
         try:
             await coordinator.client.start_container(container_id)
@@ -146,6 +171,7 @@ async def async_setup_services(
 
     async def handle_container_stop(call: ServiceCall) -> None:
         """Handle container stop service."""
+        coordinator = _get_coordinator(call)
         container_id = call.data["container_id"]
         try:
             await coordinator.client.stop_container(container_id)
@@ -156,6 +182,7 @@ async def async_setup_services(
 
     async def handle_container_restart(call: ServiceCall) -> None:
         """Handle container restart service."""
+        coordinator = _get_coordinator(call)
         container_id = call.data["container_id"]
         try:
             await coordinator.client.restart_container(container_id)
@@ -166,6 +193,7 @@ async def async_setup_services(
 
     async def handle_container_pause(call: ServiceCall) -> None:
         """Handle container pause service."""
+        coordinator = _get_coordinator(call)
         container_id = call.data["container_id"]
         try:
             await coordinator.client.pause_container(container_id)
@@ -176,6 +204,7 @@ async def async_setup_services(
 
     async def handle_container_resume(call: ServiceCall) -> None:
         """Handle container resume service."""
+        coordinator = _get_coordinator(call)
         container_id = call.data["container_id"]
         try:
             await coordinator.client.unpause_container(container_id)
@@ -186,6 +215,7 @@ async def async_setup_services(
 
     async def handle_vm_start(call: ServiceCall) -> None:
         """Handle VM start service."""
+        coordinator = _get_coordinator(call)
         vm_id = call.data["vm_id"]
         try:
             await coordinator.client.start_vm(vm_id)
@@ -196,6 +226,7 @@ async def async_setup_services(
 
     async def handle_vm_stop(call: ServiceCall) -> None:
         """Handle VM stop service."""
+        coordinator = _get_coordinator(call)
         vm_id = call.data["vm_id"]
         try:
             await coordinator.client.stop_vm(vm_id)
@@ -206,6 +237,7 @@ async def async_setup_services(
 
     async def handle_vm_restart(call: ServiceCall) -> None:
         """Handle VM restart service."""
+        coordinator = _get_coordinator(call)
         vm_id = call.data["vm_id"]
         try:
             await coordinator.client.restart_vm(vm_id)
@@ -216,6 +248,7 @@ async def async_setup_services(
 
     async def handle_vm_pause(call: ServiceCall) -> None:
         """Handle VM pause service."""
+        coordinator = _get_coordinator(call)
         vm_id = call.data["vm_id"]
         try:
             await coordinator.client.pause_vm(vm_id)
@@ -226,6 +259,7 @@ async def async_setup_services(
 
     async def handle_vm_resume(call: ServiceCall) -> None:
         """Handle VM resume service."""
+        coordinator = _get_coordinator(call)
         vm_id = call.data["vm_id"]
         try:
             await coordinator.client.resume_vm(vm_id)
@@ -236,6 +270,7 @@ async def async_setup_services(
 
     async def handle_vm_hibernate(call: ServiceCall) -> None:
         """Handle VM hibernate service."""
+        coordinator = _get_coordinator(call)
         vm_id = call.data["vm_id"]
         try:
             await coordinator.client.hibernate_vm(vm_id)
@@ -246,6 +281,7 @@ async def async_setup_services(
 
     async def handle_vm_force_stop(call: ServiceCall) -> None:
         """Handle VM force stop service."""
+        coordinator = _get_coordinator(call)
         vm_id = call.data["vm_id"]
         try:
             await coordinator.client.force_stop_vm(vm_id)
@@ -256,6 +292,7 @@ async def async_setup_services(
 
     async def handle_array_start(call: ServiceCall) -> None:
         """Handle array start service."""
+        coordinator = _get_coordinator(call)
         try:
             await coordinator.client.start_array()
             await coordinator.async_request_refresh()
@@ -265,6 +302,7 @@ async def async_setup_services(
 
     async def handle_array_stop(call: ServiceCall) -> None:
         """Handle array stop service."""
+        coordinator = _get_coordinator(call)
         try:
             await coordinator.client.stop_array()
             await coordinator.async_request_refresh()
@@ -274,6 +312,7 @@ async def async_setup_services(
 
     async def handle_parity_check_start(call: ServiceCall) -> None:
         """Handle parity check start service."""
+        coordinator = _get_coordinator(call)
         try:
             await coordinator.client.start_parity_check()
             await coordinator.async_request_refresh()
@@ -283,6 +322,7 @@ async def async_setup_services(
 
     async def handle_parity_check_stop(call: ServiceCall) -> None:
         """Handle parity check stop service."""
+        coordinator = _get_coordinator(call)
         try:
             await coordinator.client.stop_parity_check()
             await coordinator.async_request_refresh()
@@ -292,6 +332,7 @@ async def async_setup_services(
 
     async def handle_parity_check_pause(call: ServiceCall) -> None:
         """Handle parity check pause service."""
+        coordinator = _get_coordinator(call)
         try:
             await coordinator.client.pause_parity_check()
             await coordinator.async_request_refresh()
@@ -301,6 +342,7 @@ async def async_setup_services(
 
     async def handle_parity_check_resume(call: ServiceCall) -> None:
         """Handle parity check resume service."""
+        coordinator = _get_coordinator(call)
         try:
             await coordinator.client.resume_parity_check()
             await coordinator.async_request_refresh()
@@ -354,6 +396,7 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator):
         self.client = client
         self.enable_websocket = enable_websocket
         self.websocket_task = None
+        self._unavailable_logged = False
 
         super().__init__(
             hass,
@@ -425,10 +468,15 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator):
                 else {},
             }
 
-            # Log any errors
+            # Log any errors (but don't spam)
             for i, result in enumerate(results):
                 if isinstance(result, Exception):
-                    _LOGGER.warning("Error fetching data for index %d: %s", i, result)
+                    _LOGGER.debug("Error fetching data for index %d: %s", i, result)
+
+            # Log recovery if we were previously unavailable
+            if self._unavailable_logged:
+                _LOGGER.info("Connection to Unraid server restored")
+                self._unavailable_logged = False
 
             # Check for issues and create repair flows
             await repairs.async_check_and_create_issues(self.hass, self)
@@ -436,7 +484,10 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator):
             return data
 
         except Exception as err:
-            _LOGGER.error("Error communicating with API: %s", err)
+            # Log unavailable only once
+            if not self._unavailable_logged:
+                _LOGGER.warning("Error communicating with Unraid API: %s", err)
+                self._unavailable_logged = True
             raise UpdateFailed(f"Error communicating with API: {err}") from err
 
     def _handle_websocket_event(self, event_type: str, data: Any) -> None:

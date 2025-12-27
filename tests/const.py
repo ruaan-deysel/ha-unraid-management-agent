@@ -111,14 +111,14 @@ MOCK_VMS_DATA = [
         "id": "windows-10",
         "name": "Windows 10",
         "state": "running",
-        "vcpus": 4,
+        "cpu_count": 4,
         "memory_mb": 8192,
     },
     {
         "id": "ubuntu-server",
         "name": "Ubuntu Server",
         "state": "stopped",
-        "vcpus": 2,
+        "cpu_count": 2,
         "memory_mb": 4096,
     },
 ]

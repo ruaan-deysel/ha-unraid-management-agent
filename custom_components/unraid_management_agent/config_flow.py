@@ -116,6 +116,65 @@ class UnraidConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle reconfiguration of the integration."""
+        reconfigure_entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            try:
+                info = await validate_input(self.hass, user_input)
+            except TimeoutError:
+                errors["base"] = ERROR_TIMEOUT
+            except ConnectionError:
+                errors["base"] = ERROR_CANNOT_CONNECT
+            except Exception:  # pylint: disable=broad-except
+                _LOGGER.exception("Unexpected exception during reconfigure")
+                errors["base"] = ERROR_UNKNOWN
+            else:
+                # Update the unique ID if host/port changed
+                await self.async_set_unique_id(
+                    f"{user_input[CONF_HOST]}:{user_input[CONF_PORT]}"
+                )
+                self._abort_if_unique_id_mismatch(reason="unique_id_mismatch")
+
+                return self.async_update_reload_and_abort(
+                    reconfigure_entry,
+                    title=info["title"],
+                    data=user_input,
+                )
+
+        # Pre-fill with current values
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_HOST, default=reconfigure_entry.data.get(CONF_HOST, "")
+                    ): cv.string,
+                    vol.Required(
+                        CONF_PORT,
+                        default=reconfigure_entry.data.get(CONF_PORT, DEFAULT_PORT),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
+                    vol.Optional(
+                        CONF_UPDATE_INTERVAL,
+                        default=reconfigure_entry.data.get(
+                            CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
+                        ),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=5, max=300)),
+                    vol.Optional(
+                        CONF_ENABLE_WEBSOCKET,
+                        default=reconfigure_entry.data.get(
+                            CONF_ENABLE_WEBSOCKET, DEFAULT_ENABLE_WEBSOCKET
+                        ),
+                    ): cv.boolean,
+                }
+            ),
+            errors=errors,
+        )
+
     @staticmethod
     @callback
     def async_get_options_flow(

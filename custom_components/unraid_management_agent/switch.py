@@ -14,7 +14,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from . import UnraidDataUpdateCoordinator
+from . import UnraidConfigEntry, UnraidDataUpdateCoordinator
 from .const import (
     ATTR_CONTAINER_IMAGE,
     ATTR_CONTAINER_PORTS,
@@ -32,14 +32,17 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# Coordinator handles updates, so no parallel update limit
+PARALLEL_UPDATES = 0
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: UnraidConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Unraid switch entities."""
-    coordinator: UnraidDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data.coordinator
 
     entities: list[SwitchEntity] = []
 
