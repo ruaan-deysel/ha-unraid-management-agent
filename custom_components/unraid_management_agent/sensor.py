@@ -1120,6 +1120,42 @@ class UnraidNetworkRXSensor(UnraidSensorBase):
         self._attr_icon = ICON_NETWORK
         self._last_bytes = None
         self._last_update = None
+        self._last_value = 0.0
+
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator - calculate rate once per update."""
+        from datetime import datetime
+
+        for interface in self.coordinator.data.get(KEY_NETWORK, []):
+            if interface.get("name") == self._interface_name:
+                bytes_received = interface.get("bytes_received")
+                if bytes_received is not None:
+                    now = datetime.now()
+
+                    # Calculate rate if we have previous data
+                    if self._last_bytes is not None and self._last_update is not None:
+                        # Only recalculate if bytes have actually changed AND enough time has passed
+                        if bytes_received != self._last_bytes:
+                            time_diff = (now - self._last_update).total_seconds()
+                            if time_diff >= 5.0:
+                                bytes_diff = bytes_received - self._last_bytes
+                                bytes_per_second = bytes_diff / time_diff
+                                bits_per_second = bytes_per_second * 8
+                                kilobits_per_second = bits_per_second / 1000
+
+                                self._last_value = max(0.0, kilobits_per_second)
+                                self._last_bytes = bytes_received
+                                self._last_update = now
+                        # else: bytes unchanged or time_diff < 5s, keep previous _last_value
+                    else:
+                        # First run - store initial values, keep existing _last_value if we have one
+                        self._last_bytes = bytes_received
+                        self._last_update = now
+                        # Don't reset to 0 if we already have a cached value (prevents reset after brief data gaps)
+                break
+
+        # Call parent to trigger state update
+        super()._handle_coordinator_update()
 
     @property
     def unique_id(self) -> str:
@@ -1129,40 +1165,7 @@ class UnraidNetworkRXSensor(UnraidSensorBase):
     @property
     def native_value(self) -> float | None:
         """Return the state in kilobits per second."""
-        from datetime import datetime
-
-        for interface in self.coordinator.data.get(KEY_NETWORK, []):
-            if interface.get("name") == self._interface_name:
-                bytes_received = interface.get("bytes_received")
-                if bytes_received is None:
-                    return None
-
-                # Get current time
-                now = datetime.now()
-
-                # If we have previous data, calculate rate
-                if self._last_bytes is not None and self._last_update is not None:
-                    time_diff = (now - self._last_update).total_seconds()
-                    if time_diff > 0:
-                        bytes_diff = bytes_received - self._last_bytes
-                        # Calculate bytes per second, then convert to kilobits per second
-                        bytes_per_second = bytes_diff / time_diff
-                        bits_per_second = bytes_per_second * 8
-                        kilobits_per_second = bits_per_second / 1000
-
-                        # Update tracking variables
-                        self._last_bytes = bytes_received
-                        self._last_update = now
-
-                        # Return rate (can be negative if counter reset, return 0 in that case)
-                        return max(0.0, kilobits_per_second)
-
-                # First run or after reset - store values and return 0
-                self._last_bytes = bytes_received
-                self._last_update = now
-                return 0.0
-
-        return None
+        return self._last_value
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -1217,6 +1220,42 @@ class UnraidNetworkTXSensor(UnraidSensorBase):
         self._attr_icon = ICON_NETWORK
         self._last_bytes = None
         self._last_update = None
+        self._last_value = 0.0
+
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator - calculate rate once per update."""
+        from datetime import datetime
+
+        for interface in self.coordinator.data.get(KEY_NETWORK, []):
+            if interface.get("name") == self._interface_name:
+                bytes_sent = interface.get("bytes_sent")
+                if bytes_sent is not None:
+                    now = datetime.now()
+
+                    # Calculate rate if we have previous data
+                    if self._last_bytes is not None and self._last_update is not None:
+                        # Only recalculate if bytes have actually changed AND enough time has passed
+                        if bytes_sent != self._last_bytes:
+                            time_diff = (now - self._last_update).total_seconds()
+                            if time_diff >= 5.0:
+                                bytes_diff = bytes_sent - self._last_bytes
+                                bytes_per_second = bytes_diff / time_diff
+                                bits_per_second = bytes_per_second * 8
+                                kilobits_per_second = bits_per_second / 1000
+
+                                self._last_value = max(0.0, kilobits_per_second)
+                                self._last_bytes = bytes_sent
+                                self._last_update = now
+                        # else: bytes unchanged or time_diff < 5s, keep previous _last_value
+                    else:
+                        # First run - store initial values, keep existing _last_value if we have one
+                        self._last_bytes = bytes_sent
+                        self._last_update = now
+                        # Don't reset to 0 if we already have a cached value (prevents reset after brief data gaps)
+                break
+
+        # Call parent to trigger state update
+        super()._handle_coordinator_update()
 
     @property
     def unique_id(self) -> str:
@@ -1226,40 +1265,7 @@ class UnraidNetworkTXSensor(UnraidSensorBase):
     @property
     def native_value(self) -> float | None:
         """Return the state in kilobits per second."""
-        from datetime import datetime
-
-        for interface in self.coordinator.data.get(KEY_NETWORK, []):
-            if interface.get("name") == self._interface_name:
-                bytes_sent = interface.get("bytes_sent")
-                if bytes_sent is None:
-                    return None
-
-                # Get current time
-                now = datetime.now()
-
-                # If we have previous data, calculate rate
-                if self._last_bytes is not None and self._last_update is not None:
-                    time_diff = (now - self._last_update).total_seconds()
-                    if time_diff > 0:
-                        bytes_diff = bytes_sent - self._last_bytes
-                        # Calculate bytes per second, then convert to kilobits per second
-                        bytes_per_second = bytes_diff / time_diff
-                        bits_per_second = bytes_per_second * 8
-                        kilobits_per_second = bits_per_second / 1000
-
-                        # Update tracking variables
-                        self._last_bytes = bytes_sent
-                        self._last_update = now
-
-                        # Return rate (can be negative if counter reset, return 0 in that case)
-                        return max(0.0, kilobits_per_second)
-
-                # First run or after reset - store values and return 0
-                self._last_bytes = bytes_sent
-                self._last_update = now
-                return 0.0
-
-        return None
+        return self._last_value
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
