@@ -178,13 +178,18 @@ class UnraidParityCheckRunningBinarySensor(UnraidBinarySensorBase):
 
     @property
     def is_on(self) -> bool:
-        """Return true if parity check is running."""
-        status = (
-            self.coordinator.data.get(KEY_ARRAY, {})
-            .get("parity_check_status", "")
-            .lower()
-        )
-        return status == "running"
+        """Return true if parity check is in progress (running or paused)."""
+        array_data = self.coordinator.data.get(KEY_ARRAY, {})
+
+        # Check the boolean flag first (if available from API)
+        parity_running = array_data.get("parity_check_running")
+        if parity_running is True:
+            return True
+
+        # Fall back to checking status string
+        # Consider both "running" and "paused" as "in progress"
+        status = array_data.get("parity_check_status", "").lower()
+        return status in ("running", "paused", "checking")
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -192,6 +197,7 @@ class UnraidParityCheckRunningBinarySensor(UnraidBinarySensorBase):
         array_data = self.coordinator.data.get(KEY_ARRAY, {})
         return {
             ATTR_PARITY_CHECK_STATUS: array_data.get("parity_check_status"),
+            "is_paused": array_data.get("parity_check_status", "").lower() == "paused",
         }
 
 
