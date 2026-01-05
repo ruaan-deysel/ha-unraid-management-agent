@@ -170,14 +170,45 @@ class ParityCheckRepairFlow(RepairsFlow):
         )
 
 
+# Temperature thresholds matching Unraid's default settings
+# HDD thresholds (spinning disks)
+DEFAULT_HDD_TEMP_WARNING = 45  # Warning threshold for HDDs
+DEFAULT_HDD_TEMP_CRITICAL = 55  # Critical threshold for HDDs
+
+# SSD/NVMe thresholds (solid state drives run hotter)
+DEFAULT_SSD_TEMP_WARNING = 60  # Warning threshold for SSDs
+DEFAULT_SSD_TEMP_CRITICAL = 70  # Critical threshold for SSDs
+
+
+def _is_ssd(disk: dict) -> bool:
+    """Determine if a disk is an SSD/NVMe based on device name or role."""
+    device = disk.get("device", "").lower()
+    role = disk.get("role", "").lower()
+    name = disk.get("name", "").lower()
+
+    # NVMe drives are always SSDs
+    if "nvme" in device:
+        return True
+
+    # Cache drives in Unraid are typically SSDs
+    if role == "cache" or "cache" in name:
+        return True
+
+    # Check for SSD in the disk ID/model
+    disk_id = disk.get("id", "").lower()
+    return "ssd" in disk_id or "nvme" in disk_id
+
+
 async def async_check_and_create_issues(hass: HomeAssistant, coordinator) -> None:
     """Check for issues and create repair flows if needed."""
+    entry_id = coordinator.config_entry.entry_id
+
     # Check for connection issues
     if not coordinator.last_update_success:
         ir.async_create_issue(
             hass,
             DOMAIN,
-            f"connection_{coordinator.config_entry.entry_id}",
+            f"connection_{entry_id}",
             is_fixable=True,
             severity=ir.IssueSeverity.ERROR,
             translation_key="connection_failed",
@@ -191,6 +222,9 @@ async def async_check_and_create_issues(hass: HomeAssistant, coordinator) -> Non
                 ),
             },
         )
+    else:
+        # Connection is successful, remove any existing connection issue
+        ir.async_delete_issue(hass, DOMAIN, f"connection_{entry_id}")
 
     # Skip further checks if coordinator data is not available
     if not coordinator.data:
@@ -200,50 +234,97 @@ async def async_check_and_create_issues(hass: HomeAssistant, coordinator) -> Non
     disks = coordinator.data.get("disks", [])
     for disk in disks:
         disk_id = disk.get("id", disk.get("name", "unknown"))
-        smart_errors = disk.get("smart_errors", 0)
+        smart_errors = disk.get("smart_errors", 0) or 0
         smart_status = disk.get("smart_status", "UNKNOWN")
-        temperature = disk.get("temperature_celsius", 0)
+        temperature = disk.get("temperature_celsius", 0) or 0
 
-        # Check for SMART errors
-        if smart_errors > 0:
+        # Check for SMART errors (only if explicitly reported as having errors)
+        smart_issue_id = f"disk_health_{disk_id}_smart_errors"
+        if isinstance(smart_errors, (int, float)) and smart_errors > 0:
             ir.async_create_issue(
                 hass,
                 DOMAIN,
-                f"disk_health_{disk_id}_smart_errors",
+                smart_issue_id,
                 is_fixable=True,
                 severity=ir.IssueSeverity.WARNING,
                 translation_key="disk_smart_errors",
                 translation_placeholders={
                     "disk_name": disk.get("name", disk_id),
-                    "smart_errors": str(smart_errors),
+                    "smart_errors": str(int(smart_errors)),
                     "smart_status": smart_status,
                 },
             )
+        else:
+            # No SMART errors, remove any existing issue
+            ir.async_delete_issue(hass, DOMAIN, smart_issue_id)
 
-        # Check for high temperature (>50°C)
-        if temperature > 50:
-            ir.async_create_issue(
-                hass,
-                DOMAIN,
-                f"disk_health_{disk_id}_high_temp",
-                is_fixable=True,
-                severity=ir.IssueSeverity.WARNING,
-                translation_key="disk_high_temperature",
-                translation_placeholders={
-                    "disk_name": disk.get("name", disk_id),
-                    "temperature": str(temperature),
-                },
-            )
+        # Check for high temperature using Unraid's default thresholds
+        # SSDs have higher thresholds than HDDs
+        is_ssd = _is_ssd(disk)
+        temp_warning = DEFAULT_SSD_TEMP_WARNING if is_ssd else DEFAULT_HDD_TEMP_WARNING
+        temp_critical = (
+            DEFAULT_SSD_TEMP_CRITICAL if is_ssd else DEFAULT_HDD_TEMP_CRITICAL
+        )
+
+        temp_warning_issue_id = f"disk_health_{disk_id}_high_temp"
+        temp_critical_issue_id = f"disk_health_{disk_id}_critical_temp"
+
+        if isinstance(temperature, (int, float)) and temperature > 0:
+            # Check for critical temperature first
+            if temperature >= temp_critical:
+                ir.async_create_issue(
+                    hass,
+                    DOMAIN,
+                    temp_critical_issue_id,
+                    is_fixable=True,
+                    severity=ir.IssueSeverity.ERROR,
+                    translation_key="disk_critical_temperature",
+                    translation_placeholders={
+                        "disk_name": disk.get("name", disk_id),
+                        "temperature": str(int(temperature)),
+                        "threshold": str(temp_critical),
+                    },
+                )
+                # Remove warning issue if critical is active
+                ir.async_delete_issue(hass, DOMAIN, temp_warning_issue_id)
+            elif temperature >= temp_warning:
+                # Warning level temperature
+                ir.async_create_issue(
+                    hass,
+                    DOMAIN,
+                    temp_warning_issue_id,
+                    is_fixable=True,
+                    severity=ir.IssueSeverity.WARNING,
+                    translation_key="disk_high_temperature",
+                    translation_placeholders={
+                        "disk_name": disk.get("name", disk_id),
+                        "temperature": str(int(temperature)),
+                        "threshold": str(temp_warning),
+                    },
+                )
+                # Remove critical issue if only warning
+                ir.async_delete_issue(hass, DOMAIN, temp_critical_issue_id)
+            else:
+                # Temperature is normal, remove any existing issues
+                ir.async_delete_issue(hass, DOMAIN, temp_warning_issue_id)
+                ir.async_delete_issue(hass, DOMAIN, temp_critical_issue_id)
+        else:
+            # No valid temperature reading, remove any existing issues
+            ir.async_delete_issue(hass, DOMAIN, temp_warning_issue_id)
+            ir.async_delete_issue(hass, DOMAIN, temp_critical_issue_id)
 
     # Check for array issues
     array_data = coordinator.data.get("array", {})
-    parity_valid = array_data.get("parity_valid", True)
+    # Be strict about parity_valid - only consider it invalid if explicitly False
+    # None, missing, or any other value should be treated as valid/unknown
+    parity_valid = array_data.get("parity_valid")
+    parity_issue_id = f"array_parity_invalid_{entry_id}"
 
-    if not parity_valid:
+    if parity_valid is False:
         ir.async_create_issue(
             hass,
             DOMAIN,
-            f"array_parity_invalid_{coordinator.config_entry.entry_id}",
+            parity_issue_id,
             is_fixable=True,
             severity=ir.IssueSeverity.ERROR,
             translation_key="array_parity_invalid",
@@ -251,17 +332,21 @@ async def async_check_and_create_issues(hass: HomeAssistant, coordinator) -> Non
                 "array_state": array_data.get("state", "Unknown"),
             },
         )
+    else:
+        # Parity is valid or unknown, remove any existing issue
+        ir.async_delete_issue(hass, DOMAIN, parity_issue_id)
 
     # Check for parity check issues
     parity_check_running = array_data.get("parity_check_running", False)
-    sync_percent = array_data.get("sync_percent", 0)
+    sync_percent = array_data.get("sync_percent", 0) or 0
+    stuck_issue_id = f"parity_check_stuck_{entry_id}"
 
     # If parity check has been running for a very long time (>95% but not complete)
-    if parity_check_running and sync_percent > 95 and sync_percent < 100:
+    if parity_check_running is True and 95 < sync_percent < 100:
         ir.async_create_issue(
             hass,
             DOMAIN,
-            f"parity_check_stuck_{coordinator.config_entry.entry_id}",
+            stuck_issue_id,
             is_fixable=True,
             severity=ir.IssueSeverity.WARNING,
             translation_key="parity_check_stuck",
@@ -269,3 +354,6 @@ async def async_check_and_create_issues(hass: HomeAssistant, coordinator) -> Non
                 "sync_percent": str(sync_percent),
             },
         )
+    else:
+        # Parity check is not stuck, remove any existing issue
+        ir.async_delete_issue(hass, DOMAIN, stuck_issue_id)
