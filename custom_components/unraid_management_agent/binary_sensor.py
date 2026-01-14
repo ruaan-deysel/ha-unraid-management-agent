@@ -11,28 +11,13 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import UnraidConfigEntry, UnraidDataUpdateCoordinator
-from .const import (
-    ATTR_PARITY_CHECK_STATUS,
-    DOMAIN,
-    ICON_ARRAY,
-    ICON_NETWORK,
-    ICON_PARITY,
-    ICON_UPS,
-    ICON_ZFS,
-    KEY_ARRAY,
-    KEY_NETWORK,
-    KEY_SYSTEM,
-    KEY_UPS,
-    KEY_ZFS_POOLS,
-    MANUFACTURER,
-)
+from .const import ATTR_PARITY_CHECK_STATUS
+from .entity import UnraidEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -41,26 +26,17 @@ PARALLEL_UPDATES = 0
 
 
 def _is_physical_network_interface(interface_name: str) -> bool:
-    """
-    Check if the network interface is a physical interface.
-
-    Only include physical interfaces like eth0, eth1, wlan0, bond0, etc.
-    Exclude virtual interfaces (veth*, br-*, docker*, virbr*) and loopback (lo).
-    """
-    # Patterns for physical interfaces
+    """Check if the network interface is a physical interface."""
     physical_patterns = [
-        r"^eth\d+$",  # Ethernet: eth0, eth1, etc.
-        r"^wlan\d+$",  # Wireless: wlan0, wlan1, etc.
-        r"^bond\d+$",  # Bonded interfaces: bond0, bond1, etc.
-        r"^eno\d+$",  # Onboard Ethernet: eno1, eno2, etc.
-        r"^enp\d+s\d+$",  # PCI Ethernet: enp2s0, etc.
+        r"^eth\d+$",
+        r"^wlan\d+$",
+        r"^bond\d+$",
+        r"^eno\d+$",
+        r"^enp\d+s\d+$",
     ]
-
-    # Check if interface matches any physical pattern
     for pattern in physical_patterns:
         if re.match(pattern, interface_name):
             return True
-
     return False
 
 
@@ -71,6 +47,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up Unraid binary sensor entities."""
     coordinator = entry.runtime_data.coordinator
+    data = coordinator.data
 
     entities: list[BinarySensorEntity] = []
 
@@ -83,61 +60,29 @@ async def async_setup_entry(
         ]
     )
 
-    # UPS binary sensor (if UPS exists)
-    # Only create if UPS data exists and is not an empty dict
-    # When no UPS hardware is present, the API returns null/error and coordinator sets KEY_UPS to {}
-    ups_data = coordinator.data.get(KEY_UPS, {})
-    if ups_data and isinstance(ups_data, dict) and len(ups_data) > 0:
+    # UPS binary sensor (only if UPS is connected)
+    if data and data.ups and getattr(data.ups, "connected", False):
         entities.append(UnraidUPSConnectedBinarySensor(coordinator, entry))
 
     # Network interface binary sensors (only physical interfaces)
-    for interface in coordinator.data.get(KEY_NETWORK, []):
-        interface_name = interface.get("name", "unknown")
-        # Only create sensors for physical network interfaces
+    for interface in (data.network if data else []) or []:
+        interface_name = getattr(interface, "name", "unknown")
         if _is_physical_network_interface(interface_name):
             entities.append(
                 UnraidNetworkInterfaceBinarySensor(coordinator, entry, interface_name)
             )
 
-    # ZFS binary sensors (if ZFS pools available)
-    # Only create if ZFS pools data exists and is not empty
-    zfs_pools = coordinator.data.get(KEY_ZFS_POOLS, [])
-    if zfs_pools and isinstance(zfs_pools, list) and len(zfs_pools) > 0:
-        # ZFS Available binary sensor (indicates ZFS is installed/detected)
+    # ZFS available binary sensor (if ZFS pools exist)
+    zfs_pools = data.zfs_pools if data else []
+    if zfs_pools and len(zfs_pools) > 0:
         entities.append(UnraidZFSAvailableBinarySensor(coordinator, entry))
 
+    _LOGGER.debug("Adding %d Unraid binary sensor entities", len(entities))
     async_add_entities(entities)
 
 
-class UnraidBinarySensorBase(CoordinatorEntity, BinarySensorEntity):
+class UnraidBinarySensorBase(UnraidEntity, BinarySensorEntity):
     """Base class for Unraid binary sensors."""
-
-    def __init__(
-        self,
-        coordinator: UnraidDataUpdateCoordinator,
-        entry: ConfigEntry,
-    ) -> None:
-        """Initialize the binary sensor."""
-        super().__init__(coordinator)
-        self._attr_has_entity_name = True
-        self._entry = entry
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device information."""
-        system_data = self.coordinator.data.get(KEY_SYSTEM, {})
-        hostname = system_data.get("hostname", "Unraid")
-        version = system_data.get("version", "Unknown")
-        host = self._entry.data.get(CONF_HOST, "")
-
-        return {
-            "identifiers": {(DOMAIN, self._entry.entry_id)},
-            "name": hostname,
-            "manufacturer": MANUFACTURER,
-            "model": f"Unraid {version}",
-            "sw_version": version,
-            "configuration_url": f"http://{host}",
-        }
 
 
 # Array Binary Sensors
@@ -148,7 +93,7 @@ class UnraidArrayStartedBinarySensor(UnraidBinarySensorBase):
 
     _attr_name = "Array Started"
     _attr_device_class = BinarySensorDeviceClass.RUNNING
-    _attr_icon = ICON_ARRAY
+    _attr_icon = "mdi:harddisk"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     @property
@@ -159,8 +104,11 @@ class UnraidArrayStartedBinarySensor(UnraidBinarySensorBase):
     @property
     def is_on(self) -> bool:
         """Return true if array is started."""
-        state = self.coordinator.data.get(KEY_ARRAY, {}).get("state", "").lower()
-        return state == "started"
+        data = self.coordinator.data
+        if data and data.array:
+            state = getattr(data.array, "state", "").lower()
+            return state == "started"
+        return False
 
 
 class UnraidParityCheckRunningBinarySensor(UnraidBinarySensorBase):
@@ -168,7 +116,7 @@ class UnraidParityCheckRunningBinarySensor(UnraidBinarySensorBase):
 
     _attr_name = "Parity Check Running"
     _attr_device_class = BinarySensorDeviceClass.RUNNING
-    _attr_icon = ICON_PARITY
+    _attr_icon = "mdi:shield-check"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     @property
@@ -178,26 +126,33 @@ class UnraidParityCheckRunningBinarySensor(UnraidBinarySensorBase):
 
     @property
     def is_on(self) -> bool:
-        """Return true if parity check is in progress (running or paused)."""
-        array_data = self.coordinator.data.get(KEY_ARRAY, {})
+        """Return true if parity check is in progress."""
+        data = self.coordinator.data
+        if not data or not data.array:
+            return False
 
-        # Check the boolean flag first (if available from API)
-        parity_running = array_data.get("parity_check_running")
-        if parity_running is True:
-            return True
-
-        # Fall back to checking status string
-        # Consider both "running" and "paused" as "in progress"
-        status = array_data.get("parity_check_status", "").lower()
-        return status in ("running", "paused", "checking")
+        # Check if parity check status exists
+        parity_status = getattr(data.array, "parity_check_status", None)
+        if parity_status:
+            status = getattr(parity_status, "status", "").lower()
+            return status in ("running", "paused", "checking")
+        return False
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra attributes."""
-        array_data = self.coordinator.data.get(KEY_ARRAY, {})
+        data = self.coordinator.data
+        if not data or not data.array:
+            return {}
+
+        parity_status = getattr(data.array, "parity_check_status", None)
+        if not parity_status:
+            return {}
+
+        status = getattr(parity_status, "status", None)
         return {
-            ATTR_PARITY_CHECK_STATUS: array_data.get("parity_check_status"),
-            "is_paused": array_data.get("parity_check_status", "").lower() == "paused",
+            ATTR_PARITY_CHECK_STATUS: status,
+            "is_paused": status.lower() == "paused" if status else False,
         }
 
 
@@ -206,7 +161,7 @@ class UnraidParityValidBinarySensor(UnraidBinarySensorBase):
 
     _attr_name = "Parity Valid"
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
-    _attr_icon = ICON_PARITY
+    _attr_icon = "mdi:shield-check"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     @property
@@ -216,13 +171,13 @@ class UnraidParityValidBinarySensor(UnraidBinarySensorBase):
 
     @property
     def is_on(self) -> bool:
-        """Return true if parity is valid (inverted for problem device class)."""
-        # For PROBLEM device class, ON means there IS a problem
-        # So we invert: parity_valid=true means NO problem (OFF)
-        parity_valid = self.coordinator.data.get(KEY_ARRAY, {}).get(
-            "parity_valid", True
-        )
-        return not parity_valid
+        """Return true if parity has a problem (inverted for PROBLEM device class)."""
+        data = self.coordinator.data
+        if data and data.array:
+            # For PROBLEM device class, ON means there IS a problem
+            parity_valid = getattr(data.array, "parity_valid", True)
+            return not parity_valid
+        return False
 
 
 # UPS Binary Sensor
@@ -233,7 +188,7 @@ class UnraidUPSConnectedBinarySensor(UnraidBinarySensorBase):
 
     _attr_name = "UPS Connected"
     _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
-    _attr_icon = ICON_UPS
+    _attr_icon = "mdi:battery"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     @property
@@ -244,7 +199,10 @@ class UnraidUPSConnectedBinarySensor(UnraidBinarySensorBase):
     @property
     def is_on(self) -> bool:
         """Return true if UPS is connected."""
-        return self.coordinator.data.get(KEY_UPS, {}).get("connected", False)
+        data = self.coordinator.data
+        if data and data.ups:
+            return getattr(data.ups, "connected", False)
+        return False
 
 
 # Network Interface Binary Sensors
@@ -264,7 +222,7 @@ class UnraidNetworkInterfaceBinarySensor(UnraidBinarySensorBase):
         self._interface_name = interface_name
         self._attr_name = f"Network {interface_name}"
         self._attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
-        self._attr_icon = ICON_NETWORK
+        self._attr_icon = "mdi:ethernet"
         self._attr_entity_category = EntityCategory.DIAGNOSTIC
 
     @property
@@ -275,10 +233,13 @@ class UnraidNetworkInterfaceBinarySensor(UnraidBinarySensorBase):
     @property
     def is_on(self) -> bool:
         """Return true if interface is up."""
-        for interface in self.coordinator.data.get(KEY_NETWORK, []):
-            if interface.get("name") == self._interface_name:
-                # API returns "state" field with values like "up", "down", "lowerlayerdown"
-                state = interface.get("state", "down")
+        data = self.coordinator.data
+        if not data or not data.network:
+            return False
+
+        for interface in data.network:
+            if getattr(interface, "name", "") == self._interface_name:
+                state = getattr(interface, "state", "down")
                 return state == "up"
         return False
 
@@ -291,7 +252,7 @@ class UnraidZFSAvailableBinarySensor(UnraidBinarySensorBase):
 
     _attr_name = "ZFS Available"
     _attr_device_class = BinarySensorDeviceClass.RUNNING
-    _attr_icon = ICON_ZFS
+    _attr_icon = "mdi:database"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     @property
@@ -302,13 +263,15 @@ class UnraidZFSAvailableBinarySensor(UnraidBinarySensorBase):
     @property
     def is_on(self) -> bool:
         """Return true if ZFS is available."""
-        zfs_pools = self.coordinator.data.get(KEY_ZFS_POOLS, [])
-        return isinstance(zfs_pools, list) and len(zfs_pools) > 0
+        data = self.coordinator.data
+        if data and data.zfs_pools:
+            return len(data.zfs_pools) > 0
+        return False
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra attributes."""
-        zfs_pools = self.coordinator.data.get(KEY_ZFS_POOLS, [])
-        return {
-            "pool_count": len(zfs_pools) if isinstance(zfs_pools, list) else 0,
-        }
+        data = self.coordinator.data
+        if not data or not data.zfs_pools:
+            return {"pool_count": 0}
+        return {"pool_count": len(data.zfs_pools)}

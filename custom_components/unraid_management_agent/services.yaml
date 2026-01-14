@@ -171,4 +171,3 @@ parity_check_pause:
 parity_check_resume:
   name: Resume Parity Check
   description: Resume a paused parity check
-

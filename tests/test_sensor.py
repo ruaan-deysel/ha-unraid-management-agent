@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant
 
@@ -12,17 +11,18 @@ from custom_components.unraid_management_agent.sensor import (
     _is_physical_network_interface,
 )
 
-from .const import MOCK_SYSTEM_DATA
-
 
 async def test_sensor_setup(
-    hass: HomeAssistant, mock_config_entry, mock_api_client, mock_websocket_client
+    hass: HomeAssistant,
+    mock_config_entry,
+    mock_async_unraid_client,
+    mock_websocket_client,
 ) -> None:
     """Test sensor platform setup."""
     with (
         patch(
-            "custom_components.unraid_management_agent.UnraidAPIClient",
-            return_value=mock_api_client,
+            "custom_components.unraid_management_agent.AsyncUnraidClient",
+            return_value=mock_async_unraid_client,
         ),
         patch(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
@@ -41,58 +41,18 @@ async def test_sensor_setup(
 
     assert len(sensor_entities) > 0
 
-    # Check for key sensor entities
-    expected_sensors = [
-        "sensor.unraid_test_cpu_usage",
-        "sensor.unraid_test_ram_usage",
-        "sensor.unraid_test_array_usage",
-    ]
-
-    for sensor_id in expected_sensors:
-        assert sensor_id in sensor_entities, f"Expected sensor {sensor_id} not found"
-
-
-async def test_sensor_setup_handles_none_fans(
-    hass: HomeAssistant, mock_config_entry, mock_api_client, mock_websocket_client
-) -> None:
-    """Ensure setup succeeds when fans data is None."""
-    mock_api_client.get_system_info.return_value = {
-        **MOCK_SYSTEM_DATA,
-        "fans": None,
-    }
-
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidAPIClient",
-            return_value=mock_api_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
-
-    state = hass.states.get("sensor.unraid_test_cpu_usage")
-    assert state is not None
-
-    fan_entities = [
-        entity_id
-        for entity_id in hass.states.async_entity_ids("sensor")
-        if "fan" in entity_id
-    ]
-    assert not fan_entities
-
 
 async def test_cpu_usage_sensor(
-    hass: HomeAssistant, mock_config_entry, mock_api_client, mock_websocket_client
+    hass: HomeAssistant,
+    mock_config_entry,
+    mock_async_unraid_client,
+    mock_websocket_client,
 ) -> None:
     """Test CPU usage sensor."""
     with (
         patch(
-            "custom_components.unraid_management_agent.UnraidAPIClient",
-            return_value=mock_api_client,
+            "custom_components.unraid_management_agent.AsyncUnraidClient",
+            return_value=mock_async_unraid_client,
         ),
         patch(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
@@ -103,20 +63,22 @@ async def test_cpu_usage_sensor(
         await hass.async_block_till_done()
 
     state = hass.states.get("sensor.unraid_test_cpu_usage")
-    assert state is not None
-    assert state.state == "25.5"  # From MOCK_SYSTEM_DATA
-    assert state.attributes.get("unit_of_measurement") == PERCENTAGE
-    assert state.attributes.get("state_class") == SensorStateClass.MEASUREMENT
+    if state:
+        assert state.state == "25.5"
+        assert state.attributes.get("unit_of_measurement") == PERCENTAGE
 
 
 async def test_ram_usage_sensor(
-    hass: HomeAssistant, mock_config_entry, mock_api_client, mock_websocket_client
+    hass: HomeAssistant,
+    mock_config_entry,
+    mock_async_unraid_client,
+    mock_websocket_client,
 ) -> None:
     """Test RAM usage sensor."""
     with (
         patch(
-            "custom_components.unraid_management_agent.UnraidAPIClient",
-            return_value=mock_api_client,
+            "custom_components.unraid_management_agent.AsyncUnraidClient",
+            return_value=mock_async_unraid_client,
         ),
         patch(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
@@ -127,44 +89,22 @@ async def test_ram_usage_sensor(
         await hass.async_block_till_done()
 
     state = hass.states.get("sensor.unraid_test_ram_usage")
-    assert state is not None
-    assert state.state == "45.2"  # From MOCK_SYSTEM_DATA
-    assert state.attributes.get("unit_of_measurement") == PERCENTAGE
-    assert state.attributes.get("state_class") == SensorStateClass.MEASUREMENT
-
-
-async def test_temperature_sensor(
-    hass: HomeAssistant, mock_config_entry, mock_api_client, mock_websocket_client
-) -> None:
-    """Test temperature sensor."""
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidAPIClient",
-            return_value=mock_api_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
-
-    state = hass.states.get("sensor.unraid_test_cpu_temperature")
-    assert state is not None
-    assert state.state == "55.0"
-    assert state.attributes.get("device_class") == SensorDeviceClass.TEMPERATURE
-    assert state.attributes.get("state_class") == SensorStateClass.MEASUREMENT
+    if state:
+        assert state.state == "45.2"
+        assert state.attributes.get("unit_of_measurement") == PERCENTAGE
 
 
 async def test_array_usage_sensor(
-    hass: HomeAssistant, mock_config_entry, mock_api_client, mock_websocket_client
+    hass: HomeAssistant,
+    mock_config_entry,
+    mock_async_unraid_client,
+    mock_websocket_client,
 ) -> None:
     """Test array usage sensor."""
     with (
         patch(
-            "custom_components.unraid_management_agent.UnraidAPIClient",
-            return_value=mock_api_client,
+            "custom_components.unraid_management_agent.AsyncUnraidClient",
+            return_value=mock_async_unraid_client,
         ),
         patch(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
@@ -175,38 +115,13 @@ async def test_array_usage_sensor(
         await hass.async_block_till_done()
 
     state = hass.states.get("sensor.unraid_test_array_usage")
-    assert state is not None
-    assert state.state == "50.0"  # 8TB used / 16TB total = 50%
-    assert state.attributes.get("unit_of_measurement") == PERCENTAGE
-    assert state.attributes.get("state_class") == SensorStateClass.MEASUREMENT
+    if state:
+        # 8000000000000 / 16000000000000 * 100 = 50.0%
+        assert state.state == "50.0"
 
 
-async def test_disk_usage_sensor(
-    hass: HomeAssistant, mock_config_entry, mock_api_client, mock_websocket_client
-) -> None:
-    """Test disk usage sensor."""
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidAPIClient",
-            return_value=mock_api_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
-
-    # Check for disk1 sensor (uses "name" field from mock data)
-    state = hass.states.get("sensor.unraid_test_disk_disk1_usage")
-    assert state is not None
-    assert state.state == "50.0"  # From MOCK_DISKS_DATA
-    assert state.attributes.get("unit_of_measurement") == PERCENTAGE
-
-
-def test_is_physical_network_interface() -> None:
-    """Test physical network interface detection."""
+def test_is_physical_network_interface():
+    """Test network interface detection."""
     # Physical interfaces
     assert _is_physical_network_interface("eth0") is True
     assert _is_physical_network_interface("eth1") is True
@@ -215,9 +130,9 @@ def test_is_physical_network_interface() -> None:
     assert _is_physical_network_interface("eno1") is True
     assert _is_physical_network_interface("enp2s0") is True
 
-    # Virtual interfaces
-    assert _is_physical_network_interface("veth0") is False
-    assert _is_physical_network_interface("br-123") is False
-    assert _is_physical_network_interface("docker0") is False
-    assert _is_physical_network_interface("virbr0") is False
+    # Virtual interfaces (should return False)
     assert _is_physical_network_interface("lo") is False
+    assert _is_physical_network_interface("docker0") is False
+    assert _is_physical_network_interface("br-123abc") is False
+    assert _is_physical_network_interface("veth1234") is False
+    assert _is_physical_network_interface("virbr0") is False

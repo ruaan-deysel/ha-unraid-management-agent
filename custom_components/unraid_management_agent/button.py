@@ -8,24 +8,14 @@ from typing import Any
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import UnraidConfigEntry, UnraidDataUpdateCoordinator
-from .const import (
-    DOMAIN,
-    ERROR_CONTROL_FAILED,
-    ICON_ARRAY,
-    ICON_PARITY,
-    ICON_USER_SCRIPT,
-    KEY_SYSTEM,
-    KEY_USER_SCRIPTS,
-    MANUFACTURER,
-)
+from .const import ERROR_CONTROL_FAILED
+from .entity import UnraidEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,6 +30,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up Unraid button entities."""
     coordinator = entry.runtime_data.coordinator
+    data = coordinator.data
 
     entities: list[ButtonEntity] = [
         UnraidArrayStartButton(coordinator, entry),
@@ -49,43 +40,19 @@ async def async_setup_entry(
     ]
 
     # Add user script buttons dynamically
-    user_scripts = coordinator.data.get(KEY_USER_SCRIPTS, [])
-    _LOGGER.debug("Creating button entities for %d user scripts", len(user_scripts))
-    for script in user_scripts:
+    user_scripts = data.user_scripts if data else []
+    _LOGGER.debug(
+        "Creating button entities for %d user scripts", len(user_scripts or [])
+    )
+    for script in user_scripts or []:
         entities.append(UnraidUserScriptButton(coordinator, entry, script))
 
+    _LOGGER.debug("Adding %d Unraid button entities", len(entities))
     async_add_entities(entities)
 
 
-class UnraidButtonBase(CoordinatorEntity, ButtonEntity):
+class UnraidButtonBase(UnraidEntity, ButtonEntity):
     """Base class for Unraid buttons."""
-
-    def __init__(
-        self,
-        coordinator: UnraidDataUpdateCoordinator,
-        entry: ConfigEntry,
-    ) -> None:
-        """Initialize the button."""
-        super().__init__(coordinator)
-        self._attr_has_entity_name = True
-        self._entry = entry
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device information."""
-        system_data = self.coordinator.data.get(KEY_SYSTEM, {})
-        hostname = system_data.get("hostname", "Unraid")
-        version = system_data.get("version", "Unknown")
-        host = self._entry.data.get(CONF_HOST, "")
-
-        return {
-            "identifiers": {(DOMAIN, self._entry.entry_id)},
-            "name": hostname,
-            "manufacturer": MANUFACTURER,
-            "model": f"Unraid {version}",
-            "sw_version": version,
-            "configuration_url": f"http://{host}",
-        }
 
 
 # Array Control Buttons
@@ -95,7 +62,7 @@ class UnraidArrayStartButton(UnraidButtonBase):
     """Array start button."""
 
     _attr_name = "Start Array"
-    _attr_icon = ICON_ARRAY
+    _attr_icon = "mdi:harddisk"
 
     @property
     def unique_id(self) -> str:
@@ -107,7 +74,6 @@ class UnraidArrayStartButton(UnraidButtonBase):
         try:
             await self.coordinator.client.start_array()
             _LOGGER.info("Array start command sent")
-            # Request immediate update
             await self.coordinator.async_request_refresh()
         except Exception as err:
             _LOGGER.error("Failed to start array: %s", err)
@@ -120,7 +86,7 @@ class UnraidArrayStopButton(UnraidButtonBase):
     """Array stop button."""
 
     _attr_name = "Stop Array"
-    _attr_icon = ICON_ARRAY
+    _attr_icon = "mdi:harddisk"
 
     @property
     def unique_id(self) -> str:
@@ -132,7 +98,6 @@ class UnraidArrayStopButton(UnraidButtonBase):
         try:
             await self.coordinator.client.stop_array()
             _LOGGER.info("Array stop command sent")
-            # Request immediate update
             await self.coordinator.async_request_refresh()
         except Exception as err:
             _LOGGER.error("Failed to stop array: %s", err)
@@ -148,7 +113,7 @@ class UnraidParityCheckStartButton(UnraidButtonBase):
     """Parity check start button."""
 
     _attr_name = "Start Parity Check"
-    _attr_icon = ICON_PARITY
+    _attr_icon = "mdi:shield-check"
 
     @property
     def unique_id(self) -> str:
@@ -160,7 +125,6 @@ class UnraidParityCheckStartButton(UnraidButtonBase):
         try:
             await self.coordinator.client.start_parity_check()
             _LOGGER.info("Parity check start command sent")
-            # Request immediate update
             await self.coordinator.async_request_refresh()
         except Exception as err:
             _LOGGER.error("Failed to start parity check: %s", err)
@@ -173,7 +137,7 @@ class UnraidParityCheckStopButton(UnraidButtonBase):
     """Parity check stop button."""
 
     _attr_name = "Stop Parity Check"
-    _attr_icon = ICON_PARITY
+    _attr_icon = "mdi:shield-check"
 
     @property
     def unique_id(self) -> str:
@@ -185,7 +149,6 @@ class UnraidParityCheckStopButton(UnraidButtonBase):
         try:
             await self.coordinator.client.stop_parity_check()
             _LOGGER.info("Parity check stop command sent")
-            # Request immediate update
             await self.coordinator.async_request_refresh()
         except Exception as err:
             _LOGGER.error("Failed to stop parity check: %s", err)
@@ -200,7 +163,7 @@ class UnraidParityCheckStopButton(UnraidButtonBase):
 class UnraidUserScriptButton(UnraidButtonBase):
     """User script execution button."""
 
-    _attr_icon = ICON_USER_SCRIPT
+    _attr_icon = "mdi:script-text"
     _attr_entity_category = EntityCategory.CONFIG
     _attr_entity_registry_enabled_default = False
 
@@ -208,20 +171,17 @@ class UnraidUserScriptButton(UnraidButtonBase):
         self,
         coordinator: UnraidDataUpdateCoordinator,
         entry: ConfigEntry,
-        script: dict[str, Any],
+        script: Any,
     ) -> None:
         """Initialize the user script button."""
         super().__init__(coordinator, entry)
-        self._script_name = script.get("name", "")
-        self._script_description = script.get("description", "")
-
-        # Set entity name
+        self._script_name = getattr(script, "name", "") or ""
+        self._script_description = getattr(script, "description", "") or ""
         self._attr_name = f"User Script {self._script_name}"
 
     @property
     def unique_id(self) -> str:
         """Return unique ID."""
-        # Sanitize script name for unique ID
         safe_name = re.sub(r"[^a-z0-9_]", "_", self._script_name.lower())
         return f"{self._entry.entry_id}_user_script_{safe_name}"
 

@@ -1,4 +1,8 @@
-"""Constants for Unraid Management Agent tests."""
+"""Constants and mock factories for Unraid Management Agent tests."""
+
+from __future__ import annotations
+
+from unittest.mock import MagicMock
 
 from homeassistant.const import CONF_HOST, CONF_PORT
 
@@ -13,20 +17,201 @@ MOCK_OPTIONS = {
     "enable_websocket": True,
 }
 
-# Mock API responses
+
+def mock_system_info() -> MagicMock:
+    """Create a mock SystemInfo Pydantic model."""
+    system = MagicMock()
+    system.hostname = "unraid-test"
+    system.version = "6.12.6"
+    system.agent_version = "1.2.0"
+    system.cpu_usage_percent = 25.5
+    system.ram_usage_percent = 45.2
+    system.cpu_temp_celsius = 55.0
+    system.motherboard_temp_celsius = 42.0
+    system.cpu_model = "Intel Core i7-9700K"
+    system.cpu_cores = 8
+    system.cpu_threads = 8
+    system.cpu_mhz = 3600.0
+    system.ram_total_bytes = 34359738368  # 32 GB
+    system.ram_used_bytes = 15534686208
+    system.ram_free_bytes = 10737418240
+    system.ram_cached_bytes = 8087633920
+    system.ram_buffers_bytes = 0
+    system.uptime_seconds = 86400  # 1 day
+    system.server_model = "Custom Build"
+    system.fans = [
+        MagicMock(name="CPU Fan", rpm=1200),
+        MagicMock(name="System Fan", rpm=800),
+    ]
+    # Set fan name as an attribute since MagicMock(name=...) sets the mock's name
+    system.fans[0].name = "CPU Fan"
+    system.fans[1].name = "System Fan"
+    return system
+
+
+def mock_array_status() -> MagicMock:
+    """Create a mock ArrayStatus Pydantic model."""
+    array = MagicMock()
+    array.state = "Started"
+    array.total_bytes = 16000000000000
+    array.used_bytes = 8000000000000
+    array.free_bytes = 8000000000000
+    array.num_disks = 4
+    array.num_data_disks = 3
+    array.num_parity_disks = 1
+    array.parity_valid = True
+    array.parity_check_status = MagicMock()
+    array.parity_check_status.status = "idle"
+    array.parity_check_status.progress_percent = 0
+    return array
+
+
+def mock_disks() -> list[MagicMock]:
+    """Create mock DiskInfo Pydantic models."""
+    disk1 = MagicMock()
+    disk1.id = "WDC_WD80EFAX_12345"
+    disk1.name = "disk1"
+    disk1.device = "sdb"
+    disk1.role = "data"
+    disk1.size_bytes = 8000000000000
+    disk1.used_bytes = 4000000000000
+    disk1.free_bytes = 4000000000000
+    disk1.temp_celsius = 35
+    disk1.spin_state = "active"
+    disk1.status = "DISK_OK"
+    disk1.filesystem = "xfs"
+    disk1.serial = "WDC_WD80EFAX_12345"
+
+    disk2 = MagicMock()
+    disk2.id = "Samsung_SSD_980_67890"
+    disk2.name = "cache"
+    disk2.device = "nvme0n1"
+    disk2.role = "cache"
+    disk2.size_bytes = 256054571008
+    disk2.used_bytes = 36332154880
+    disk2.free_bytes = 219722416128
+    disk2.temp_celsius = 42
+    disk2.spin_state = "active"
+    disk2.status = "DISK_OK"
+    disk2.filesystem = "btrfs"
+    disk2.serial = "Samsung_SSD_980_67890"
+
+    return [disk1, disk2]
+
+
+def mock_ups_info() -> MagicMock:
+    """Create a mock UPSInfo Pydantic model."""
+    ups = MagicMock()
+    ups.connected = True
+    ups.status = "ONLINE"
+    ups.model = "APC Back-UPS 1500"
+    ups.battery_charge_percent = 100
+    ups.runtime_minutes = 60
+    ups.power_watts = 150.5
+    ups.load_percent = 25
+    ups.energy_kwh = 10.5
+    return ups
+
+
+def mock_containers() -> list[MagicMock]:
+    """Create mock ContainerInfo Pydantic models."""
+    plex = MagicMock()
+    plex.id = "plex_container_id"
+    plex.container_id = "plex_container_id"
+    plex.name = "plex"
+    plex.state = "running"
+    plex.image = "plexinc/pms-docker:latest"
+    plex.ports = ["32400:32400/tcp"]
+
+    sonarr = MagicMock()
+    sonarr.id = "sonarr_container_id"
+    sonarr.container_id = "sonarr_container_id"
+    sonarr.name = "sonarr"
+    sonarr.state = "stopped"
+    sonarr.image = "linuxserver/sonarr:latest"
+    sonarr.ports = ["8989:8989/tcp"]
+
+    return [plex, sonarr]
+
+
+def mock_vms() -> list[MagicMock]:
+    """Create mock VMInfo Pydantic models."""
+    windows = MagicMock()
+    windows.id = "windows-10"
+    windows.name = "Windows 10"
+    windows.state = "running"
+    windows.cpu_count = 4
+    windows.memory_display = "8 GB"
+    windows.guest_cpu_percent = 15.5
+    windows.host_cpu_percent = 3.2
+    windows.disk_read_bytes = 1024000
+    windows.disk_write_bytes = 512000
+
+    ubuntu = MagicMock()
+    ubuntu.id = "ubuntu-server"
+    ubuntu.name = "Ubuntu Server"
+    ubuntu.state = "stopped"
+    ubuntu.cpu_count = 2
+    ubuntu.memory_display = "4 GB"
+    ubuntu.guest_cpu_percent = None
+    ubuntu.host_cpu_percent = None
+    ubuntu.disk_read_bytes = 0
+    ubuntu.disk_write_bytes = 0
+
+    return [windows, ubuntu]
+
+
+def mock_gpu_list() -> list[MagicMock]:
+    """Create mock GPUInfo Pydantic models."""
+    gpu = MagicMock()
+    gpu.name = "NVIDIA GeForce RTX 3080"
+    gpu.driver_version = "535.86.05"
+    gpu.utilization_gpu_percent = 45
+    gpu.temperature_celsius = 65
+    gpu.power_watts = 220.5
+    gpu.energy_kwh = 5.2
+    return [gpu]
+
+
+def mock_network_interfaces() -> list[MagicMock]:
+    """Create mock NetworkInterface Pydantic models."""
+    eth0 = MagicMock()
+    eth0.name = "eth0"
+    eth0.state = "up"
+    eth0.speed_mbps = 1000
+    eth0.mac_address = "00:11:22:33:44:55"
+    eth0.ip_address = "192.168.1.100"
+    eth0.rx_bytes_per_sec = 125000
+    eth0.tx_bytes_per_sec = 62500
+
+    eth1 = MagicMock()
+    eth1.name = "eth1"
+    eth1.state = "down"
+    eth1.speed_mbps = 0
+    eth1.mac_address = "00:11:22:33:44:56"
+    eth1.ip_address = None
+    eth1.rx_bytes_per_sec = 0
+    eth1.tx_bytes_per_sec = 0
+
+    return [eth0, eth1]
+
+
+# Legacy dict format for backward compatibility with older tests
+MOCK_HEALTH_CHECK = {
+    "status": "healthy",
+    "version": "1.0.0",
+}
+
 MOCK_SYSTEM_DATA = {
     "hostname": "unraid-test",
+    "version": "6.12.6",
     "cpu_usage_percent": 25.5,
     "ram_usage_percent": 45.2,
     "cpu_temp_celsius": 55.0,
     "motherboard_temp_celsius": 42.0,
     "cpu_model": "Intel Core i7-9700K",
-    "ram_total_bytes": 34359738368,  # 32 GB
-    "uptime_seconds": 86400,  # 1 day
-    "fans": [
-        {"name": "CPU Fan", "rpm": 1200},
-        {"name": "System Fan", "rpm": 800},
-    ],
+    "ram_total_bytes": 34359738368,
+    "uptime_seconds": 86400,
 }
 
 MOCK_ARRAY_DATA = {
@@ -34,129 +219,11 @@ MOCK_ARRAY_DATA = {
     "size_bytes": 16000000000000,
     "used_bytes": 8000000000000,
     "free_bytes": 8000000000000,
-    "used_percent": 50.0,  # Added for sensor
+    "used_percent": 50.0,
     "num_disks": 4,
     "num_data_disks": 3,
     "num_parity_disks": 1,
     "parity_check_status": "idle",
     "parity_valid": True,
     "sync_percent": 0,
-}
-
-MOCK_DISKS_DATA = [
-    {
-        "id": "WDC_WD80EFAX_12345",
-        "device": "sdb",
-        "name": "disk1",
-        "role": "data",
-        "size_bytes": 8000000000000,
-        "used_bytes": 4000000000000,
-        "free_bytes": 4000000000000,
-        "usage_percent": 50.0,
-        "temperature_celsius": 35,
-        "spin_state": "active",
-        "status": "DISK_OK",
-        "filesystem": "xfs",
-        "mount_point": "/mnt/disk1",
-        "smart_status": "PASSED",
-        "smart_errors": 0,
-    },
-    {
-        "id": "Samsung_SSD_980_67890",
-        "device": "nvme0n1",
-        "name": "cache",
-        "role": "cache",
-        "size_bytes": 256054571008,
-        "used_bytes": 36332154880,
-        "free_bytes": 219722416128,
-        "usage_percent": 14.2,
-        "temperature_celsius": 42,
-        "spin_state": "active",
-        "status": "DISK_OK",
-        "filesystem": "btrfs",
-        "mount_point": "/mnt/cache",
-        "smart_status": "PASSED",
-        "smart_errors": 0,
-    },
-]
-
-MOCK_UPS_DATA = {
-    "status": "ONLINE",
-    "battery_charge_percent": 100,
-    "runtime_left_seconds": 3600,
-    "power_watts": 150.5,
-    "load_percent": 25,
-    "model": "APC Back-UPS 1500",
-}
-
-MOCK_CONTAINERS_DATA = [
-    {
-        "id": "plex",
-        "name": "plex",
-        "state": "running",
-        "status": "Up 2 days",
-        "image": "plexinc/pms-docker:latest",
-    },
-    {
-        "id": "sonarr",
-        "name": "sonarr",
-        "state": "stopped",
-        "status": "Exited (0) 1 hour ago",
-        "image": "linuxserver/sonarr:latest",
-    },
-]
-
-MOCK_VMS_DATA = [
-    {
-        "id": "windows-10",
-        "name": "Windows 10",
-        "state": "running",
-        "cpu_count": 4,
-        "memory_mb": 8192,
-    },
-    {
-        "id": "ubuntu-server",
-        "name": "Ubuntu Server",
-        "state": "stopped",
-        "cpu_count": 2,
-        "memory_mb": 4096,
-    },
-]
-
-MOCK_GPU_DATA = [
-    {
-        "name": "NVIDIA GeForce RTX 3080",
-        "utilization_percent": 45,
-        "temperature_celsius": 65,
-        "power_watts": 220,
-        "memory_used_mb": 4096,
-        "memory_total_mb": 10240,
-    },
-]
-
-MOCK_NETWORK_DATA = [
-    {
-        "interface": "eth0",
-        "state": "up",
-        "speed_mbps": 1000,
-        "rx_bytes": 1234567890,
-        "tx_bytes": 987654321,
-        "rx_packets": 1000000,
-        "tx_packets": 800000,
-    },
-    {
-        "interface": "eth1",
-        "state": "down",
-        "speed_mbps": 0,
-        "rx_bytes": 0,
-        "tx_bytes": 0,
-        "rx_packets": 0,
-        "tx_packets": 0,
-    },
-]
-
-# Mock health check response
-MOCK_HEALTH_CHECK = {
-    "status": "healthy",
-    "version": "1.0.0",
 }

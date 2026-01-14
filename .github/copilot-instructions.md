@@ -114,4 +114,3 @@ custom_components/unraid_management_agent/
 ## References
 - Home Assistant Integration Development: https://developers.home-assistant.io/docs/creating_integration_manifest/
 - Home Assistant Developer Docs: https://developers.home-assistant.io/
-

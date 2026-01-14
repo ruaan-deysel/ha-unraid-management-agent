@@ -11,9 +11,8 @@ from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from uma_api import AsyncUnraidClient, UnraidConnectionError
 
-from .api_client import UnraidAPIClient
 from .const import (
     CONF_ENABLE_WEBSOCKET,
     CONF_UPDATE_INTERVAL,
@@ -50,31 +49,29 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
     Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
     """
-    session = async_get_clientsession(hass)
-    client = UnraidAPIClient(
+    # Use AsyncUnraidClient from uma-api
+    async with AsyncUnraidClient(
         host=data[CONF_HOST],
         port=data[CONF_PORT],
-        session=session,
-    )
+    ) as client:
+        try:
+            # Test connection by getting system info - returns typed Pydantic model
+            system_info = await client.get_system_info()
+            hostname = system_info.hostname or "unknown"
 
-    try:
-        # Test connection by getting system info
-        system_info = await client.get_system_info()
-        hostname = system_info.get("hostname", "unknown")
-
-        return {
-            "title": f"Unraid ({hostname})",
-            "hostname": hostname,
-        }
-    except TimeoutError as err:
-        _LOGGER.error("Timeout connecting to Unraid server: %s", err)
-        raise TimeoutError(ERROR_TIMEOUT) from err
-    except ConnectionError as err:
-        _LOGGER.error("Cannot connect to Unraid server: %s", err)
-        raise ConnectionError(ERROR_CANNOT_CONNECT) from err
-    except Exception as err:
-        _LOGGER.exception("Unexpected exception: %s", err)
-        raise Exception(ERROR_UNKNOWN) from err
+            return {
+                "title": f"Unraid ({hostname})",
+                "hostname": hostname,
+            }
+        except TimeoutError as err:
+            _LOGGER.error("Timeout connecting to Unraid server: %s", err)
+            raise TimeoutError(ERROR_TIMEOUT) from err
+        except UnraidConnectionError as err:
+            _LOGGER.error("Cannot connect to Unraid server: %s", err)
+            raise ConnectionError(ERROR_CANNOT_CONNECT) from err
+        except Exception as err:
+            _LOGGER.exception("Unexpected exception: %s", err)
+            raise Exception(ERROR_UNKNOWN) from err
 
 
 class UnraidConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):

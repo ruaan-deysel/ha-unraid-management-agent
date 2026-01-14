@@ -19,94 +19,6 @@ DEFAULT_ENABLE_WEBSOCKET: Final = True
 
 # Update intervals
 UPDATE_INTERVAL: Final = timedelta(seconds=DEFAULT_UPDATE_INTERVAL)
-WEBSOCKET_RECONNECT_DELAY: Final = [
-    1,
-    2,
-    4,
-    8,
-    16,
-    32,
-    60,
-]  # Exponential backoff in seconds
-WEBSOCKET_MAX_RETRIES: Final = 10
-
-# API endpoints
-API_BASE: Final = "/api/v1"
-API_HEALTH: Final = f"{API_BASE}/health"
-API_SYSTEM: Final = f"{API_BASE}/system"
-API_ARRAY: Final = f"{API_BASE}/array"
-API_DISKS: Final = f"{API_BASE}/disks"
-API_SHARES: Final = f"{API_BASE}/shares"
-API_DOCKER: Final = f"{API_BASE}/docker"
-API_VM: Final = f"{API_BASE}/vm"
-API_UPS: Final = f"{API_BASE}/ups"
-API_GPU: Final = f"{API_BASE}/gpu"
-API_NETWORK: Final = f"{API_BASE}/network"
-API_NOTIFICATIONS: Final = f"{API_BASE}/notifications"
-API_USER_SCRIPTS: Final = f"{API_BASE}/user-scripts"
-API_ZFS_POOLS: Final = f"{API_BASE}/zfs/pools"
-API_ZFS_POOL: Final = f"{API_BASE}/zfs/pools/{{name}}"
-API_ZFS_DATASETS: Final = f"{API_BASE}/zfs/datasets"
-API_ZFS_SNAPSHOTS: Final = f"{API_BASE}/zfs/snapshots"
-API_ZFS_ARC: Final = f"{API_BASE}/zfs/arc"
-API_WEBSOCKET: Final = f"{API_BASE}/ws"
-
-# Control endpoints
-API_DOCKER_START: Final = f"{API_DOCKER}/{{id}}/start"
-API_DOCKER_STOP: Final = f"{API_DOCKER}/{{id}}/stop"
-API_DOCKER_RESTART: Final = f"{API_DOCKER}/{{id}}/restart"
-API_DOCKER_PAUSE: Final = f"{API_DOCKER}/{{id}}/pause"
-API_DOCKER_UNPAUSE: Final = f"{API_DOCKER}/{{id}}/unpause"
-
-API_VM_START: Final = f"{API_VM}/{{id}}/start"
-API_VM_STOP: Final = f"{API_VM}/{{id}}/stop"
-API_VM_RESTART: Final = f"{API_VM}/{{id}}/restart"
-API_VM_PAUSE: Final = f"{API_VM}/{{id}}/pause"
-API_VM_RESUME: Final = f"{API_VM}/{{id}}/resume"
-API_VM_HIBERNATE: Final = f"{API_VM}/{{id}}/hibernate"
-API_VM_FORCE_STOP: Final = f"{API_VM}/{{id}}/force-stop"
-
-API_ARRAY_START: Final = f"{API_ARRAY}/start"
-API_ARRAY_STOP: Final = f"{API_ARRAY}/stop"
-API_PARITY_CHECK_START: Final = f"{API_ARRAY}/parity-check/start"
-API_PARITY_CHECK_STOP: Final = f"{API_ARRAY}/parity-check/stop"
-API_PARITY_CHECK_PAUSE: Final = f"{API_ARRAY}/parity-check/pause"
-API_PARITY_CHECK_RESUME: Final = f"{API_ARRAY}/parity-check/resume"
-
-API_USER_SCRIPT_EXECUTE: Final = f"{API_USER_SCRIPTS}/{{name}}/execute"
-
-# Event types
-EVENT_SYSTEM_UPDATE: Final = "system_update"
-EVENT_ARRAY_STATUS_UPDATE: Final = "array_status_update"
-EVENT_DISK_LIST_UPDATE: Final = "disk_list_update"
-EVENT_SHARE_LIST_UPDATE: Final = "share_list_update"
-EVENT_CONTAINER_LIST_UPDATE: Final = "container_list_update"
-EVENT_VM_LIST_UPDATE: Final = "vm_list_update"
-EVENT_UPS_STATUS_UPDATE: Final = "ups_status_update"
-EVENT_GPU_UPDATE: Final = "gpu_update"
-EVENT_NETWORK_LIST_UPDATE: Final = "network_list_update"
-EVENT_NOTIFICATION_UPDATE: Final = "notification_update"
-EVENT_ZFS_POOL_UPDATE: Final = "zfs_pool_update"
-EVENT_ZFS_DATASET_UPDATE: Final = "zfs_dataset_update"
-EVENT_ZFS_SNAPSHOT_UPDATE: Final = "zfs_snapshot_update"
-EVENT_ZFS_ARC_UPDATE: Final = "zfs_arc_update"
-
-# Entity keys
-KEY_SYSTEM: Final = "system"
-KEY_ARRAY: Final = "array"
-KEY_DISKS: Final = "disks"
-KEY_SHARES: Final = "shares"
-KEY_CONTAINERS: Final = "containers"
-KEY_VMS: Final = "vms"
-KEY_UPS: Final = "ups"
-KEY_GPU: Final = "gpu"
-KEY_NETWORK: Final = "network"
-KEY_NOTIFICATIONS: Final = "notifications"
-KEY_USER_SCRIPTS: Final = "user_scripts"
-KEY_ZFS_POOLS: Final = "zfs_pools"
-KEY_ZFS_DATASETS: Final = "zfs_datasets"
-KEY_ZFS_SNAPSHOTS: Final = "zfs_snapshots"
-KEY_ZFS_ARC: Final = "zfs_arc"
 
 # Sensor types
 SENSOR_CPU_USAGE: Final = "cpu_usage"
@@ -175,30 +87,6 @@ ATTR_NETWORK_IP: Final = "network_ip"
 ATTR_NETWORK_SPEED: Final = "network_speed"
 ATTR_UPS_STATUS: Final = "ups_status"
 ATTR_UPS_MODEL: Final = "ups_model"
-
-# Icons
-ICON_CPU: Final = "mdi:cpu-64-bit"
-ICON_MEMORY: Final = "mdi:memory"
-ICON_TEMPERATURE: Final = "mdi:thermometer"
-ICON_UPTIME: Final = "mdi:clock-outline"
-ICON_ARRAY: Final = "mdi:harddisk"
-ICON_PARITY: Final = "mdi:shield-check"
-ICON_CONTAINER: Final = "mdi:docker"
-ICON_VM: Final = "mdi:desktop-tower"
-ICON_GPU: Final = "mdi:expansion-card"
-ICON_NETWORK: Final = "mdi:ethernet"
-ICON_UPS: Final = "mdi:battery"
-ICON_POWER: Final = "mdi:power"
-ICON_START: Final = "mdi:play"
-ICON_STOP: Final = "mdi:stop"
-ICON_RESTART: Final = "mdi:restart"
-ICON_SHARE: Final = "mdi:folder-network"
-ICON_NOTIFICATION: Final = "mdi:bell-alert"
-ICON_USER_SCRIPT: Final = "mdi:script-text"
-ICON_ZFS: Final = "mdi:database"
-ICON_ZFS_POOL: Final = "mdi:database-outline"
-ICON_ZFS_DATASET: Final = "mdi:file-tree"
-ICON_ZFS_ARC: Final = "mdi:memory-arrow-down"
 
 # Error messages
 ERROR_CANNOT_CONNECT: Final = "cannot_connect"
