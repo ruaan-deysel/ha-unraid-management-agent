@@ -1,0 +1,190 @@
+[project]
+name = "ha-unraid-management-agent"
+version = "2026.1.0"
+description = "Home Assistant custom integration for Unraid server monitoring and management"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.12"
+authors = [
+    { name = "Ruaan Deysel" }
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Home Automation",
+]
+keywords = ["home-assistant", "unraid", "hacs", "integration"]
+
+dependencies = [
+    "uma-api[async]>=1.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "homeassistant>=2025.6.3",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-homeassistant-custom-component>=0.13.0",
+    "pytest-cov>=4.0.0",
+    "pytest-timeout>=2.0.0",
+    "ruff>=0.13.0",
+    "mypy>=1.0.0",
+    "pre-commit>=3.0.0",
+    "codespell>=2.4.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/ruaan-deysel/ha-unraid-management-agent"
+Documentation = "https://github.com/ruaan-deysel/ha-unraid-management-agent#readme"
+Repository = "https://github.com/ruaan-deysel/ha-unraid-management-agent"
+Issues = "https://github.com/ruaan-deysel/ha-unraid-management-agent/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["custom_components/unraid_management_agent"]
+
+# Ruff configuration (following HA Core standards)
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "A",      # flake8-builtins
+    "ASYNC",  # flake8-async
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "D",      # pydocstyle
+    "E",      # pycodestyle errors
+    "F",      # pyflakes
+    "FA",     # flake8-future-annotations
+    "FLY",    # flynt
+    "I",      # isort
+    "ICN",    # flake8-import-conventions
+    "LOG",    # flake8-logging
+    "N",      # pep8-naming
+    "PERF",   # perflint
+    "PGH",    # pygrep-hooks
+    "PIE",    # flake8-pie
+    "PL",     # pylint
+    "PT",     # flake8-pytest-style
+    "PTH",    # flake8-use-pathlib
+    "RET",    # flake8-return
+    "RSE",    # flake8-raise
+    "RUF",    # Ruff-specific rules
+    "S",      # flake8-bandit (security)
+    "SIM",    # flake8-simplify
+    "SLF",    # flake8-self
+    "SLOT",   # flake8-slots
+    "T10",    # flake8-debugger
+    "T20",    # flake8-print
+    "TCH",    # flake8-type-checking
+    "TID",    # flake8-tidy-imports
+    "TRY",    # tryceratops
+    "UP",     # pyupgrade
+    "W",      # pycodestyle warnings
+    "YTT",    # flake8-2020
+]
+ignore = [
+    "D100",    # Missing docstring in public module
+    "D104",    # Missing docstring in public package
+    "D203",    # 1 blank line required before class docstring
+    "D213",    # Multi-line docstring summary should start at the second line
+    "PLR0913", # Too many arguments
+    "PLR2004", # Magic value used in comparison
+    "TRY003",  # Avoid specifying long messages outside the exception class
+    "TC001",   # Imports not in type-checking block (home assistant pattern)
+    "TC002",   # Imports not in type-checking block (home assistant pattern)
+    "TC003",   # Standard library import not in type-checking block
+    "TRY300",  # Consider moving to else block (style preference)
+    "TRY400",  # Use logging.exception vs logging.error (both valid)
+    "TRY401",  # Redundant exception in logging (explicit is better)
+    "TRY002",  # Create own exception (HA uses generic exceptions)
+    "PLR0912", # Too many branches (complex integration logic)
+    "PLR0915", # Too many statements (complex integration logic)
+    "SIM110",  # Use any() (explicit loop is clearer)
+    "PERF401", # Use list.extend (append is clearer)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    "D",       # Ignore docstrings in tests
+    "S101",    # Allow assert in tests
+    "PLR2004", # Allow magic values in tests
+    "SLF001",  # Allow private member access in tests
+    "TC001",   # Allow imports not in type-checking blocks
+    "TC002",   # Allow imports not in type-checking blocks
+    "TC003",   # Allow imports not in type-checking blocks
+    "PLC0415", # Allow imports not at top-level (needed for test isolation)
+    "E501",    # Allow longer lines in tests
+    "F841",    # Allow unused variables in tests (for context)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["custom_components.unraid_management_agent"]
+force-sort-within-sections = true
+combine-as-imports = true
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+# Mypy configuration
+[tool.mypy]
+python_version = "3.12"
+show_error_codes = true
+follow_imports = "silent"
+ignore_missing_imports = true
+strict_equality = true
+warn_incomplete_stub = true
+warn_redundant_casts = true
+warn_unused_configs = true
+warn_unused_ignores = true
+check_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_untyped_decorators = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+warn_return_any = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_untyped_calls = false
+
+# Pytest configuration (following HA Core standards)
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = [".git", "testing_config"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = [
+    "error::pytest_homeassistant_custom_component.DeprecationWarning",
+]
+
+# Coverage configuration
+[tool.coverage.run]
+source = ["custom_components/unraid_management_agent"]
+omit = ["tests/*"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "@overload",
+]
+fail_under = 60
+show_missing = true

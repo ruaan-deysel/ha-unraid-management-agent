@@ -100,6 +100,12 @@
       },
       "ups_connected": {
         "name": "UPS Connected"
+      },
+      "zfs_available": {
+        "name": "ZFS Available"
+      },
+      "network_interface": {
+        "name": "Network {interface}"
       }
     },
     "switch": {
@@ -122,7 +128,30 @@
       },
       "parity_check_stop": {
         "name": "Stop Parity Check"
+      },
+      "user_script": {
+        "name": "User Script {script_name}"
       }
+    }
+  },
+  "exceptions": {
+    "button_error": {
+      "message": "Failed to execute button action: {key}"
+    },
+    "user_script_error": {
+      "message": "Failed to execute user script: {script_name}"
+    },
+    "container_start_error": {
+      "message": "Failed to start container: {name}"
+    },
+    "container_stop_error": {
+      "message": "Failed to stop container: {name}"
+    },
+    "vm_start_error": {
+      "message": "Failed to start VM: {name}"
+    },
+    "vm_stop_error": {
+      "message": "Failed to stop VM: {name}"
     }
   },
   "services": {

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import timedelta
@@ -389,6 +390,7 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
         self.client = client
         self.enable_websocket = enable_websocket
         self._ws_client: UnraidWebSocketClient | None = None
+        self._ws_task: asyncio.Task | None = None
         self._unavailable_logged = False
 
         super().__init__(
@@ -463,7 +465,8 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
             try:
                 gpu = await self.client.list_gpus()
             except Exception as err:
-                _LOGGER.debug("Error fetching GPU metrics: %s", err)
+                if "404" not in str(err):
+                    _LOGGER.debug("Error fetching GPU metrics: %s", err)
 
             # Fetch network interfaces
             try:
@@ -511,7 +514,8 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
             try:
                 zfs_arc = await self.client.get_zfs_arc_stats()
             except Exception as err:
-                _LOGGER.debug("Error fetching ZFS ARC stats: %s", err)
+                if "404" not in str(err):
+                    _LOGGER.debug("Error fetching ZFS ARC stats: %s", err)
 
             # Log recovery if we were previously unavailable
             if self._unavailable_logged:
@@ -606,6 +610,26 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
     def _handle_raw_message(self, data: dict) -> None:
         """Handle raw WebSocket message and parse to typed event."""
         try:
+            # Handle special case where notifications come as NotificationsResponse
+            # instead of a list of Notification objects
+            if (
+                isinstance(data, dict)
+                and "notifications" in data
+                and "overview" in data
+            ):
+                # This is a NotificationsResponse format, extract notifications list
+                notifications_data = data.get("notifications", [])
+                if notifications_data:
+                    # Create a fake event for notification update
+                    notifications = [
+                        Notification.model_validate(n) if isinstance(n, dict) else n
+                        for n in notifications_data
+                    ]
+                    if self.data:
+                        self.data.notifications = notifications
+                        self.async_set_updated_data(self.data)
+                return
+
             event = parse_event(data)
             self._handle_websocket_event(event)
         except Exception as err:
@@ -634,9 +658,10 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
                 max_retries=10,
             )
 
-            # Start the WebSocket client
-            await self._ws_client.start()
-            _LOGGER.info("WebSocket client started")
+            # Start the WebSocket client as a background task
+            # The start() method blocks forever, so we run it in a task
+            self._ws_task = asyncio.create_task(self._ws_client.start())
+            _LOGGER.info("WebSocket client started as background task")
 
         except Exception as err:
             _LOGGER.error("Failed to start WebSocket client: %s", err)
@@ -647,4 +672,11 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
         if self._ws_client:
             await self._ws_client.stop()
             self._ws_client = None
+        if self._ws_task:
+            self._ws_task.cancel()
+            try:
+                await self._ws_task
+            except asyncio.CancelledError:
+                pass
+            self._ws_task = None
             _LOGGER.info("WebSocket client stopped")

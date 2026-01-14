@@ -7,10 +7,9 @@ import logging
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from uma_api.formatting import format_bytes
 
 from . import UnraidConfigEntry, UnraidDataUpdateCoordinator
@@ -19,20 +18,20 @@ from .const import (
     ATTR_CONTAINER_PORTS,
     ATTR_VM_MEMORY,
     ATTR_VM_VCPUS,
-    ERROR_CONTROL_FAILED,
+    DOMAIN,
 )
-from .entity import UnraidEntity
+from .entity import UnraidBaseEntity
 
 _LOGGER = logging.getLogger(__name__)
 
 # Coordinator handles updates, so no parallel update limit
-PARALLEL_UPDATES = 0
+PARALLEL_UPDATES = 1
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: UnraidConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Unraid switch entities."""
     coordinator = entry.runtime_data.coordinator
@@ -49,7 +48,7 @@ async def async_setup_entry(
         container_name = getattr(container, "name", "unknown")
         if container_id:
             entities.append(
-                UnraidContainerSwitch(coordinator, entry, container_id, container_name)
+                UnraidContainerSwitch(coordinator, container_id, container_name)
             )
 
     # VM switches
@@ -58,42 +57,31 @@ async def async_setup_entry(
         vm_id = getattr(vm, "id", None) or getattr(vm, "name", None)
         vm_name = getattr(vm, "name", "unknown")
         if vm_id:
-            entities.append(UnraidVMSwitch(coordinator, entry, vm_id, vm_name))
+            entities.append(UnraidVMSwitch(coordinator, vm_id, vm_name))
 
     _LOGGER.debug("Adding %d Unraid switch entities", len(entities))
     async_add_entities(entities)
 
 
-class UnraidSwitchBase(UnraidEntity, SwitchEntity):
-    """Base class for Unraid switches."""
-
-
-# Container Switches
-
-
-class UnraidContainerSwitch(UnraidSwitchBase):
+class UnraidContainerSwitch(UnraidBaseEntity, SwitchEntity):
     """Container control switch."""
+
+    _attr_icon = "mdi:docker"
+    _attr_assumed_state = False
 
     def __init__(
         self,
         coordinator: UnraidDataUpdateCoordinator,
-        entry: ConfigEntry,
         container_id: str,
         container_name: str,
     ) -> None:
         """Initialize the switch."""
-        super().__init__(coordinator, entry)
         self._container_id = container_id
         self._container_name = container_name
-        self._attr_name = f"Container {container_name}"
-        self._attr_icon = "mdi:docker"
-        self._attr_assumed_state = False
+        super().__init__(coordinator, f"container_switch_{container_id}")
+        self._attr_translation_key = "container"
+        self._attr_translation_placeholders = {"name": container_name}
         self._optimistic_state: bool | None = None
-
-    @property
-    def unique_id(self) -> str:
-        """Return unique ID."""
-        return f"{self._entry.entry_id}_container_switch_{self._container_id}"
 
     def _find_container(self) -> Any | None:
         """Find the container in coordinator data."""
@@ -164,13 +152,14 @@ class UnraidContainerSwitch(UnraidSwitchBase):
             )
             self._optimistic_state = None
             self.async_write_ha_state()
-        except Exception as err:
+        except Exception as exc:
             self._optimistic_state = None
             self.async_write_ha_state()
-            _LOGGER.error("Failed to start container %s: %s", self._container_name, err)
             raise HomeAssistantError(
-                f"{ERROR_CONTROL_FAILED}: Failed to start container {self._container_name}"
-            ) from err
+                translation_domain=DOMAIN,
+                translation_key="container_start_error",
+                translation_placeholders={"name": self._container_name},
+            ) from exc
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the container."""
@@ -201,41 +190,35 @@ class UnraidContainerSwitch(UnraidSwitchBase):
             )
             self._optimistic_state = None
             self.async_write_ha_state()
-        except Exception as err:
+        except Exception as exc:
             self._optimistic_state = None
             self.async_write_ha_state()
-            _LOGGER.error("Failed to stop container %s: %s", self._container_name, err)
             raise HomeAssistantError(
-                f"{ERROR_CONTROL_FAILED}: Failed to stop container {self._container_name}"
-            ) from err
+                translation_domain=DOMAIN,
+                translation_key="container_stop_error",
+                translation_placeholders={"name": self._container_name},
+            ) from exc
 
 
-# VM Switches
-
-
-class UnraidVMSwitch(UnraidSwitchBase):
+class UnraidVMSwitch(UnraidBaseEntity, SwitchEntity):
     """VM control switch."""
+
+    _attr_icon = "mdi:desktop-tower"
+    _attr_assumed_state = False
 
     def __init__(
         self,
         coordinator: UnraidDataUpdateCoordinator,
-        entry: ConfigEntry,
         vm_id: str,
         vm_name: str,
     ) -> None:
         """Initialize the switch."""
-        super().__init__(coordinator, entry)
         self._vm_id = vm_id
         self._vm_name = vm_name
-        self._attr_name = f"VM {vm_name}"
-        self._attr_icon = "mdi:desktop-tower"
-        self._attr_assumed_state = False
+        super().__init__(coordinator, f"vm_switch_{vm_id}")
+        self._attr_translation_key = "vm"
+        self._attr_translation_placeholders = {"name": vm_name}
         self._optimistic_state: bool | None = None
-
-    @property
-    def unique_id(self) -> str:
-        """Return unique ID."""
-        return f"{self._entry.entry_id}_vm_switch_{self._vm_id}"
 
     def _find_vm(self) -> Any | None:
         """Find the VM in coordinator data."""
@@ -325,13 +308,14 @@ class UnraidVMSwitch(UnraidSwitchBase):
             )
             self._optimistic_state = None
             self.async_write_ha_state()
-        except Exception as err:
+        except Exception as exc:
             self._optimistic_state = None
             self.async_write_ha_state()
-            _LOGGER.error("Failed to start VM %s: %s", self._vm_name, err)
             raise HomeAssistantError(
-                f"{ERROR_CONTROL_FAILED}: Failed to start VM {self._vm_name}"
-            ) from err
+                translation_domain=DOMAIN,
+                translation_key="vm_start_error",
+                translation_placeholders={"name": self._vm_name},
+            ) from exc
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the VM."""
@@ -363,10 +347,11 @@ class UnraidVMSwitch(UnraidSwitchBase):
             )
             self._optimistic_state = None
             self.async_write_ha_state()
-        except Exception as err:
+        except Exception as exc:
             self._optimistic_state = None
             self.async_write_ha_state()
-            _LOGGER.error("Failed to stop VM %s: %s", self._vm_name, err)
             raise HomeAssistantError(
-                f"{ERROR_CONTROL_FAILED}: Failed to stop VM {self._vm_name}"
-            ) from err
+                translation_domain=DOMAIN,
+                translation_key="vm_stop_error",
+                translation_placeholders={"name": self._vm_name},
+            ) from exc

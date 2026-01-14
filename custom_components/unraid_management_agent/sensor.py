@@ -14,14 +14,13 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     PERCENTAGE,
-    UnitOfDataRate,
+    EntityCategory,
     UnitOfEnergy,
     UnitOfPower,
     UnitOfTemperature,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import EntityCategory
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from uma_api.formatting import format_bytes, format_duration
 
 from . import UnraidConfigEntry, UnraidDataUpdateCoordinator
@@ -43,12 +42,12 @@ from .const import (
     ATTR_UPS_MODEL,
     ATTR_UPS_STATUS,
 )
-from .entity import UnraidEntity
+from .entity import UnraidLegacyEntity
 
 _LOGGER = logging.getLogger(__name__)
 
 # Coordinator handles updates, so no parallel update limit
-PARALLEL_UPDATES = 0
+PARALLEL_UPDATES = 1
 
 
 def _is_physical_network_interface(interface_name: str) -> bool:
@@ -69,7 +68,7 @@ def _is_physical_network_interface(interface_name: str) -> bool:
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: UnraidConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Unraid sensor entities."""
     coordinator = entry.runtime_data.coordinator
@@ -100,9 +99,13 @@ async def async_setup_entry(
     # Fan sensors (dynamic, one per fan)
     if data and data.system:
         fans = getattr(data.system, "fans", []) or []
-        for fan in fans:
-            fan_name = getattr(fan, "name", "unknown")
-            entities.append(UnraidFanSensor(coordinator, entry, fan_name))
+        for idx, fan in enumerate(fans):
+            # Fans can be dict or object depending on API version
+            if isinstance(fan, dict):
+                fan_name = fan.get("name", "unknown")
+            else:
+                fan_name = getattr(fan, "name", "unknown")
+            entities.append(UnraidFanSensor(coordinator, entry, fan_name, idx))
 
     # Array sensors
     entities.extend(
@@ -162,15 +165,15 @@ async def async_setup_entry(
             ]
         )
 
-    # UPS sensors (if UPS connected)
-    if data and data.ups and getattr(data.ups, "connected", False):
+    # UPS sensors (if UPS data is available with valid status)
+    if data and data.ups and getattr(data.ups, "status", None) is not None:
         entities.extend(
             [
                 UnraidUPSBatterySensor(coordinator, entry),
                 UnraidUPSLoadSensor(coordinator, entry),
                 UnraidUPSRuntimeSensor(coordinator, entry),
                 UnraidUPSPowerSensor(coordinator, entry),
-                UnraidUPSEnergySensor(coordinator, entry),
+                # Note: UPS Energy sensor removed - uma-api doesn't provide energy_kwh
             ]
         )
 
@@ -215,7 +218,7 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class UnraidSensorBase(UnraidEntity, SensorEntity):
+class UnraidSensorBase(UnraidLegacyEntity, SensorEntity):
     """Base class for Unraid sensors."""
 
 
@@ -396,16 +399,19 @@ class UnraidFanSensor(UnraidSensorBase):
         coordinator: UnraidDataUpdateCoordinator,
         entry: ConfigEntry,
         fan_name: str,
+        index: int = 0,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator, entry)
         self._fan_name = fan_name
-        self._attr_name = f"Fan {fan_name}"
+        self._fan_index = index
+        self._attr_name = f"Fan {fan_name}" if fan_name != "unknown" else f"Fan {index}"
 
     @property
     def unique_id(self) -> str:
         """Return unique ID."""
-        return f"{self._entry.entry_id}_fan_{self._fan_name}"
+        # Use index to ensure uniqueness for fans with same name
+        return f"{self._entry.entry_id}_fan_{self._fan_index}"
 
     @property
     def native_value(self) -> int | None:
@@ -415,19 +421,23 @@ class UnraidFanSensor(UnraidSensorBase):
             return None
 
         fans = getattr(data.system, "fans", []) or []
-        for fan in fans:
-            if getattr(fan, "name", "") == self._fan_name:
-                return getattr(fan, "rpm", None)
+        if self._fan_index < len(fans):
+            fan = fans[self._fan_index]
+            # Fans can be dict or object depending on API version
+            if isinstance(fan, dict):
+                return fan.get("rpm")
+            return getattr(fan, "rpm", None)
         return None
 
 
 class UnraidUptimeSensor(UnraidSensorBase):
-    """Uptime sensor."""
+    """
+    Uptime sensor.
+
+    Displays uptime as a formatted human-readable string.
+    """
 
     _attr_name = "Uptime"
-    _attr_device_class = SensorDeviceClass.DURATION
-    _attr_native_unit_of_measurement = "s"
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_icon = "mdi:clock-outline"
 
     @property
@@ -436,11 +446,13 @@ class UnraidUptimeSensor(UnraidSensorBase):
         return f"{self._entry.entry_id}_uptime"
 
     @property
-    def native_value(self) -> int | None:
-        """Return the state."""
+    def native_value(self) -> str | None:
+        """Return the state as formatted uptime."""
         data = self.coordinator.data
         if data and data.system:
-            return getattr(data.system, "uptime_seconds", None)
+            uptime_seconds = getattr(data.system, "uptime_seconds", None)
+            if uptime_seconds is not None:
+                return format_duration(uptime_seconds)
         return None
 
     @property
@@ -453,7 +465,16 @@ class UnraidUptimeSensor(UnraidSensorBase):
         uptime_seconds = getattr(data.system, "uptime_seconds", None)
         attrs = {}
         if uptime_seconds:
-            attrs["uptime_formatted"] = format_duration(uptime_seconds)
+            attrs["uptime_seconds"] = uptime_seconds
+            # Calculate days, hours, minutes, seconds breakdown
+            days = uptime_seconds // 86400
+            hours = (uptime_seconds % 86400) // 3600
+            minutes = (uptime_seconds % 3600) // 60
+            seconds = uptime_seconds % 60
+            attrs["days"] = days
+            attrs["hours"] = hours
+            attrs["minutes"] = minutes
+            attrs["seconds"] = seconds
         return attrs
 
 
@@ -482,6 +503,12 @@ class UnraidArrayUsageSensor(UnraidSensorBase):
         if not data or not data.array:
             return None
 
+        # API returns used_percent directly
+        used_percent = getattr(data.array, "used_percent", None)
+        if used_percent is not None:
+            return round(used_percent, 1)
+
+        # Fallback: calculate from total_bytes and used_bytes
         total = getattr(data.array, "total_bytes", 0) or 0
         used = getattr(data.array, "used_bytes", 0) or 0
         if total > 0:
@@ -723,7 +750,12 @@ class UnraidUPSRuntimeSensor(UnraidSensorBase):
         """Return the state."""
         data = self.coordinator.data
         if data and data.ups:
-            return getattr(data.ups, "runtime_minutes", None)
+            # Try runtime_left_seconds (in model_extra) first, then battery_runtime_seconds
+            runtime_seconds = getattr(data.ups, "runtime_left_seconds", None)
+            if runtime_seconds is None:
+                runtime_seconds = getattr(data.ups, "battery_runtime_seconds", None)
+            if runtime_seconds is not None:
+                return round(runtime_seconds / 60, 1)
         return None
 
 
@@ -779,9 +811,9 @@ class UnraidUPSEnergySensor(UnraidSensorBase):
 class UnraidNetworkRXSensor(UnraidSensorBase):
     """Network receive sensor."""
 
-    _attr_native_unit_of_measurement = UnitOfDataRate.BYTES_PER_SECOND
-    _attr_device_class = SensorDeviceClass.DATA_RATE
-    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "B"
+    _attr_device_class = SensorDeviceClass.DATA_SIZE
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_icon = "mdi:ethernet"
 
     def __init__(
@@ -809,7 +841,8 @@ class UnraidNetworkRXSensor(UnraidSensorBase):
 
         for interface in data.network:
             if getattr(interface, "name", "") == self._interface_name:
-                return getattr(interface, "rx_bytes_per_sec", None)
+                # API returns bytes_received (not rx_bytes)
+                return getattr(interface, "bytes_received", None)
         return None
 
     @property
@@ -832,9 +865,9 @@ class UnraidNetworkRXSensor(UnraidSensorBase):
 class UnraidNetworkTXSensor(UnraidSensorBase):
     """Network transmit sensor."""
 
-    _attr_native_unit_of_measurement = UnitOfDataRate.BYTES_PER_SECOND
-    _attr_device_class = SensorDeviceClass.DATA_RATE
-    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "B"
+    _attr_device_class = SensorDeviceClass.DATA_SIZE
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_icon = "mdi:ethernet"
 
     def __init__(
@@ -862,7 +895,8 @@ class UnraidNetworkTXSensor(UnraidSensorBase):
 
         for interface in data.network:
             if getattr(interface, "name", "") == self._interface_name:
-                return getattr(interface, "tx_bytes_per_sec", None)
+                # API returns bytes_sent (not tx_bytes)
+                return getattr(interface, "bytes_sent", None)
         return None
 
 
@@ -1235,9 +1269,16 @@ class UnraidNotificationsSensor(UnraidSensorBase):
     def native_value(self) -> int:
         """Return the state."""
         data = self.coordinator.data
-        if data and data.notifications:
-            return len(data.notifications)
-        return 0
+        if not data or not data.notifications:
+            return 0
+
+        # Handle both list and NotificationsResponse
+        notifications = data.notifications
+        if hasattr(notifications, "notifications"):
+            # This is a NotificationsResponse object
+            notifications = notifications.notifications or []
+
+        return len(notifications)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -1246,5 +1287,11 @@ class UnraidNotificationsSensor(UnraidSensorBase):
         if not data or not data.notifications:
             return {"unread_count": 0}
 
-        unread = sum(1 for n in data.notifications if not getattr(n, "read", True))
+        # Handle both list and NotificationsResponse
+        notifications = data.notifications
+        if hasattr(notifications, "notifications"):
+            # This is a NotificationsResponse object
+            notifications = notifications.notifications or []
+
+        unread = sum(1 for n in notifications if not getattr(n, "read", True))
         return {"unread_count": unread}

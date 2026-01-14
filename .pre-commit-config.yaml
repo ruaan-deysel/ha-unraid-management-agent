@@ -1,0 +1,89 @@
+# Pre-commit configuration following Home Assistant Core integration best practices
+# See https://pre-commit.com for more information
+# Reference: https://github.com/home-assistant/core/blob/dev/.pre-commit-config.yaml
+repos:
+  # Ruff - Python linting and formatting (same as HA Core)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.13.0
+    hooks:
+      - id: ruff-check
+        args:
+          - --fix
+      - id: ruff-format
+        files: ^((custom_components|tests)/.+)?[^/]+\.py$
+
+  # Codespell - Check for common spelling mistakes
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.1
+    hooks:
+      - id: codespell
+        args:
+          - --ignore-words-list=hass,hacs
+          - --skip="./.*,*.csv,*.json,*.ambr"
+          - --quiet-level=2
+        exclude_types: [csv, json, html]
+
+  # Pre-commit hooks - General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-executables-have-shebangs
+        stages: [manual]  # Skip in normal runs - file permissions are a git issue
+      - id: check-json
+        exclude: (.vscode|.devcontainer)
+      - id: check-toml
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ["--maxkb=1000"]
+      - id: check-ast
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: debug-statements
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+      - id: no-commit-to-branch
+        args:
+          - --branch=main
+          - --branch=master
+      - id: trailing-whitespace
+
+  # YAML linting
+  - repo: https://github.com/adrienverge/yamllint.git
+    rev: v1.37.1
+    hooks:
+      - id: yamllint
+        args: ["-d", "{extends: relaxed, rules: {line-length: {max: 200}}}"]
+
+  # Local hooks
+  - repo: local
+    hooks:
+      # Mypy type checking (relaxed for HA custom integrations)
+      - id: mypy
+        name: mypy
+        entry: mypy
+        language: system
+        types: [python]
+        files: ^custom_components/.+\.py$
+        args:
+          - --ignore-missing-imports
+          - --follow-imports=skip
+          - --no-strict-optional
+          - --disable-error-code=misc
+          - --disable-error-code=no-any-return
+          - --disable-error-code=arg-type
+          - --disable-error-code=no-untyped-def
+          - --disable-error-code=call-arg
+          - --disable-error-code=untyped-decorator
+        require_serial: true
+
+# CI configuration for pre-commit.ci
+ci:
+  autofix_commit_msg: |
+    [pre-commit.ci] auto fixes from pre-commit hooks
+  autofix_prs: true
+  autoupdate_branch: ""
+  autoupdate_commit_msg: "[pre-commit.ci] pre-commit autoupdate"
+  autoupdate_schedule: weekly
+  skip: [mypy]  # Skip mypy in CI as it requires dependencies
+  submodules: false

@@ -15,6 +15,7 @@ from custom_components.unraid_management_agent.const import (
     CONF_UPDATE_INTERVAL,
     DOMAIN,
     ERROR_CANNOT_CONNECT,
+    ERROR_TIMEOUT,
     ERROR_UNKNOWN,
 )
 
@@ -135,8 +136,8 @@ async def test_form_user_timeout(hass: HomeAssistant) -> None:
         )
 
     assert result2["type"] == FlowResultType.FORM
-    # TimeoutError should map to cannot_connect
-    assert result2["errors"]["base"] in (ERROR_CANNOT_CONNECT, ERROR_UNKNOWN)
+    # TimeoutError should map to timeout error
+    assert result2["errors"]["base"] == ERROR_TIMEOUT
 
 
 async def test_form_user_unknown_error(hass: HomeAssistant) -> None:
@@ -226,3 +227,173 @@ async def test_options_flow(
     assert result2["type"] == FlowResultType.CREATE_ENTRY
     assert result2["data"][CONF_UPDATE_INTERVAL] == 60
     assert result2["data"][CONF_ENABLE_WEBSOCKET] is False
+
+
+async def test_reconfigure_flow(
+    hass: HomeAssistant,
+    mock_config_entry,
+    mock_async_unraid_client,
+    mock_websocket_client,
+) -> None:
+    """Test reconfigure flow."""
+    with (
+        patch(
+            "custom_components.unraid_management_agent.AsyncUnraidClient",
+            return_value=mock_async_unraid_client,
+        ),
+        patch(
+            "custom_components.unraid_management_agent.UnraidWebSocketClient",
+            return_value=mock_websocket_client,
+        ),
+    ):
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    result = await mock_config_entry.start_reconfigure_flow(hass)
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "reconfigure"
+
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.get_system_info = AsyncMock(return_value=mock_system_info())
+
+    with patch(
+        "custom_components.unraid_management_agent.config_flow.AsyncUnraidClient",
+        return_value=mock_client,
+    ):
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_HOST: "192.168.1.100",
+                CONF_PORT: 8043,
+                CONF_UPDATE_INTERVAL: 45,
+                CONF_ENABLE_WEBSOCKET: True,
+            },
+        )
+
+    assert result2["type"] == FlowResultType.ABORT
+    assert result2["reason"] == "reconfigure_successful"
+
+
+async def test_reconfigure_flow_timeout(
+    hass: HomeAssistant,
+    mock_config_entry,
+    mock_async_unraid_client,
+    mock_websocket_client,
+) -> None:
+    """Test reconfigure flow with timeout error."""
+    with (
+        patch(
+            "custom_components.unraid_management_agent.AsyncUnraidClient",
+            return_value=mock_async_unraid_client,
+        ),
+        patch(
+            "custom_components.unraid_management_agent.UnraidWebSocketClient",
+            return_value=mock_websocket_client,
+        ),
+    ):
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    result = await mock_config_entry.start_reconfigure_flow(hass)
+
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.get_system_info = AsyncMock(side_effect=TimeoutError("Timeout"))
+
+    with patch(
+        "custom_components.unraid_management_agent.config_flow.AsyncUnraidClient",
+        return_value=mock_client,
+    ):
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_HOST: "192.168.1.100",
+                CONF_PORT: 8043,
+                CONF_UPDATE_INTERVAL: 30,
+                CONF_ENABLE_WEBSOCKET: True,
+            },
+        )
+
+    assert result2["type"] == FlowResultType.FORM
+    assert result2["errors"]["base"] == ERROR_TIMEOUT
+
+
+async def test_reconfigure_flow_connection_error(
+    hass: HomeAssistant,
+    mock_config_entry,
+    mock_async_unraid_client,
+    mock_websocket_client,
+) -> None:
+    """Test reconfigure flow with connection error."""
+    with (
+        patch(
+            "custom_components.unraid_management_agent.AsyncUnraidClient",
+            return_value=mock_async_unraid_client,
+        ),
+        patch(
+            "custom_components.unraid_management_agent.UnraidWebSocketClient",
+            return_value=mock_websocket_client,
+        ),
+    ):
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    result = await mock_config_entry.start_reconfigure_flow(hass)
+
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.get_system_info = AsyncMock(
+        side_effect=UnraidConnectionError("Connection refused")
+    )
+
+    with patch(
+        "custom_components.unraid_management_agent.config_flow.AsyncUnraidClient",
+        return_value=mock_client,
+    ):
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_HOST: "192.168.1.200",
+                CONF_PORT: 8043,
+                CONF_UPDATE_INTERVAL: 30,
+                CONF_ENABLE_WEBSOCKET: True,
+            },
+        )
+
+    assert result2["type"] == FlowResultType.FORM
+    assert result2["errors"]["base"] == ERROR_CANNOT_CONNECT
+
+
+async def test_validate_input_missing_hostname(hass: HomeAssistant) -> None:
+    """Test validate_input with missing hostname in response."""
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    # Create system_info with None hostname
+    system_info = MagicMock()
+    system_info.hostname = None
+    mock_client.get_system_info = AsyncMock(return_value=system_info)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+
+    with patch(
+        "custom_components.unraid_management_agent.config_flow.AsyncUnraidClient",
+        return_value=mock_client,
+    ):
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            MOCK_CONFIG,
+        )
+        await hass.async_block_till_done()
+
+    # Should succeed with "unknown" hostname
+    assert result2["type"] == FlowResultType.CREATE_ENTRY
+    assert result2["title"] == "Unraid (unknown)"

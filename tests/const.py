@@ -56,6 +56,7 @@ def mock_array_status() -> MagicMock:
     array.total_bytes = 16000000000000
     array.used_bytes = 8000000000000
     array.free_bytes = 8000000000000
+    array.used_percent = 50.0  # Add used_percent for direct access
     array.num_disks = 4
     array.num_data_disks = 3
     array.num_parity_disks = 1
@@ -107,6 +108,9 @@ def mock_ups_info() -> MagicMock:
     ups.model = "APC Back-UPS 1500"
     ups.battery_charge_percent = 100
     ups.runtime_minutes = 60
+    # Add runtime_left_seconds for uma-api compatibility
+    ups.runtime_left_seconds = 3600  # 60 minutes in seconds
+    ups.battery_runtime_seconds = 3600  # fallback field
     ups.power_watts = 150.5
     ups.load_percent = 25
     ups.energy_kwh = 10.5
@@ -183,6 +187,9 @@ def mock_network_interfaces() -> list[MagicMock]:
     eth0.ip_address = "192.168.1.100"
     eth0.rx_bytes_per_sec = 125000
     eth0.tx_bytes_per_sec = 62500
+    # Add bytes_received/bytes_sent for total byte counters
+    eth0.bytes_received = 1000000000
+    eth0.bytes_sent = 500000000
 
     eth1 = MagicMock()
     eth1.name = "eth1"
@@ -192,6 +199,8 @@ def mock_network_interfaces() -> list[MagicMock]:
     eth1.ip_address = None
     eth1.rx_bytes_per_sec = 0
     eth1.tx_bytes_per_sec = 0
+    eth1.bytes_received = 0
+    eth1.bytes_sent = 0
 
     return [eth0, eth1]
 
