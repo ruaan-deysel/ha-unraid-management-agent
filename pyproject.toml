@@ -4,7 +4,7 @@ version = "2026.1.0"
 description = "Home Assistant custom integration for Unraid server monitoring and management"
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 authors = [
     { name = "Ruaan Deysel" }
 ]
@@ -14,7 +14,6 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Home Automation",
 ]
@@ -53,7 +52,7 @@ packages = ["custom_components/unraid_management_agent"]
 
 # Ruff configuration (following HA Core standards)
 [tool.ruff]
-target-version = "py312"
+target-version = "py313"
 line-length = 88
 
 [tool.ruff.lint]
@@ -138,7 +137,7 @@ convention = "google"
 
 # Mypy configuration
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.13"
 show_error_codes = true
 follow_imports = "silent"
 ignore_missing_imports = true
