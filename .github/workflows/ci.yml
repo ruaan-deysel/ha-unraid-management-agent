@@ -58,7 +58,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install homeassistant>=2025.6.3
+          pip install pytest>=8.0.0 pytest-asyncio>=0.23.0 pytest-homeassistant-custom-component>=0.13.0
+          pip install pytest-cov>=4.0.0 pytest-timeout>=2.0.0
+          pip install uma-api[async]>=1.2.0
 
       - name: Run tests with coverage
         run: |
@@ -75,7 +78,6 @@ jobs:
         uses: codecov/codecov-action@v5
         if: matrix.python-version == '3.12'
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.xml
           flags: unittests
           name: codecov-umbrella
@@ -86,7 +88,6 @@ jobs:
         uses: codecov/test-results-action@v1
         if: matrix.python-version == '3.12' && !cancelled()
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
           files: ./junit.xml
           flags: unittests
           name: pytest-results
@@ -109,7 +110,7 @@ jobs:
 
       - name: Validate manifest.json
         run: |
-          python3 -c "
+          python3 << 'EOF'
           import json
           import sys
           
@@ -132,25 +133,25 @@ jobs:
                   sys.exit(1)
               
               print(f'✅ manifest.json is valid')
-              print(f'   Domain: {manifest[\"domain\"]}')
-              print(f'   Name: {manifest[\"name\"]}')
-              print(f'   Version: {manifest[\"version\"]}')
+              print(f'   Domain: {manifest["domain"]}')
+              print(f'   Name: {manifest["name"]}')
+              print(f'   Version: {manifest["version"]}')
               
           except Exception as e:
               print(f'❌ Error validating manifest.json: {e}')
               sys.exit(1)
-          "
+          EOF
 
       - name: Validate strings.json
         run: |
-          python3 -c "
+          python3 << 'EOF'
           import json
           
           with open('custom_components/unraid_management_agent/strings.json') as f:
               strings = json.load(f)
           
           print('✅ strings.json is valid JSON')
-          "
+          EOF
 
       - name: Check for required files
         run: |
