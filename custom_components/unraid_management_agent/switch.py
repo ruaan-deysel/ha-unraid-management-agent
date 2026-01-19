@@ -25,7 +25,7 @@ from .entity import UnraidBaseEntity
 _LOGGER = logging.getLogger(__name__)
 
 # Coordinator handles updates, so no parallel update limit
-PARALLEL_UPDATES = 1
+PARALLEL_UPDATES = 0
 
 
 async def async_setup_entry(
@@ -39,25 +39,27 @@ async def async_setup_entry(
 
     entities: list[SwitchEntity] = []
 
-    # Container switches
-    containers = data.containers if data else []
-    for container in containers or []:
-        container_id = getattr(container, "id", None) or getattr(
-            container, "container_id", None
-        )
-        container_name = getattr(container, "name", "unknown")
-        if container_id:
-            entities.append(
-                UnraidContainerSwitch(coordinator, container_id, container_name)
+    # Container switches - only if docker collector is enabled
+    if coordinator.is_collector_enabled("docker"):
+        containers = data.containers if data else []
+        for container in containers or []:
+            container_id = getattr(container, "id", None) or getattr(
+                container, "container_id", None
             )
+            container_name = getattr(container, "name", "unknown")
+            if container_id:
+                entities.append(
+                    UnraidContainerSwitch(coordinator, container_id, container_name)
+                )
 
-    # VM switches
-    vms = data.vms if data else []
-    for vm in vms or []:
-        vm_id = getattr(vm, "id", None) or getattr(vm, "name", None)
-        vm_name = getattr(vm, "name", "unknown")
-        if vm_id:
-            entities.append(UnraidVMSwitch(coordinator, vm_id, vm_name))
+    # VM switches - only if vm collector is enabled
+    if coordinator.is_collector_enabled("vm"):
+        vms = data.vms if data else []
+        for vm in vms or []:
+            vm_id = getattr(vm, "id", None) or getattr(vm, "name", None)
+            vm_name = getattr(vm, "name", "unknown")
+            if vm_id:
+                entities.append(UnraidVMSwitch(coordinator, vm_id, vm_name))
 
     _LOGGER.debug("Adding %d Unraid switch entities", len(entities))
     async_add_entities(entities)
@@ -117,10 +119,24 @@ class UnraidContainerSwitch(UnraidBaseEntity, SwitchEntity):
             return {}
 
         state = getattr(container, "state", "").lower()
+
+        # Convert PortMapping objects to JSON-serializable format
+        ports = getattr(container, "ports", None)
+        serializable_ports = None
+        if ports:
+            serializable_ports = [
+                {
+                    "public_port": getattr(p, "public_port", None),
+                    "private_port": getattr(p, "private_port", None),
+                    "type": getattr(p, "type", None),
+                }
+                for p in ports
+            ]
+
         return {
             "status": "running" if state == "running" else "stopped",
             ATTR_CONTAINER_IMAGE: getattr(container, "image", None),
-            ATTR_CONTAINER_PORTS: getattr(container, "ports", None),
+            ATTR_CONTAINER_PORTS: serializable_ports,
         }
 
     async def async_turn_on(self, **kwargs: Any) -> None:
@@ -132,11 +148,10 @@ class UnraidContainerSwitch(UnraidBaseEntity, SwitchEntity):
             await self.coordinator.client.start_container(self._container_id)
             _LOGGER.info("Started container: %s", self._container_name)
 
-            await self.coordinator.async_request_refresh()
-
             # Wait for state confirmation (10 seconds max)
             for _ in range(20):
                 await asyncio.sleep(0.5)
+                await self.coordinator.async_refresh()
                 container = self._find_container()
                 if container:
                     state = getattr(container, "state", "").lower()
@@ -144,7 +159,6 @@ class UnraidContainerSwitch(UnraidBaseEntity, SwitchEntity):
                         self._optimistic_state = None
                         self.async_write_ha_state()
                         return
-                await self.coordinator.async_request_refresh()
 
             _LOGGER.warning(
                 "Container %s start command sent but state not confirmed after 10s",
@@ -170,11 +184,10 @@ class UnraidContainerSwitch(UnraidBaseEntity, SwitchEntity):
             await self.coordinator.client.stop_container(self._container_id)
             _LOGGER.info("Stopped container: %s", self._container_name)
 
-            await self.coordinator.async_request_refresh()
-
             # Wait for state confirmation (10 seconds max)
             for _ in range(20):
                 await asyncio.sleep(0.5)
+                await self.coordinator.async_refresh()
                 container = self._find_container()
                 if container:
                     state = getattr(container, "state", "").lower()
@@ -182,7 +195,6 @@ class UnraidContainerSwitch(UnraidBaseEntity, SwitchEntity):
                         self._optimistic_state = None
                         self.async_write_ha_state()
                         return
-                await self.coordinator.async_request_refresh()
 
             _LOGGER.warning(
                 "Container %s stop command sent but state not confirmed after 10s",
@@ -287,11 +299,10 @@ class UnraidVMSwitch(UnraidBaseEntity, SwitchEntity):
             await self.coordinator.client.start_vm(self._vm_id)
             _LOGGER.info("Started VM: %s", self._vm_name)
 
-            await self.coordinator.async_request_refresh()
-
             # Wait for state confirmation (30 seconds max - VMs take longer)
             for _ in range(60):
                 await asyncio.sleep(0.5)
+                await self.coordinator.async_refresh()
                 vm = self._find_vm()
                 if vm:
                     state = getattr(vm, "state", "").lower()
@@ -300,7 +311,6 @@ class UnraidVMSwitch(UnraidBaseEntity, SwitchEntity):
                         self.async_write_ha_state()
                         _LOGGER.info("VM %s state confirmed as running", self._vm_name)
                         return
-                await self.coordinator.async_request_refresh()
 
             _LOGGER.warning(
                 "VM %s start command sent but state not confirmed after 30s",
@@ -326,11 +336,10 @@ class UnraidVMSwitch(UnraidBaseEntity, SwitchEntity):
             await self.coordinator.client.stop_vm(self._vm_id)
             _LOGGER.info("Stopped VM: %s", self._vm_name)
 
-            await self.coordinator.async_request_refresh()
-
             # Wait for state confirmation (30 seconds max - VMs take longer)
             for _ in range(60):
                 await asyncio.sleep(0.5)
+                await self.coordinator.async_refresh()
                 vm = self._find_vm()
                 if vm:
                     state = getattr(vm, "state", "").lower()
@@ -339,7 +348,6 @@ class UnraidVMSwitch(UnraidBaseEntity, SwitchEntity):
                         self.async_write_ha_state()
                         _LOGGER.info("VM %s state confirmed as stopped", self._vm_name)
                         return
-                await self.coordinator.async_request_refresh()
 
             _LOGGER.warning(
                 "VM %s stop command sent but state not confirmed after 30s",

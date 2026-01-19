@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Collector-Based Entity Filtering**: Entities are now only created for enabled collectors
+  - Integration queries the UMA-API `/collectors/status` endpoint to detect enabled/disabled collectors
+  - Added `is_collector_enabled()` helper method to coordinator for checking collector status
+  - If a collector is disabled (e.g., nut, zfs, unassigned), its corresponding entities are not created
+  - Reduces entity clutter by only showing relevant entities based on server configuration
+
+- **Physical Disk Filtering**: Improved disk entity creation to only include actual physical disks
+  - Excludes virtual disks (`docker_vdisk`, `log` roles)
+  - Excludes disabled disk slots (`DISK_NP_DSBL` status)
+  - Excludes empty disk slots (no device assigned)
+  - Results in cleaner entity list showing only installed, physical disks
+
+### Changed
+
+- **UMA-API v1.2.1 Migration**: Full migration to typed Pydantic models from uma-api package
+  - All API responses now use strongly-typed Pydantic models instead of raw dictionaries
+  - Improved type safety and IDE autocompletion throughout the codebase
+  - WebSocket events properly typed using EventType enum and parse_event()
+  - CollectorStatus model added for collector filtering support
+
+- **Entity Platforms**: All entity platforms updated to check collector status before entity creation
+  - sensor.py: GPU, UPS, Network, Shares, ZFS, Disk, Notification sensors filter by collector
+  - switch.py: Container and VM switches filter by docker/vm collectors
+  - binary_sensor.py: UPS, ZFS, Network binary sensors filter by collector
+
+### Technical Details
+
+- **Collector-to-Entity Mapping**:
+  - `system` → CPU, RAM, Temperature, Uptime sensors (required, always enabled)
+  - `array` → Array usage, Parity sensors and binary sensors
+  - `disk` → Disk usage and health sensors
+  - `docker` → Container switches
+  - `vm` → VM switches
+  - `ups` → UPS sensors and binary sensor
+  - `gpu` → GPU utilization, temperature, power sensors
+  - `network` → Network RX/TX sensors and interface binary sensors
+  - `shares` → Share usage sensors
+  - `zfs` → ZFS pool sensors and ZFS available binary sensor
+  - `notification` → Notification count sensor
+
+- **Test Coverage**: 95%+ coverage with comprehensive tests following HA Core patterns
+
 ## [2025.12.1] - 2025-12-27
 
 ### Added

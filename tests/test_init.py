@@ -20,7 +20,7 @@ async def test_setup_entry_success(
     """Test successful setup of config entry."""
     with (
         patch(
-            "custom_components.unraid_management_agent.AsyncUnraidClient",
+            "custom_components.unraid_management_agent.UnraidClient",
             return_value=mock_async_unraid_client,
         ),
         patch(
@@ -50,7 +50,7 @@ async def test_setup_entry_connection_error(
     )
 
     with patch(
-        "custom_components.unraid_management_agent.AsyncUnraidClient",
+        "custom_components.unraid_management_agent.UnraidClient",
         return_value=mock_async_unraid_client,
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
@@ -66,7 +66,7 @@ async def test_setup_entry_unexpected_error(
     mock_async_unraid_client.health_check.side_effect = Exception("Unexpected error")
 
     with patch(
-        "custom_components.unraid_management_agent.AsyncUnraidClient",
+        "custom_components.unraid_management_agent.UnraidClient",
         return_value=mock_async_unraid_client,
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
@@ -84,7 +84,7 @@ async def test_unload_entry(
     """Test unloading a config entry."""
     with (
         patch(
-            "custom_components.unraid_management_agent.AsyncUnraidClient",
+            "custom_components.unraid_management_agent.UnraidClient",
             return_value=mock_async_unraid_client,
         ),
         patch(
@@ -114,7 +114,7 @@ async def test_reload_entry(
     """Test reloading a config entry."""
     with (
         patch(
-            "custom_components.unraid_management_agent.AsyncUnraidClient",
+            "custom_components.unraid_management_agent.UnraidClient",
             return_value=mock_async_unraid_client,
         ),
         patch(
@@ -129,7 +129,7 @@ async def test_reload_entry(
 
     with (
         patch(
-            "custom_components.unraid_management_agent.AsyncUnraidClient",
+            "custom_components.unraid_management_agent.UnraidClient",
             return_value=mock_async_unraid_client,
         ),
         patch(
@@ -152,7 +152,7 @@ async def test_services_registered(
     """Test services are registered after setup."""
     with (
         patch(
-            "custom_components.unraid_management_agent.AsyncUnraidClient",
+            "custom_components.unraid_management_agent.UnraidClient",
             return_value=mock_async_unraid_client,
         ),
         patch(

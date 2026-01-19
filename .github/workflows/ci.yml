@@ -1,0 +1,200 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - enhancement/*
+      - feature/*
+      - fix/*
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  lint:
+    name: Lint Code
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+
+      - name: Run Ruff format check
+        run: ruff format --check .
+
+      - name: Run Ruff linter
+        run: ruff check .
+
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests with coverage
+        run: |
+          pytest \
+            --cov \
+            --cov-branch \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --junitxml=junit.xml \
+            -o junit_family=legacy \
+            -v
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        if: matrix.python-version == '3.12'
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+          verbose: true
+
+      - name: Upload test results to Codecov
+        uses: codecov/test-results-action@v1
+        if: matrix.python-version == '3.12' && !cancelled()
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./junit.xml
+          flags: unittests
+          name: pytest-results
+          fail_ci_if_error: false
+          verbose: true
+
+  validate:
+    name: Validate Integration
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Validate manifest.json
+        run: |
+          python3 -c "
+          import json
+          import sys
+          
+          try:
+              with open('custom_components/unraid_management_agent/manifest.json') as f:
+                  manifest = json.load(f)
+              
+              # Validate required fields
+              required = ['domain', 'name', 'version', 'documentation', 'issue_tracker', 'requirements', 'codeowners']
+              missing = [field for field in required if field not in manifest]
+              
+              if missing:
+                  print(f'❌ Missing required fields: {missing}')
+                  sys.exit(1)
+              
+              # Validate version format
+              version = manifest['version']
+              if not version or '.' not in version:
+                  print(f'❌ Invalid version format: {version}')
+                  sys.exit(1)
+              
+              print(f'✅ manifest.json is valid')
+              print(f'   Domain: {manifest[\"domain\"]}')
+              print(f'   Name: {manifest[\"name\"]}')
+              print(f'   Version: {manifest[\"version\"]}')
+              
+          except Exception as e:
+              print(f'❌ Error validating manifest.json: {e}')
+              sys.exit(1)
+          "
+
+      - name: Validate strings.json
+        run: |
+          python3 -c "
+          import json
+          
+          with open('custom_components/unraid_management_agent/strings.json') as f:
+              strings = json.load(f)
+          
+          print('✅ strings.json is valid JSON')
+          "
+
+      - name: Check for required files
+        run: |
+          FILES=(
+            "custom_components/unraid_management_agent/__init__.py"
+            "custom_components/unraid_management_agent/manifest.json"
+            "custom_components/unraid_management_agent/strings.json"
+            "custom_components/unraid_management_agent/config_flow.py"
+            "custom_components/unraid_management_agent/const.py"
+          )
+          
+          for file in "${FILES[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "❌ Missing required file: $file"
+              exit 1
+            fi
+          done
+          
+          echo "✅ All required files present"
+
+  summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    needs: [lint, test, validate]
+    if: always()
+
+    steps:
+      - name: Check results
+        run: |
+          if [ "${{ needs.lint.result }}" != "success" ] || \
+             [ "${{ needs.test.result }}" != "success" ] || \
+             [ "${{ needs.validate.result }}" != "success" ]; then
+            echo "❌ CI checks failed"
+            exit 1
+          fi
+          
+          echo "✅ All CI checks passed"
+
+      - name: Summary
+        run: |
+          echo "## 🎉 CI Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Lint | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Test | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Validate | ${{ needs.validate.result }} |" >> $GITHUB_STEP_SUMMARY

@@ -6,11 +6,11 @@ from unittest.mock import MagicMock, patch
 
 from homeassistant.core import HomeAssistant
 
+from custom_components.unraid_management_agent.coordinator import UnraidData
 from custom_components.unraid_management_agent.diagnostics import (
     _serialize_data,
     async_get_config_entry_diagnostics,
 )
-from custom_components.unraid_management_agent.entity import UnraidData
 
 from .const import (
     mock_array_status,
@@ -33,7 +33,7 @@ async def test_async_get_config_entry_diagnostics(
     """Test diagnostics returns expected data structure."""
     with (
         patch(
-            "custom_components.unraid_management_agent.AsyncUnraidClient",
+            "custom_components.unraid_management_agent.UnraidClient",
             return_value=mock_async_unraid_client,
         ),
         patch(

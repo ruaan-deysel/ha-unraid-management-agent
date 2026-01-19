@@ -11,12 +11,13 @@ from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 
 from custom_components.unraid_management_agent.const import DOMAIN
-from custom_components.unraid_management_agent.entity import UnraidData
+from custom_components.unraid_management_agent.coordinator import UnraidData
 
 from .const import (
     MOCK_CONFIG,
     MOCK_OPTIONS,
     mock_array_status,
+    mock_collectors_status,
     mock_containers,
     mock_disks,
     mock_gpu_list,
@@ -41,9 +42,9 @@ def mock_setup_entry() -> Generator[AsyncMock]:
 
 @pytest.fixture
 def mock_async_unraid_client() -> Generator[MagicMock]:
-    """Mock AsyncUnraidClient from uma-api."""
+    """Mock UnraidClient from uma-api (async by default in v1.2.1+)."""
     with patch(
-        "custom_components.unraid_management_agent.AsyncUnraidClient",
+        "custom_components.unraid_management_agent.UnraidClient",
         autospec=True,
     ) as mock_client_class:
         client = mock_client_class.return_value
@@ -71,6 +72,7 @@ def mock_async_unraid_client() -> Generator[MagicMock]:
         client.list_zfs_datasets = AsyncMock(return_value=[])
         client.list_zfs_snapshots = AsyncMock(return_value=[])
         client.get_zfs_arc_stats = AsyncMock(return_value=None)
+        client.get_collectors_status = AsyncMock(return_value=mock_collectors_status())
 
         # Mock control methods
         client.start_array = AsyncMock(return_value=True)
@@ -161,6 +163,7 @@ def mock_unraid_data() -> UnraidData:
         zfs_datasets=[],
         zfs_snapshots=[],
         zfs_arc=None,
+        collectors=mock_collectors_status(),
     )
 
 
@@ -182,6 +185,20 @@ def mock_coordinator(
         coordinator.async_request_refresh = AsyncMock()
         coordinator.async_start_websocket = AsyncMock()
         coordinator.async_stop_websocket = AsyncMock()
+
+        # Add is_collector_enabled method - defaults to True for all collectors in tests
+        def _is_collector_enabled(collector_name: str) -> bool:
+            """Check if a collector is enabled (default all enabled in tests)."""
+            if not coordinator.data or not coordinator.data.collectors:
+                return True
+            collectors = coordinator.data.collectors.collectors or []
+            for c in collectors:
+                if getattr(c, "name", "") == collector_name:
+                    return getattr(c, "enabled", True)
+            return True
+
+        coordinator.is_collector_enabled = _is_collector_enabled
+
         yield coordinator
 
 

@@ -21,7 +21,7 @@ from .entity import UnraidBaseEntity, UnraidEntityDescription
 _LOGGER = logging.getLogger(__name__)
 
 # Coordinator handles updates, so no parallel update limit
-PARALLEL_UPDATES = 1
+PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)

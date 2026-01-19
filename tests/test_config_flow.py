@@ -22,8 +22,14 @@ from custom_components.unraid_management_agent.const import (
 from .const import MOCK_CONFIG, mock_system_info
 
 
-async def test_form_user_success(hass: HomeAssistant) -> None:
-    """Test successful user config flow."""
+async def test_form_user_success(
+    hass: HomeAssistant, mock_setup_entry: AsyncMock
+) -> None:
+    """
+    Test successful user config flow.
+
+    Uses mock_setup_entry to isolate config flow testing from actual setup.
+    """
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
@@ -37,7 +43,7 @@ async def test_form_user_success(hass: HomeAssistant) -> None:
     mock_client.get_system_info = AsyncMock(return_value=mock_system_info())
 
     with patch(
-        "custom_components.unraid_management_agent.config_flow.AsyncUnraidClient",
+        "custom_components.unraid_management_agent.config_flow.UnraidClient",
         return_value=mock_client,
     ):
         result2 = await hass.config_entries.flow.async_configure(
@@ -54,10 +60,18 @@ async def test_form_user_success(hass: HomeAssistant) -> None:
         result2["result"].unique_id
         == f"{MOCK_CONFIG[CONF_HOST]}:{MOCK_CONFIG[CONF_PORT]}"
     )
+    # Verify setup was called
+    assert len(mock_setup_entry.mock_calls) == 1
 
 
-async def test_form_user_with_options(hass: HomeAssistant) -> None:
-    """Test user config flow with custom options."""
+async def test_form_user_with_options(
+    hass: HomeAssistant, mock_setup_entry: AsyncMock
+) -> None:
+    """
+    Test user config flow with custom options.
+
+    Uses mock_setup_entry to isolate config flow testing from actual setup.
+    """
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
@@ -75,7 +89,7 @@ async def test_form_user_with_options(hass: HomeAssistant) -> None:
     mock_client.get_system_info = AsyncMock(return_value=mock_system_info())
 
     with patch(
-        "custom_components.unraid_management_agent.config_flow.AsyncUnraidClient",
+        "custom_components.unraid_management_agent.config_flow.UnraidClient",
         return_value=mock_client,
     ):
         result2 = await hass.config_entries.flow.async_configure(
@@ -87,6 +101,8 @@ async def test_form_user_with_options(hass: HomeAssistant) -> None:
     assert result2["type"] == FlowResultType.CREATE_ENTRY
     assert result2["data"][CONF_HOST] == "192.168.1.100"
     assert result2["data"][CONF_PORT] == 8043
+    # Verify setup was called
+    assert len(mock_setup_entry.mock_calls) == 1
 
 
 async def test_form_user_cannot_connect(hass: HomeAssistant) -> None:
@@ -103,7 +119,7 @@ async def test_form_user_cannot_connect(hass: HomeAssistant) -> None:
     )
 
     with patch(
-        "custom_components.unraid_management_agent.config_flow.AsyncUnraidClient",
+        "custom_components.unraid_management_agent.config_flow.UnraidClient",
         return_value=mock_client,
     ):
         result2 = await hass.config_entries.flow.async_configure(
@@ -127,7 +143,7 @@ async def test_form_user_timeout(hass: HomeAssistant) -> None:
     mock_client.get_system_info = AsyncMock(side_effect=TimeoutError("Timeout"))
 
     with patch(
-        "custom_components.unraid_management_agent.config_flow.AsyncUnraidClient",
+        "custom_components.unraid_management_agent.config_flow.UnraidClient",
         return_value=mock_client,
     ):
         result2 = await hass.config_entries.flow.async_configure(
@@ -152,7 +168,7 @@ async def test_form_user_unknown_error(hass: HomeAssistant) -> None:
     mock_client.get_system_info = AsyncMock(side_effect=Exception("Unknown error"))
 
     with patch(
-        "custom_components.unraid_management_agent.config_flow.AsyncUnraidClient",
+        "custom_components.unraid_management_agent.config_flow.UnraidClient",
         return_value=mock_client,
     ):
         result2 = await hass.config_entries.flow.async_configure(
@@ -178,7 +194,7 @@ async def test_form_user_already_configured(
     mock_client.get_system_info = AsyncMock(return_value=mock_system_info())
 
     with patch(
-        "custom_components.unraid_management_agent.config_flow.AsyncUnraidClient",
+        "custom_components.unraid_management_agent.config_flow.UnraidClient",
         return_value=mock_client,
     ):
         result2 = await hass.config_entries.flow.async_configure(
@@ -200,7 +216,7 @@ async def test_options_flow(
     """Test options flow."""
     with (
         patch(
-            "custom_components.unraid_management_agent.AsyncUnraidClient",
+            "custom_components.unraid_management_agent.UnraidClient",
             return_value=mock_async_unraid_client,
         ),
         patch(
@@ -238,7 +254,7 @@ async def test_reconfigure_flow(
     """Test reconfigure flow."""
     with (
         patch(
-            "custom_components.unraid_management_agent.AsyncUnraidClient",
+            "custom_components.unraid_management_agent.UnraidClient",
             return_value=mock_async_unraid_client,
         ),
         patch(
@@ -260,7 +276,7 @@ async def test_reconfigure_flow(
     mock_client.get_system_info = AsyncMock(return_value=mock_system_info())
 
     with patch(
-        "custom_components.unraid_management_agent.config_flow.AsyncUnraidClient",
+        "custom_components.unraid_management_agent.config_flow.UnraidClient",
         return_value=mock_client,
     ):
         result2 = await hass.config_entries.flow.async_configure(
@@ -286,7 +302,7 @@ async def test_reconfigure_flow_timeout(
     """Test reconfigure flow with timeout error."""
     with (
         patch(
-            "custom_components.unraid_management_agent.AsyncUnraidClient",
+            "custom_components.unraid_management_agent.UnraidClient",
             return_value=mock_async_unraid_client,
         ),
         patch(
@@ -305,7 +321,7 @@ async def test_reconfigure_flow_timeout(
     mock_client.get_system_info = AsyncMock(side_effect=TimeoutError("Timeout"))
 
     with patch(
-        "custom_components.unraid_management_agent.config_flow.AsyncUnraidClient",
+        "custom_components.unraid_management_agent.config_flow.UnraidClient",
         return_value=mock_client,
     ):
         result2 = await hass.config_entries.flow.async_configure(
@@ -331,7 +347,7 @@ async def test_reconfigure_flow_connection_error(
     """Test reconfigure flow with connection error."""
     with (
         patch(
-            "custom_components.unraid_management_agent.AsyncUnraidClient",
+            "custom_components.unraid_management_agent.UnraidClient",
             return_value=mock_async_unraid_client,
         ),
         patch(
@@ -352,7 +368,7 @@ async def test_reconfigure_flow_connection_error(
     )
 
     with patch(
-        "custom_components.unraid_management_agent.config_flow.AsyncUnraidClient",
+        "custom_components.unraid_management_agent.config_flow.UnraidClient",
         return_value=mock_client,
     ):
         result2 = await hass.config_entries.flow.async_configure(
@@ -369,8 +385,14 @@ async def test_reconfigure_flow_connection_error(
     assert result2["errors"]["base"] == ERROR_CANNOT_CONNECT
 
 
-async def test_validate_input_missing_hostname(hass: HomeAssistant) -> None:
-    """Test validate_input with missing hostname in response."""
+async def test_validate_input_missing_hostname(
+    hass: HomeAssistant, mock_setup_entry: AsyncMock
+) -> None:
+    """
+    Test validate_input with missing hostname in response.
+
+    Uses mock_setup_entry to isolate config flow testing from actual setup.
+    """
     mock_client = MagicMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
@@ -385,7 +407,7 @@ async def test_validate_input_missing_hostname(hass: HomeAssistant) -> None:
     )
 
     with patch(
-        "custom_components.unraid_management_agent.config_flow.AsyncUnraidClient",
+        "custom_components.unraid_management_agent.config_flow.UnraidClient",
         return_value=mock_client,
     ):
         result2 = await hass.config_entries.flow.async_configure(
@@ -397,3 +419,5 @@ async def test_validate_input_missing_hostname(hass: HomeAssistant) -> None:
     # Should succeed with "unknown" hostname
     assert result2["type"] == FlowResultType.CREATE_ENTRY
     assert result2["title"] == "Unraid (unknown)"
+    # Verify setup was called
+    assert len(mock_setup_entry.mock_calls) == 1

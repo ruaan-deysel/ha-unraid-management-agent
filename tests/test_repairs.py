@@ -5,7 +5,9 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from homeassistant.core import HomeAssistant
+from uma_api.models import ArrayStatus, DiskInfo
 
+from custom_components.unraid_management_agent.coordinator import UnraidData
 from custom_components.unraid_management_agent.repairs import (
     ArrayIssueRepairFlow,
     ConnectionIssueRepairFlow,
@@ -170,31 +172,31 @@ async def test_parity_check_repair_flow_resolve(hass: HomeAssistant) -> None:
 
 def test_is_ssd_nvme_device() -> None:
     """Test SSD detection for NVMe devices."""
-    disk = {"device": "nvme0n1", "role": "data", "name": "disk1", "id": "Samsung_990"}
+    disk = DiskInfo(device="nvme0n1", role="data", name="disk1", id="Samsung_990")
     assert _is_ssd(disk) is True
 
 
 def test_is_ssd_cache_role() -> None:
     """Test SSD detection for cache role."""
-    disk = {"device": "sda", "role": "cache", "name": "cache", "id": "SamsungSSD"}
+    disk = DiskInfo(device="sda", role="cache", name="cache", id="SamsungSSD")
     assert _is_ssd(disk) is True
 
 
 def test_is_ssd_cache_name() -> None:
     """Test SSD detection for cache in name."""
-    disk = {"device": "sda", "role": "data", "name": "cache1", "id": "Unknown"}
+    disk = DiskInfo(device="sda", role="data", name="cache1", id="Unknown")
     assert _is_ssd(disk) is True
 
 
 def test_is_ssd_in_id() -> None:
     """Test SSD detection from disk ID."""
-    disk = {"device": "sda", "role": "data", "name": "disk1", "id": "Samsung_SSD_860"}
+    disk = DiskInfo(device="sda", role="data", name="disk1", id="Samsung_SSD_860")
     assert _is_ssd(disk) is True
 
 
 def test_is_not_ssd() -> None:
     """Test HDD detection."""
-    disk = {"device": "sdb", "role": "data", "name": "disk2", "id": "WDC_WD80EFAX"}
+    disk = DiskInfo(device="sdb", role="data", name="disk2", id="WDC_WD80EFAX")
     assert _is_ssd(disk) is False
 
 
@@ -229,7 +231,7 @@ async def test_check_and_create_issues_connection_success(
     coordinator.config_entry.entry_id = "test_entry"
     coordinator.config_entry.data = {"host": "192.168.1.100", "port": 8043}
     coordinator.last_update_success = True
-    coordinator.data = {"disks": [], "array": {}}
+    coordinator.data = UnraidData(disks=[], array=None)
 
     with (
         patch(
@@ -253,18 +255,18 @@ async def test_check_and_create_issues_disk_smart_errors(
     coordinator.config_entry.entry_id = "test_entry"
     coordinator.config_entry.data = {"host": "192.168.1.100", "port": 8043}
     coordinator.last_update_success = True
-    coordinator.data = {
-        "disks": [
-            {
-                "id": "disk1",
-                "name": "disk1",
-                "smart_errors": 5,
-                "smart_status": "FAILING",
-                "temperature_celsius": 35,
-            }
+    coordinator.data = UnraidData(
+        disks=[
+            DiskInfo(
+                id="disk1",
+                name="disk1",
+                smart_errors=5,
+                smart_status="FAILING",
+                temperature_celsius=35,
+            )
         ],
-        "array": {},
-    }
+        array=None,
+    )
 
     with (
         patch(
@@ -288,20 +290,20 @@ async def test_check_and_create_issues_disk_high_temp(
     coordinator.config_entry.entry_id = "test_entry"
     coordinator.config_entry.data = {"host": "192.168.1.100", "port": 8043}
     coordinator.last_update_success = True
-    coordinator.data = {
-        "disks": [
-            {
-                "id": "disk1",
-                "name": "disk1",
-                "device": "sda",
-                "role": "data",
-                "smart_errors": 0,
-                "smart_status": "OK",
-                "temperature_celsius": 50,  # Above 45 warning threshold for HDD
-            }
+    coordinator.data = UnraidData(
+        disks=[
+            DiskInfo(
+                id="disk1",
+                name="disk1",
+                device="sda",
+                role="data",
+                smart_errors=0,
+                smart_status="OK",
+                temperature_celsius=50,  # Above 45 warning threshold for HDD
+            )
         ],
-        "array": {},
-    }
+        array=None,
+    )
 
     with (
         patch(
@@ -325,19 +327,19 @@ async def test_check_and_create_issues_disk_critical_temp(
     coordinator.config_entry.entry_id = "test_entry"
     coordinator.config_entry.data = {"host": "192.168.1.100", "port": 8043}
     coordinator.last_update_success = True
-    coordinator.data = {
-        "disks": [
-            {
-                "id": "disk1",
-                "name": "disk1",
-                "device": "sda",
-                "role": "data",
-                "smart_errors": 0,
-                "temperature_celsius": 60,  # Above 55 critical threshold for HDD
-            }
+    coordinator.data = UnraidData(
+        disks=[
+            DiskInfo(
+                id="disk1",
+                name="disk1",
+                device="sda",
+                role="data",
+                smart_errors=0,
+                temperature_celsius=60,  # Above 55 critical threshold for HDD
+            )
         ],
-        "array": {},
-    }
+        array=None,
+    )
 
     with (
         patch(
@@ -361,10 +363,10 @@ async def test_check_and_create_issues_parity_invalid(
     coordinator.config_entry.entry_id = "test_entry"
     coordinator.config_entry.data = {"host": "192.168.1.100", "port": 8043}
     coordinator.last_update_success = True
-    coordinator.data = {
-        "disks": [],
-        "array": {"parity_valid": False, "state": "Started"},
-    }
+    coordinator.data = UnraidData(
+        disks=[],
+        array=ArrayStatus(parity_valid=False, state="Started"),
+    )
 
     with (
         patch(
@@ -388,14 +390,14 @@ async def test_check_and_create_issues_parity_check_stuck(
     coordinator.config_entry.entry_id = "test_entry"
     coordinator.config_entry.data = {"host": "192.168.1.100", "port": 8043}
     coordinator.last_update_success = True
-    coordinator.data = {
-        "disks": [],
-        "array": {
-            "parity_valid": True,
-            "parity_check_running": True,
-            "sync_percent": 97,
-        },
-    }
+    coordinator.data = UnraidData(
+        disks=[],
+        array=ArrayStatus(
+            parity_valid=True,
+            parity_check_status="running",
+            parity_check_progress=97,
+        ),
+    )
 
     with (
         patch(

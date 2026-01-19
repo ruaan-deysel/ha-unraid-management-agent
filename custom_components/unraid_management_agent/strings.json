@@ -135,6 +135,66 @@
     }
   },
   "exceptions": {
+    "api_error": {
+      "message": "Error communicating with Unraid API"
+    },
+    "no_config_entries": {
+      "message": "No Unraid Management Agent entries configured"
+    },
+    "container_start_failed": {
+      "message": "Failed to start container {container_id}"
+    },
+    "container_stop_failed": {
+      "message": "Failed to stop container {container_id}"
+    },
+    "container_restart_failed": {
+      "message": "Failed to restart container {container_id}"
+    },
+    "container_pause_failed": {
+      "message": "Failed to pause container {container_id}"
+    },
+    "container_resume_failed": {
+      "message": "Failed to resume container {container_id}"
+    },
+    "vm_start_failed": {
+      "message": "Failed to start VM {vm_id}"
+    },
+    "vm_stop_failed": {
+      "message": "Failed to stop VM {vm_id}"
+    },
+    "vm_restart_failed": {
+      "message": "Failed to restart VM {vm_id}"
+    },
+    "vm_pause_failed": {
+      "message": "Failed to pause VM {vm_id}"
+    },
+    "vm_resume_failed": {
+      "message": "Failed to resume VM {vm_id}"
+    },
+    "vm_hibernate_failed": {
+      "message": "Failed to hibernate VM {vm_id}"
+    },
+    "vm_force_stop_failed": {
+      "message": "Failed to force stop VM {vm_id}"
+    },
+    "array_start_failed": {
+      "message": "Failed to start array"
+    },
+    "array_stop_failed": {
+      "message": "Failed to stop array"
+    },
+    "parity_check_start_failed": {
+      "message": "Failed to start parity check"
+    },
+    "parity_check_stop_failed": {
+      "message": "Failed to stop parity check"
+    },
+    "parity_check_pause_failed": {
+      "message": "Failed to pause parity check"
+    },
+    "parity_check_resume_failed": {
+      "message": "Failed to resume parity check"
+    },
     "button_error": {
       "message": "Failed to execute button action: {key}"
     },

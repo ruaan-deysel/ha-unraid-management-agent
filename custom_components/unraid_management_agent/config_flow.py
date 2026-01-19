@@ -6,12 +6,17 @@ import logging
 from typing import Any
 
 import voluptuous as vol
-from homeassistant import config_entries
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlowWithReload,
+)
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import config_validation as cv
-from uma_api import AsyncUnraidClient, UnraidConnectionError
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from uma_api import UnraidClient, UnraidConnectionError
 
 from .const import (
     CONF_ENABLE_WEBSOCKET,
@@ -49,10 +54,12 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
     Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
     """
-    # Use AsyncUnraidClient from uma-api
-    async with AsyncUnraidClient(
+    # Use Home Assistant's shared client session (inject-websession)
+    session = async_get_clientsession(hass)
+    async with UnraidClient(
         host=data[CONF_HOST],
         port=data[CONF_PORT],
+        session=session,
     ) as client:
         try:
             # Test connection by getting system info - returns typed Pydantic model
@@ -74,14 +81,14 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
             raise Exception(ERROR_UNKNOWN) from err
 
 
-class UnraidConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class UnraidConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Unraid Management Agent."""
 
     VERSION = 1
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Handle the initial step."""
         errors: dict[str, str] = {}
 
@@ -92,7 +99,7 @@ class UnraidConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = ERROR_TIMEOUT
             except ConnectionError:
                 errors["base"] = ERROR_CANNOT_CONNECT
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = ERROR_UNKNOWN
             else:
@@ -115,7 +122,7 @@ class UnraidConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Handle reconfiguration of the integration."""
         reconfigure_entry = self._get_reconfigure_entry()
         errors: dict[str, str] = {}
@@ -127,7 +134,7 @@ class UnraidConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = ERROR_TIMEOUT
             except ConnectionError:
                 errors["base"] = ERROR_CANNOT_CONNECT
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 _LOGGER.exception("Unexpected exception during reconfigure")
                 errors["base"] = ERROR_UNKNOWN
             else:
@@ -175,18 +182,18 @@ class UnraidConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(
-        _config_entry: config_entries.ConfigEntry,
+        config_entry: ConfigEntry,  # noqa: ARG004
     ) -> UnraidOptionsFlowHandler:
         """Get the options flow for this handler."""
         return UnraidOptionsFlowHandler()
 
 
-class UnraidOptionsFlowHandler(config_entries.OptionsFlow):
+class UnraidOptionsFlowHandler(OptionsFlowWithReload):
     """Handle options flow for Unraid Management Agent."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)

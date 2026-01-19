@@ -24,7 +24,7 @@ from .entity import UnraidBaseEntity, UnraidEntityDescription
 _LOGGER = logging.getLogger(__name__)
 
 # Coordinator handles updates, so no parallel update limit
-PARALLEL_UPDATES = 1
+PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -195,19 +195,34 @@ async def async_setup_entry(
     coordinator = entry.runtime_data.coordinator
     data = coordinator.data
 
-    entities: list[BinarySensorEntity] = [
-        UnraidBinarySensorEntity(coordinator, description)
-        for description in BINARY_SENSOR_DESCRIPTIONS
-        if description.supported_fn(coordinator)
-    ]
+    entities: list[BinarySensorEntity] = []
 
-    # Network interface binary sensors (dynamic, only physical interfaces)
-    for interface in (data.network if data else []) or []:
-        interface_name = getattr(interface, "name", "unknown")
-        if _is_physical_network_interface(interface_name):
-            entities.append(
-                UnraidNetworkInterfaceBinarySensor(coordinator, interface_name)
-            )
+    # Add binary sensors based on descriptions and their supported_fn
+    for description in BINARY_SENSOR_DESCRIPTIONS:
+        # Check if the sensor should be created based on collector status
+        if description.key == "ups_connected" and not coordinator.is_collector_enabled(
+            "ups"
+        ):
+            # UPS sensor - only if ups collector is enabled
+            continue
+        if description.key == "zfs_available" and not coordinator.is_collector_enabled(
+            "zfs"
+        ):
+            # ZFS sensor - only if zfs collector is enabled
+            continue
+
+        # Check if supported by the supported_fn
+        if description.supported_fn(coordinator):
+            entities.append(UnraidBinarySensorEntity(coordinator, description))
+
+    # Network interface binary sensors - only if network collector is enabled
+    if coordinator.is_collector_enabled("network"):
+        for interface in (data.network if data else []) or []:
+            interface_name = getattr(interface, "name", "unknown")
+            if _is_physical_network_interface(interface_name):
+                entities.append(
+                    UnraidNetworkInterfaceBinarySensor(coordinator, interface_name)
+                )
 
     _LOGGER.debug("Adding %d Unraid binary sensor entities", len(entities))
     async_add_entities(entities)

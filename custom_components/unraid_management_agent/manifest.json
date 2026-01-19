@@ -5,8 +5,10 @@
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/ruaan-deysel/ha-unraid-management-agent",
+  "integration_type": "device",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/ruaan-deysel/ha-unraid-management-agent/issues",
-  "requirements": ["uma-api[async]>=1.2.0"],
+  "loggers": ["uma_api"],
+  "requirements": ["uma-api>=1.2.1"],
   "version": "2026.01.0"
 }

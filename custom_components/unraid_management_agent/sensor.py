@@ -15,7 +15,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     PERCENTAGE,
     EntityCategory,
-    UnitOfEnergy,
     UnitOfPower,
     UnitOfTemperature,
 )
@@ -42,12 +41,332 @@ from .const import (
     ATTR_UPS_MODEL,
     ATTR_UPS_STATUS,
 )
-from .entity import UnraidLegacyEntity
+from .coordinator import UnraidData
+from .entity import UnraidBaseEntity, UnraidSensorEntityDescription
 
 _LOGGER = logging.getLogger(__name__)
 
-# Coordinator handles updates, so no parallel update limit
-PARALLEL_UPDATES = 1
+# Coordinator handles updates, so no parallel update limit needed
+PARALLEL_UPDATES = 0
+
+
+# =============================================================================
+# Value functions for entity descriptions (La Marzocco pattern)
+# =============================================================================
+
+
+def _get_cpu_usage(data: UnraidData) -> float | None:
+    """Get CPU usage from coordinator data."""
+    if data and data.system:
+        cpu_usage = getattr(data.system, "cpu_usage_percent", None)
+        if cpu_usage is not None:
+            return round(cpu_usage, 1)
+    return None
+
+
+def _get_cpu_attrs(data: UnraidData) -> dict[str, Any]:
+    """Get CPU extra state attributes."""
+    if not data or not data.system:
+        return {}
+
+    system = data.system
+    cpu_cores = getattr(system, "cpu_cores", 0) or 0
+    cpu_threads = getattr(system, "cpu_threads", 0) or 0
+
+    # Fix incorrect core count
+    if cpu_cores == 1 and cpu_threads > 2:
+        cpu_cores = cpu_threads // 2
+
+    attrs = {
+        ATTR_CPU_MODEL: getattr(system, "cpu_model", None),
+        ATTR_CPU_CORES: cpu_cores,
+        ATTR_CPU_THREADS: cpu_threads,
+    }
+
+    cpu_mhz = getattr(system, "cpu_mhz", None)
+    if cpu_mhz:
+        attrs["cpu_frequency"] = f"{cpu_mhz:.0f} MHz"
+
+    return attrs
+
+
+def _get_ram_usage(data: UnraidData) -> float | None:
+    """Get RAM usage from coordinator data."""
+    if data and data.system:
+        ram_usage = getattr(data.system, "ram_usage_percent", None)
+        if ram_usage is not None:
+            return round(ram_usage, 1)
+    return None
+
+
+def _get_ram_attrs(data: UnraidData) -> dict[str, Any]:
+    """Get RAM extra state attributes."""
+    if not data or not data.system:
+        return {}
+
+    system = data.system
+    ram_total = getattr(system, "ram_total_bytes", 0) or 0
+    ram_used = getattr(system, "ram_used_bytes", 0) or 0
+    ram_free = getattr(system, "ram_free_bytes", 0) or 0
+    ram_cached = getattr(system, "ram_cached_bytes", 0) or 0
+    ram_buffers = getattr(system, "ram_buffers_bytes", 0) or 0
+
+    attrs = {
+        ATTR_RAM_TOTAL: format_bytes(ram_total) if ram_total else "Unknown",
+        ATTR_SERVER_MODEL: getattr(system, "server_model", None),
+    }
+
+    if ram_used:
+        attrs["ram_used"] = format_bytes(ram_used)
+    if ram_free:
+        attrs["ram_free"] = format_bytes(ram_free)
+    if ram_cached:
+        attrs["ram_cached"] = format_bytes(ram_cached)
+    if ram_buffers:
+        attrs["ram_buffers"] = format_bytes(ram_buffers)
+
+    if ram_free and ram_cached and ram_buffers:
+        ram_available = ram_free + ram_cached + ram_buffers
+        attrs["ram_available"] = format_bytes(ram_available)
+
+    return attrs
+
+
+def _get_cpu_temperature(data: UnraidData) -> float | None:
+    """Get CPU temperature from coordinator data."""
+    if data and data.system:
+        cpu_temp = getattr(data.system, "cpu_temp_celsius", None)
+        if cpu_temp is not None:
+            return round(cpu_temp, 1)
+    return None
+
+
+def _get_uptime(data: UnraidData) -> str | None:
+    """Get uptime from coordinator data."""
+    if data and data.system:
+        uptime_seconds = getattr(data.system, "uptime_seconds", None)
+        if uptime_seconds is not None:
+            return format_duration(uptime_seconds)
+    return None
+
+
+def _get_uptime_attrs(data: UnraidData) -> dict[str, Any]:
+    """Get uptime extra state attributes."""
+    if not data or not data.system:
+        return {}
+
+    system = data.system
+    uptime_seconds = getattr(system, "uptime_seconds", None)
+
+    attrs = {
+        "hostname": getattr(system, "hostname", None),
+        "version": getattr(system, "version", None),
+    }
+
+    if uptime_seconds is not None:
+        days = uptime_seconds // 86400
+        hours = (uptime_seconds % 86400) // 3600
+        minutes = (uptime_seconds % 3600) // 60
+        attrs["uptime_days"] = days
+        attrs["uptime_hours"] = hours
+        attrs["uptime_minutes"] = minutes
+        attrs["uptime_total_seconds"] = uptime_seconds
+
+    return attrs
+
+
+def _get_array_usage(data: UnraidData) -> float | None:
+    """Get array usage from coordinator data."""
+    if data and data.array:
+        # First try to use used_percent directly from API
+        used_percent = getattr(data.array, "used_percent", None)
+        if used_percent is not None:
+            return round(used_percent, 1)
+        # Fallback: calculate from bytes
+        total = getattr(data.array, "total_bytes", 0) or 0
+        used = getattr(data.array, "used_bytes", 0) or 0
+        if total > 0:
+            return round((used / total) * 100, 1)
+    return None
+
+
+def _get_array_attrs(data: UnraidData) -> dict[str, Any]:
+    """Get array extra state attributes."""
+    if not data or not data.array:
+        return {}
+
+    array = data.array
+    total = getattr(array, "total_bytes", 0) or 0
+    used = getattr(array, "used_bytes", 0) or 0
+    free = getattr(array, "free_bytes", 0) or 0
+
+    attrs = {
+        ATTR_ARRAY_STATE: getattr(array, "state", "Unknown"),
+        ATTR_NUM_DISKS: getattr(array, "num_disks", 0),
+        ATTR_NUM_DATA_DISKS: getattr(array, "num_data_disks", 0),
+        ATTR_NUM_PARITY_DISKS: getattr(array, "num_parity_disks", 0),
+    }
+
+    if total:
+        attrs["total_capacity"] = format_bytes(total)
+    if used:
+        attrs["used_space"] = format_bytes(used)
+    if free:
+        attrs["free_space"] = format_bytes(free)
+
+    return attrs
+
+
+def _get_parity_progress(data: UnraidData) -> float | None:
+    """Get parity check progress from coordinator data."""
+    if data and data.array:
+        sync_percent = getattr(data.array, "sync_percent", None)
+        if sync_percent is not None:
+            return round(sync_percent, 1)
+    return 0.0
+
+
+def _get_parity_attrs(data: UnraidData) -> dict[str, Any]:
+    """Get parity check extra state attributes."""
+    if not data or not data.array:
+        return {}
+
+    array = data.array
+    attrs = {}
+
+    sync_action = getattr(array, "sync_action", None)
+    if sync_action:
+        attrs["sync_action"] = sync_action
+
+    sync_errors = getattr(array, "sync_errors", None)
+    if sync_errors is not None:
+        attrs["sync_errors"] = sync_errors
+
+    sync_speed = getattr(array, "sync_speed", None)
+    if sync_speed:
+        attrs["sync_speed"] = sync_speed
+
+    sync_eta = getattr(array, "sync_eta", None)
+    if sync_eta:
+        attrs["estimated_completion"] = sync_eta
+
+    return attrs
+
+
+# =============================================================================
+# Sensor Entity Descriptions with value_fn pattern
+# =============================================================================
+
+SENSOR_DESCRIPTIONS: tuple[UnraidSensorEntityDescription, ...] = (
+    UnraidSensorEntityDescription(
+        key="cpu_usage",
+        translation_key="cpu_usage",
+        native_unit_of_measurement=PERCENTAGE,
+        device_class=SensorDeviceClass.POWER_FACTOR,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:cpu-64-bit",
+        suggested_display_precision=1,
+        value_fn=_get_cpu_usage,
+        extra_state_attributes_fn=_get_cpu_attrs,
+    ),
+    UnraidSensorEntityDescription(
+        key="ram_usage",
+        translation_key="ram_usage",
+        native_unit_of_measurement=PERCENTAGE,
+        device_class=SensorDeviceClass.POWER_FACTOR,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:memory",
+        suggested_display_precision=1,
+        value_fn=_get_ram_usage,
+        extra_state_attributes_fn=_get_ram_attrs,
+    ),
+    UnraidSensorEntityDescription(
+        key="cpu_temperature",
+        translation_key="cpu_temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:thermometer",
+        suggested_display_precision=1,
+        value_fn=_get_cpu_temperature,
+    ),
+    UnraidSensorEntityDescription(
+        key="uptime",
+        translation_key="uptime",
+        icon="mdi:clock-outline",
+        value_fn=_get_uptime,
+        extra_state_attributes_fn=_get_uptime_attrs,
+    ),
+    UnraidSensorEntityDescription(
+        key="array_usage",
+        translation_key="array_usage",
+        native_unit_of_measurement=PERCENTAGE,
+        device_class=SensorDeviceClass.POWER_FACTOR,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:harddisk",
+        suggested_display_precision=1,
+        value_fn=_get_array_usage,
+        extra_state_attributes_fn=_get_array_attrs,
+    ),
+    UnraidSensorEntityDescription(
+        key="parity_progress",
+        translation_key="parity_progress",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:sync",
+        suggested_display_precision=1,
+        value_fn=_get_parity_progress,
+        extra_state_attributes_fn=_get_parity_attrs,
+    ),
+)
+
+
+# =============================================================================
+# Sensor Entity class using descriptions
+# =============================================================================
+
+
+class UnraidSensorEntity(UnraidBaseEntity, SensorEntity):
+    """Unraid sensor entity using entity description with value_fn pattern."""
+
+    entity_description: UnraidSensorEntityDescription
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        description: UnraidSensorEntityDescription,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, description.key)
+        self.entity_description = description
+
+    @property
+    def native_value(self) -> Any:
+        """Return the sensor value."""
+        if self.coordinator.data is None:
+            return None
+        return self.entity_description.value_fn(self.coordinator.data)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return extra state attributes."""
+        if (
+            self.entity_description.extra_state_attributes_fn
+            and self.coordinator.data is not None
+        ):
+            return self.entity_description.extra_state_attributes_fn(
+                self.coordinator.data
+            )
+        return None
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        if not super().available:
+            return False
+        if self.coordinator.data is None:
+            return False
+        return self.entity_description.available_fn(self.coordinator.data)
 
 
 def _is_physical_network_interface(interface_name: str) -> bool:
@@ -65,6 +384,31 @@ def _is_physical_network_interface(interface_name: str) -> bool:
     return False
 
 
+def _is_physical_disk(disk) -> bool:
+    """
+    Check if disk is a physical, installed disk (not virtual or disabled).
+
+    Filters out:
+    - Virtual disks (docker_vdisk, log)
+    - Disabled/empty slots (status=DISK_NP_DSBL, no device)
+    - Disks without a device assigned
+    """
+    role = getattr(disk, "role", "")
+    status = getattr(disk, "status", "")
+    device = getattr(disk, "device", "")
+
+    # Exclude virtual disk types
+    if role in ("docker_vdisk", "log"):
+        return False
+
+    # Exclude disabled/not present slots
+    if status == "DISK_NP_DSBL":
+        return False
+
+    # Exclude disks without a device (empty slots)
+    return bool(device)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: UnraidConfigEntry,
@@ -78,14 +422,11 @@ async def async_setup_entry(
 
     entities: list[SensorEntity] = []
 
-    # System sensors
+    # Core system sensors using entity descriptions with value_fn pattern
+    # System collector is always enabled (required=true)
     entities.extend(
-        [
-            UnraidCPUUsageSensor(coordinator, entry),
-            UnraidRAMUsageSensor(coordinator, entry),
-            UnraidCPUTemperatureSensor(coordinator, entry),
-            UnraidUptimeSensor(coordinator, entry),
-        ]
+        UnraidSensorEntity(coordinator, description)
+        for description in SENSOR_DESCRIPTIONS
     )
 
     # Motherboard temperature sensor (if available)
@@ -107,119 +448,136 @@ async def async_setup_entry(
                 fan_name = getattr(fan, "name", "unknown")
             entities.append(UnraidFanSensor(coordinator, entry, fan_name, idx))
 
-    # Array sensors
-    entities.extend(
-        [
-            UnraidArrayUsageSensor(coordinator, entry),
-            UnraidParityProgressSensor(coordinator, entry),
-        ]
-    )
+    # Note: Array sensors (usage, parity) are now created via SENSOR_DESCRIPTIONS
 
-    # Disk sensors (dynamic, one per disk)
-    disks = data.disks if data else []
-    for disk in disks or []:
-        disk_id = getattr(disk, "id", None) or getattr(disk, "name", "unknown")
-        disk_name = getattr(disk, "name", disk_id)
-        disk_role = getattr(disk, "role", "")
-        disk_device = getattr(disk, "device", None)
+    # Disk sensors - only if disk collector is enabled
+    if coordinator.is_collector_enabled("disk"):
+        disks = data.disks if data else []
+        # Filter to only physical, installed disks
+        physical_disks = [d for d in (disks or []) if _is_physical_disk(d)]
 
-        # Create health sensor for physical disks only
-        if disk_role not in ("docker_vdisk", "log"):
-            if disk_name in ("parity", "parity2") and not disk_device:
-                _LOGGER.debug(
-                    "Skipping %s health sensor - no device assigned", disk_name
-                )
-                continue
+        for disk in physical_disks:
+            disk_id = getattr(disk, "id", None) or getattr(disk, "name", "unknown")
+            disk_name = getattr(disk, "name", disk_id)
+            disk_role = getattr(disk, "role", "")
+
+            # Create health sensor for physical disks
             entities.append(
                 UnraidDiskHealthSensor(coordinator, entry, disk_id, disk_name)
             )
 
-        # Skip parity disks for usage sensors
-        if disk_name not in ("parity", "parity2"):
-            entities.append(
-                UnraidDiskUsageSensor(coordinator, entry, disk_id, disk_name)
-            )
+            # Skip parity disks for usage sensors (parity doesn't have usage data)
+            if disk_role not in ("parity", "parity2"):
+                entities.append(
+                    UnraidDiskUsageSensor(coordinator, entry, disk_id, disk_name)
+                )
 
-    # Docker vDisk usage sensor (if available)
-    docker_vdisk = next(
-        (d for d in (disks or []) if getattr(d, "role", "") == "docker_vdisk"), None
-    )
-    if docker_vdisk:
-        entities.append(UnraidDockerVDiskUsageSensor(coordinator, entry))
+        # Docker vDisk usage sensor (if available) - virtual disk, always included if exists
+        docker_vdisk = next(
+            (d for d in (disks or []) if getattr(d, "role", "") == "docker_vdisk"), None
+        )
+        if docker_vdisk:
+            entities.append(UnraidDockerVDiskUsageSensor(coordinator, entry))
 
-    # Log filesystem usage sensor (if available)
-    log_filesystem = next(
-        (d for d in (disks or []) if getattr(d, "role", "") == "log"), None
-    )
-    if log_filesystem:
-        entities.append(UnraidLogFilesystemUsageSensor(coordinator, entry))
+        # Log filesystem usage sensor (if available) - virtual disk, always included if exists
+        log_filesystem = next(
+            (d for d in (disks or []) if getattr(d, "role", "") == "log"), None
+        )
+        if log_filesystem:
+            entities.append(UnraidLogFilesystemUsageSensor(coordinator, entry))
 
-    # GPU sensors (if GPU available)
-    if data and data.gpu:
+    # GPU sensors - only if gpu collector is enabled
+    if coordinator.is_collector_enabled("gpu") and data and data.gpu:
         entities.extend(
             [
                 UnraidGPUUtilizationSensor(coordinator, entry),
                 UnraidGPUCPUTemperatureSensor(coordinator, entry),
                 UnraidGPUPowerSensor(coordinator, entry),
-                UnraidGPUEnergySensor(coordinator, entry),
             ]
         )
 
-    # UPS sensors (if UPS data is available with valid status)
-    if data and data.ups and getattr(data.ups, "status", None) is not None:
+    # UPS sensors - only if ups collector is enabled
+    if (
+        coordinator.is_collector_enabled("ups")
+        and data
+        and data.ups
+        and getattr(data.ups, "status", None) is not None
+    ):
         entities.extend(
             [
                 UnraidUPSBatterySensor(coordinator, entry),
                 UnraidUPSLoadSensor(coordinator, entry),
                 UnraidUPSRuntimeSensor(coordinator, entry),
                 UnraidUPSPowerSensor(coordinator, entry),
-                # Note: UPS Energy sensor removed - uma-api doesn't provide energy_kwh
             ]
         )
 
-    # Network sensors (only physical interfaces that are connected)
-    for interface in (data.network if data else []) or []:
-        interface_name = getattr(interface, "name", "unknown")
-        interface_state = getattr(interface, "state", "down")
-        if _is_physical_network_interface(interface_name) and interface_state == "up":
-            entities.extend(
-                [
-                    UnraidNetworkRXSensor(coordinator, entry, interface_name),
-                    UnraidNetworkTXSensor(coordinator, entry, interface_name),
-                ]
-            )
+    # Network sensors - only if network collector is enabled
+    if coordinator.is_collector_enabled("network"):
+        for interface in (data.network if data else []) or []:
+            interface_name = getattr(interface, "name", "unknown")
+            interface_state = getattr(interface, "state", "down")
+            if (
+                _is_physical_network_interface(interface_name)
+                and interface_state == "up"
+            ):
+                entities.extend(
+                    [
+                        UnraidNetworkRXSensor(coordinator, entry, interface_name),
+                        UnraidNetworkTXSensor(coordinator, entry, interface_name),
+                    ]
+                )
 
-    # Share sensors (dynamic, one per share)
-    for share in (data.shares if data else []) or []:
-        share_name = getattr(share, "name", "unknown")
-        entities.append(UnraidShareUsageSensor(coordinator, entry, share_name))
+    # Share sensors - only if shares collector is enabled
+    if coordinator.is_collector_enabled("shares"):
+        for share in (data.shares if data else []) or []:
+            share_name = getattr(share, "name", "unknown")
+            entities.append(UnraidShareUsageSensor(coordinator, entry, share_name))
 
-    # ZFS pool sensors (if ZFS pools available)
-    zfs_pools = data.zfs_pools if data else []
-    if zfs_pools:
-        for pool in zfs_pools:
-            pool_name = getattr(pool, "name", "unknown")
-            entities.extend(
-                [
-                    UnraidZFSPoolUsageSensor(coordinator, entry, pool_name),
-                    UnraidZFSPoolHealthSensor(coordinator, entry, pool_name),
-                ]
-            )
+    # ZFS pool sensors - only if zfs collector is enabled
+    if coordinator.is_collector_enabled("zfs"):
+        zfs_pools = data.zfs_pools if data else []
+        if zfs_pools:
+            for pool in zfs_pools:
+                pool_name = getattr(pool, "name", "unknown")
+                entities.extend(
+                    [
+                        UnraidZFSPoolUsageSensor(coordinator, entry, pool_name),
+                        UnraidZFSPoolHealthSensor(coordinator, entry, pool_name),
+                    ]
+                )
 
-    # ZFS ARC sensors (only if ZFS pools exist)
-    if zfs_pools and data and data.zfs_arc:
-        entities.append(UnraidZFSARCHitRatioSensor(coordinator, entry))
+            # ZFS ARC sensors (only if ZFS pools exist)
+            if data and data.zfs_arc:
+                entities.append(UnraidZFSARCHitRatioSensor(coordinator, entry))
 
-    # Notification sensor (if notifications available)
-    if data and data.notifications is not None:
+    # Notification sensor - only if notification collector is enabled
+    if (
+        coordinator.is_collector_enabled("notification")
+        and data
+        and data.notifications is not None
+    ):
         entities.append(UnraidNotificationsSensor(coordinator, entry))
 
     _LOGGER.debug("Adding %d Unraid sensor entities", len(entities))
     async_add_entities(entities)
 
 
-class UnraidSensorBase(UnraidLegacyEntity, SensorEntity):
+class UnraidSensorBase(UnraidBaseEntity, SensorEntity):
     """Base class for Unraid sensors."""
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        entry: ConfigEntry,
+        key: str | None = None,
+    ) -> None:
+        """Initialize the sensor."""
+        # Use provided key or derive from class name
+        sensor_key = key if key else self.__class__.__name__.lower()
+        super().__init__(coordinator, sensor_key)
+        # Keep _entry reference for backwards compatibility with unique_id properties
+        self._entry = entry
 
 
 # System Sensors
@@ -619,7 +977,13 @@ class UnraidGPUCPUTemperatureSensor(UnraidSensorBase):
         """Return the state."""
         data = self.coordinator.data
         if data and data.gpu and len(data.gpu) > 0:
-            return getattr(data.gpu[0], "temperature_celsius", None)
+            gpu = data.gpu[0]
+            # Try GPU temperature first, fall back to CPU temperature for iGPUs
+            temp = getattr(gpu, "temperature_celsius", None)
+            if temp is not None and temp > 0:
+                return temp
+            # For iGPUs, use cpu_temperature_celsius
+            return getattr(gpu, "cpu_temperature_celsius", None)
         return None
 
 
@@ -643,30 +1007,7 @@ class UnraidGPUPowerSensor(UnraidSensorBase):
         """Return the state."""
         data = self.coordinator.data
         if data and data.gpu and len(data.gpu) > 0:
-            return getattr(data.gpu[0], "power_watts", None)
-        return None
-
-
-class UnraidGPUEnergySensor(UnraidSensorBase):
-    """GPU energy sensor."""
-
-    _attr_name = "GPU Energy"
-    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-    _attr_device_class = SensorDeviceClass.ENERGY
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
-    _attr_icon = "mdi:expansion-card"
-
-    @property
-    def unique_id(self) -> str:
-        """Return unique ID."""
-        return f"{self._entry.entry_id}_gpu_energy"
-
-    @property
-    def native_value(self) -> float | None:
-        """Return the state."""
-        data = self.coordinator.data
-        if data and data.gpu and len(data.gpu) > 0:
-            return getattr(data.gpu[0], "energy_kwh", None)
+            return getattr(data.gpu[0], "power_draw_watts", None)
         return None
 
 
@@ -779,29 +1120,6 @@ class UnraidUPSPowerSensor(UnraidSensorBase):
         data = self.coordinator.data
         if data and data.ups:
             return getattr(data.ups, "power_watts", None)
-        return None
-
-
-class UnraidUPSEnergySensor(UnraidSensorBase):
-    """UPS energy sensor."""
-
-    _attr_name = "UPS Energy"
-    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-    _attr_device_class = SensorDeviceClass.ENERGY
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
-    _attr_icon = "mdi:battery"
-
-    @property
-    def unique_id(self) -> str:
-        """Return unique ID."""
-        return f"{self._entry.entry_id}_ups_energy"
-
-    @property
-    def native_value(self) -> float | None:
-        """Return the state."""
-        data = self.coordinator.data
-        if data and data.ups:
-            return getattr(data.ups, "energy_kwh", None)
         return None
 
 
@@ -1021,9 +1339,9 @@ class UnraidDiskHealthSensor(UnraidSensorBase):
                 or getattr(disk, "name", None) == self._disk_id
             ):
                 return {
-                    "temperature": getattr(disk, "temp_celsius", None),
+                    "temperature": getattr(disk, "temperature_celsius", None),
                     "spin_state": getattr(disk, "spin_state", None),
-                    "serial": getattr(disk, "serial", None),
+                    "serial": getattr(disk, "serial_number", None),
                     "device": getattr(disk, "device", None),
                 }
         return {}
@@ -1265,33 +1583,33 @@ class UnraidNotificationsSensor(UnraidSensorBase):
         """Return unique ID."""
         return f"{self._entry.entry_id}_notifications"
 
+    def _get_notifications_list(self) -> list:
+        """Extract notifications list from data."""
+        data = self.coordinator.data
+        if not data or not data.notifications:
+            return []
+
+        notifications = data.notifications
+        # Handle NotificationsResponse (has .notifications attribute)
+        if hasattr(notifications, "notifications"):
+            return notifications.notifications or []
+        # Handle direct list
+        if isinstance(notifications, list):
+            return notifications
+        return []
+
     @property
     def native_value(self) -> int:
         """Return the state."""
-        data = self.coordinator.data
-        if not data or not data.notifications:
-            return 0
-
-        # Handle both list and NotificationsResponse
-        notifications = data.notifications
-        if hasattr(notifications, "notifications"):
-            # This is a NotificationsResponse object
-            notifications = notifications.notifications or []
-
-        return len(notifications)
+        return len(self._get_notifications_list())
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra attributes."""
-        data = self.coordinator.data
-        if not data or not data.notifications:
+        notifications = self._get_notifications_list()
+        if not notifications:
             return {"unread_count": 0}
 
-        # Handle both list and NotificationsResponse
-        notifications = data.notifications
-        if hasattr(notifications, "notifications"):
-            # This is a NotificationsResponse object
-            notifications = notifications.notifications or []
-
-        unread = sum(1 for n in notifications if not getattr(n, "read", True))
+        # Count unread: type='unread' means not read yet
+        unread = sum(1 for n in notifications if getattr(n, "type", "") == "unread")
         return {"unread_count": unread}

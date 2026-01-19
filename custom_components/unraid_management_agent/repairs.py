@@ -180,11 +180,11 @@ DEFAULT_SSD_TEMP_WARNING = 60  # Warning threshold for SSDs
 DEFAULT_SSD_TEMP_CRITICAL = 70  # Critical threshold for SSDs
 
 
-def _is_ssd(disk: dict) -> bool:
+def _is_ssd(disk) -> bool:
     """Determine if a disk is an SSD/NVMe based on device name or role."""
-    device = disk.get("device", "").lower()
-    role = disk.get("role", "").lower()
-    name = disk.get("name", "").lower()
+    device = (disk.device or "").lower()
+    role = (disk.role or "").lower()
+    name = (disk.name or "").lower()
 
     # NVMe drives are always SSDs
     if "nvme" in device:
@@ -195,7 +195,7 @@ def _is_ssd(disk: dict) -> bool:
         return True
 
     # Check for SSD in the disk ID/model
-    disk_id = disk.get("id", "").lower()
+    disk_id = (disk.id or "").lower()
     return "ssd" in disk_id or "nvme" in disk_id
 
 
@@ -231,12 +231,12 @@ async def async_check_and_create_issues(hass: HomeAssistant, coordinator) -> Non
         return
 
     # Check for disk health issues
-    disks = coordinator.data.get("disks", [])
+    disks = coordinator.data.disks or []
     for disk in disks:
-        disk_id = disk.get("id", disk.get("name", "unknown"))
-        smart_errors = disk.get("smart_errors", 0) or 0
-        smart_status = disk.get("smart_status", "UNKNOWN")
-        temperature = disk.get("temperature_celsius", 0) or 0
+        disk_id = disk.id or disk.name or "unknown"
+        smart_errors = disk.smart_errors or 0
+        smart_status = disk.smart_status or "UNKNOWN"
+        temperature = disk.temperature_celsius or 0
 
         # Check for SMART errors (only if explicitly reported as having errors)
         smart_issue_id = f"disk_health_{disk_id}_smart_errors"
@@ -249,7 +249,7 @@ async def async_check_and_create_issues(hass: HomeAssistant, coordinator) -> Non
                 severity=ir.IssueSeverity.WARNING,
                 translation_key="disk_smart_errors",
                 translation_placeholders={
-                    "disk_name": disk.get("name", disk_id),
+                    "disk_name": disk.name or disk_id,
                     "smart_errors": str(int(smart_errors)),
                     "smart_status": smart_status,
                 },
@@ -280,7 +280,7 @@ async def async_check_and_create_issues(hass: HomeAssistant, coordinator) -> Non
                     severity=ir.IssueSeverity.ERROR,
                     translation_key="disk_critical_temperature",
                     translation_placeholders={
-                        "disk_name": disk.get("name", disk_id),
+                        "disk_name": disk.name or disk_id,
                         "temperature": str(int(temperature)),
                         "threshold": str(temp_critical),
                     },
@@ -297,7 +297,7 @@ async def async_check_and_create_issues(hass: HomeAssistant, coordinator) -> Non
                     severity=ir.IssueSeverity.WARNING,
                     translation_key="disk_high_temperature",
                     translation_placeholders={
-                        "disk_name": disk.get("name", disk_id),
+                        "disk_name": disk.name or disk_id,
                         "temperature": str(int(temperature)),
                         "threshold": str(temp_warning),
                     },
@@ -314,10 +314,10 @@ async def async_check_and_create_issues(hass: HomeAssistant, coordinator) -> Non
             ir.async_delete_issue(hass, DOMAIN, temp_critical_issue_id)
 
     # Check for array issues
-    array_data = coordinator.data.get("array", {})
+    array_data = coordinator.data.array
     # Be strict about parity_valid - only consider it invalid if explicitly False
     # None, missing, or any other value should be treated as valid/unknown
-    parity_valid = array_data.get("parity_valid")
+    parity_valid = getattr(array_data, "parity_valid", None) if array_data else None
     parity_issue_id = f"array_parity_invalid_{entry_id}"
 
     if parity_valid is False:
@@ -329,7 +329,7 @@ async def async_check_and_create_issues(hass: HomeAssistant, coordinator) -> Non
             severity=ir.IssueSeverity.ERROR,
             translation_key="array_parity_invalid",
             translation_placeholders={
-                "array_state": array_data.get("state", "Unknown"),
+                "array_state": array_data.state if array_data else "Unknown",
             },
         )
     else:
@@ -337,8 +337,10 @@ async def async_check_and_create_issues(hass: HomeAssistant, coordinator) -> Non
         ir.async_delete_issue(hass, DOMAIN, parity_issue_id)
 
     # Check for parity check issues
-    parity_check_running = array_data.get("parity_check_running", False)
-    sync_percent = array_data.get("sync_percent", 0) or 0
+    parity_check_running = (
+        array_data.parity_check_status == "running" if array_data else False
+    )
+    sync_percent = (array_data.parity_check_progress or 0) if array_data else 0
     stuck_issue_id = f"parity_check_stuck_{entry_id}"
 
     # If parity check has been running for a very long time (>95% but not complete)

@@ -77,11 +77,11 @@ def mock_disks() -> list[MagicMock]:
     disk1.size_bytes = 8000000000000
     disk1.used_bytes = 4000000000000
     disk1.free_bytes = 4000000000000
-    disk1.temp_celsius = 35
+    disk1.temperature_celsius = 35
     disk1.spin_state = "active"
     disk1.status = "DISK_OK"
     disk1.filesystem = "xfs"
-    disk1.serial = "WDC_WD80EFAX_12345"
+    disk1.serial_number = "WDC_WD80EFAX_12345"
 
     disk2 = MagicMock()
     disk2.id = "Samsung_SSD_980_67890"
@@ -91,11 +91,11 @@ def mock_disks() -> list[MagicMock]:
     disk2.size_bytes = 256054571008
     disk2.used_bytes = 36332154880
     disk2.free_bytes = 219722416128
-    disk2.temp_celsius = 42
+    disk2.temperature_celsius = 42
     disk2.spin_state = "active"
     disk2.status = "DISK_OK"
     disk2.filesystem = "btrfs"
-    disk2.serial = "Samsung_SSD_980_67890"
+    disk2.serial_number = "Samsung_SSD_980_67890"
 
     return [disk1, disk2]
 
@@ -172,8 +172,8 @@ def mock_gpu_list() -> list[MagicMock]:
     gpu.driver_version = "535.86.05"
     gpu.utilization_gpu_percent = 45
     gpu.temperature_celsius = 65
-    gpu.power_watts = 220.5
-    gpu.energy_kwh = 5.2
+    gpu.cpu_temperature_celsius = 50  # Fallback for iGPUs
+    gpu.power_draw_watts = 220.5
     return [gpu]
 
 
@@ -203,6 +203,56 @@ def mock_network_interfaces() -> list[MagicMock]:
     eth1.bytes_sent = 0
 
     return [eth0, eth1]
+
+
+def mock_collectors_status(*, all_enabled: bool = True) -> MagicMock:
+    """
+    Create a mock CollectorStatus Pydantic model.
+
+    Args:
+        all_enabled: If True, all collectors are enabled. If False, nut/zfs/unassigned disabled.
+
+    """
+    collectors_status = MagicMock()
+
+    # Define collector info items
+    collector_names = [
+        "system",
+        "array",
+        "disk",
+        "docker",
+        "vm",
+        "ups",
+        "nut",
+        "gpu",
+        "shares",
+        "network",
+        "hardware",
+        "zfs",
+        "notification",
+        "registration",
+        "unassigned",
+    ]
+
+    collectors = []
+    disabled = {"nut", "zfs", "unassigned"} if not all_enabled else set()
+
+    for name in collector_names:
+        c = MagicMock()
+        c.name = name
+        c.enabled = name not in disabled
+        c.interval_seconds = 60 if c.enabled else 0
+        c.status = "running" if c.enabled else "disabled"
+        c.required = name == "system"
+        c.error_count = 0
+        collectors.append(c)
+
+    collectors_status.collectors = collectors
+    collectors_status.total = len(collectors)
+    collectors_status.enabled_count = sum(1 for c in collectors if c.enabled)
+    collectors_status.disabled_count = sum(1 for c in collectors if not c.enabled)
+
+    return collectors_status
 
 
 # Legacy dict format for backward compatibility with older tests
