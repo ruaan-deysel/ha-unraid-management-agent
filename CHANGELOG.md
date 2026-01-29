@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2026.2.0] - 2026-01-29
+
 ### Added
 
 - **Collector-Based Entity Filtering**: Entities are now only created for enabled collectors
@@ -23,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **UMA-API v1.2.1 Migration**: Full migration to typed Pydantic models from uma-api package
+- **UMA-API v1.3.0 Migration**: Full migration to typed Pydantic models from uma-api package
   - All API responses now use strongly-typed Pydantic models instead of raw dictionaries
   - Improved type safety and IDE autocompletion throughout the codebase
   - WebSocket events properly typed using EventType enum and parse_event()

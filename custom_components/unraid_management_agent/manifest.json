@@ -10,5 +10,5 @@
   "issue_tracker": "https://github.com/ruaan-deysel/ha-unraid-management-agent/issues",
   "loggers": ["uma_api"],
   "requirements": ["uma-api>=1.3.0"],
-  "version": "2026.2.0"
+  "version": "2026.2.0b"
 }
