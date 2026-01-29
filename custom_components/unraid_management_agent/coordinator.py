@@ -554,6 +554,7 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
             try:
                 await self._ws_task
             except asyncio.CancelledError:
+                # Task cancellation is expected during shutdown
                 pass
             self._ws_task = None
             _LOGGER.info("WebSocket client stopped")
