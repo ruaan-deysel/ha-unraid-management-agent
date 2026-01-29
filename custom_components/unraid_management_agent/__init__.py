@@ -16,9 +16,7 @@ from uma_api.websocket import UnraidWebSocketClient
 
 from .const import (
     CONF_ENABLE_WEBSOCKET,
-    CONF_UPDATE_INTERVAL,
     DEFAULT_ENABLE_WEBSOCKET,
-    DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
 )
 from .coordinator import (
@@ -76,7 +74,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: UnraidConfigEntry) -> bo
     """Set up Unraid Management Agent from a config entry."""
     host = entry.data[CONF_HOST]
     port = entry.data[CONF_PORT]
-    update_interval = entry.options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
     enable_websocket = entry.options.get(
         CONF_ENABLE_WEBSOCKET, DEFAULT_ENABLE_WEBSOCKET
     )
@@ -100,7 +97,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: UnraidConfigEntry) -> bo
         hass,
         entry=entry,
         client=client,
-        update_interval=update_interval,
         enable_websocket=enable_websocket,
     )
 

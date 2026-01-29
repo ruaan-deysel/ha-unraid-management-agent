@@ -465,12 +465,14 @@ pytest -n auto
 ```
 
 **CI/CD Pipeline:**
+
 - Automated tests run on every push and pull request
 - Tests run on Python 3.12 and 3.13
 - Coverage reports automatically uploaded to Codecov
 - Test results tracked in GitHub Actions
 
 **Coverage Requirements:**
+
 - Minimum coverage: 60%
 - Coverage reports available at [Codecov](https://codecov.io/gh/ruaan-deysel/ha-unraid-management-agent)
 
@@ -525,6 +527,7 @@ Contributions are welcome! Please:
 7. Open a Pull Request
 
 **Development Guidelines:**
+
 - Follow Home Assistant core integration best practices
 - Maintain 60%+ code coverage
 - Use type hints throughout
@@ -533,10 +536,12 @@ Contributions are welcome! Please:
 
 **CI Checks:**
 All pull requests must pass:
+
 - ✅ Ruff linting (format and check)
 - ✅ Pytest test suite (Python 3.12 & 3.13)
 - ✅ Coverage threshold (60% minimum)
 - ✅ Manifest and configuration validation
+
 5. Submit a pull request
 
 ## License

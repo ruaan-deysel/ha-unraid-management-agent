@@ -18,14 +18,23 @@ from uma_api.models import (
     CollectorStatus,
     ContainerInfo,
     DiskInfo,
+    DiskSettings,
+    DockerSettings,
+    FlashDriveInfo,
     GPUInfo,
+    MoverSettings,
     NetworkInterface,
     NotificationsResponse,
+    ParityHistory,
+    ParitySchedule,
+    PluginList,
     ShareInfo,
     SystemInfo,
+    UpdateStatus,
     UPSInfo,
     UserScript,
     VMInfo,
+    VMSettings,
     ZFSArcStats,
     ZFSDataset,
     ZFSPool,
@@ -33,7 +42,10 @@ from uma_api.models import (
 )
 from uma_api.websocket import UnraidWebSocketClient
 
-from .const import DOMAIN
+from .const import (
+    DOMAIN,
+    UPDATE_INTERVAL,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -58,6 +70,16 @@ class UnraidData:
     zfs_snapshots: list[ZFSSnapshot] | None = None
     zfs_arc: ZFSArcStats | None = None
     collectors: CollectorStatus | None = None
+    # New data for enhanced features
+    disk_settings: DiskSettings | None = None
+    mover_settings: MoverSettings | None = None
+    parity_schedule: ParitySchedule | None = None
+    parity_history: ParityHistory | None = None
+    flash_info: FlashDriveInfo | None = None
+    plugins: PluginList | None = None
+    update_status: UpdateStatus | None = None
+    docker_settings: DockerSettings | None = None
+    vm_settings: VMSettings | None = None
 
 
 @dataclass
@@ -82,7 +104,6 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
         hass: HomeAssistant,
         entry: UnraidConfigEntry,
         client: UnraidClient,
-        update_interval: int,
         enable_websocket: bool,
     ) -> None:
         """Initialize the coordinator."""
@@ -97,7 +118,7 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
             _LOGGER,
             config_entry=entry,
             name=DOMAIN,
-            update_interval=timedelta(seconds=update_interval),
+            update_interval=timedelta(seconds=UPDATE_INTERVAL),
         )
 
     async def _async_setup(self) -> None:
@@ -139,12 +160,44 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
         # Collector not found in list, default to enabled
         return True
 
+    def is_docker_enabled(self) -> bool:
+        """
+        Check if Docker service is enabled in Unraid settings.
+
+        Returns:
+            True if Docker is enabled, False if explicitly disabled,
+            or True if settings are unavailable (default to enabled)
+
+        """
+        if not self.data or not self.data.docker_settings:
+            # If we can't determine, default to enabled for backwards compatibility
+            return True
+        return getattr(self.data.docker_settings, "enabled", True)
+
+    def is_vm_enabled(self) -> bool:
+        """
+        Check if VM service is enabled in Unraid settings.
+
+        Returns:
+            True if VM service is enabled, False if explicitly disabled,
+            or True if settings are unavailable (default to enabled)
+
+        """
+        if not self.data or not self.data.vm_settings:
+            # If we can't determine, default to enabled for backwards compatibility
+            return True
+        return getattr(self.data.vm_settings, "enabled", True)
+
     async def _async_update_data(self) -> UnraidData:
         """
         Fetch data from API endpoint.
 
         This is the place to pre-process the data to lookup tables
         so entities can quickly look up their data.
+
+        Note: Collector enable/disable is configured on the Unraid Management Agent
+        plugin side. The integration fetches all available data and the API will
+        return empty results for disabled collectors.
         """
         try:
             # Fetch all data - each method returns typed Pydantic models
@@ -263,6 +316,69 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
             except Exception as err:
                 _LOGGER.debug("Error fetching collectors status: %s", err)
 
+            # Fetch disk settings (for temperature thresholds)
+            disk_settings: DiskSettings | None = None
+            try:
+                disk_settings = await self.client.get_disk_settings()
+            except Exception as err:
+                _LOGGER.debug("Error fetching disk settings: %s", err)
+
+            # Fetch mover settings
+            mover_settings: MoverSettings | None = None
+            try:
+                mover_settings = await self.client.get_mover_settings()
+            except Exception as err:
+                _LOGGER.debug("Error fetching mover settings: %s", err)
+
+            # Fetch parity schedule
+            parity_schedule: ParitySchedule | None = None
+            try:
+                parity_schedule = await self.client.get_parity_schedule()
+            except Exception as err:
+                _LOGGER.debug("Error fetching parity schedule: %s", err)
+
+            # Fetch parity history
+            parity_history: ParityHistory | None = None
+            try:
+                parity_history = await self.client.get_parity_history()
+            except Exception as err:
+                _LOGGER.debug("Error fetching parity history: %s", err)
+
+            # Fetch flash drive info
+            flash_info: FlashDriveInfo | None = None
+            try:
+                flash_info = await self.client.get_flash_info()
+            except Exception as err:
+                _LOGGER.debug("Error fetching flash info: %s", err)
+
+            # Fetch plugins list
+            plugins: PluginList | None = None
+            try:
+                plugins = await self.client.list_plugins()
+            except Exception as err:
+                _LOGGER.debug("Error fetching plugins: %s", err)
+
+            # Fetch update status
+            update_status: UpdateStatus | None = None
+            try:
+                update_status = await self.client.get_update_status()
+            except Exception as err:
+                _LOGGER.debug("Error fetching update status: %s", err)
+
+            # Fetch docker settings (for conditional entity creation)
+            docker_settings: DockerSettings | None = None
+            try:
+                docker_settings = await self.client.get_docker_settings()
+            except Exception as err:
+                _LOGGER.debug("Error fetching docker settings: %s", err)
+
+            # Fetch VM settings (for conditional entity creation)
+            vm_settings: VMSettings | None = None
+            try:
+                vm_settings = await self.client.get_vm_settings()
+            except Exception as err:
+                _LOGGER.debug("Error fetching VM settings: %s", err)
+
             # Log recovery if we were previously unavailable
             if self._unavailable_logged:
                 _LOGGER.info("Connection to Unraid server restored")
@@ -289,6 +405,15 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
                 zfs_snapshots=zfs_snapshots,
                 zfs_arc=zfs_arc,
                 collectors=collectors,
+                disk_settings=disk_settings,
+                mover_settings=mover_settings,
+                parity_schedule=parity_schedule,
+                parity_history=parity_history,
+                flash_info=flash_info,
+                plugins=plugins,
+                update_status=update_status,
+                docker_settings=docker_settings,
+                vm_settings=vm_settings,
             )
 
             # Check for issues and create repair flows

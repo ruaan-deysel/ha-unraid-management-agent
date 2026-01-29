@@ -113,30 +113,30 @@ jobs:
           python3 << 'EOF'
           import json
           import sys
-          
+
           try:
               with open('custom_components/unraid_management_agent/manifest.json') as f:
                   manifest = json.load(f)
-              
+
               # Validate required fields
               required = ['domain', 'name', 'version', 'documentation', 'issue_tracker', 'requirements', 'codeowners']
               missing = [field for field in required if field not in manifest]
-              
+
               if missing:
                   print(f'❌ Missing required fields: {missing}')
                   sys.exit(1)
-              
+
               # Validate version format
               version = manifest['version']
               if not version or '.' not in version:
                   print(f'❌ Invalid version format: {version}')
                   sys.exit(1)
-              
+
               print(f'✅ manifest.json is valid')
               print(f'   Domain: {manifest["domain"]}')
               print(f'   Name: {manifest["name"]}')
               print(f'   Version: {manifest["version"]}')
-              
+
           except Exception as e:
               print(f'❌ Error validating manifest.json: {e}')
               sys.exit(1)
@@ -146,10 +146,10 @@ jobs:
         run: |
           python3 << 'EOF'
           import json
-          
+
           with open('custom_components/unraid_management_agent/strings.json') as f:
               strings = json.load(f)
-          
+
           print('✅ strings.json is valid JSON')
           EOF
 
@@ -162,14 +162,14 @@ jobs:
             "custom_components/unraid_management_agent/config_flow.py"
             "custom_components/unraid_management_agent/const.py"
           )
-          
+
           for file in "${FILES[@]}"; do
             if [ ! -f "$file" ]; then
               echo "❌ Missing required file: $file"
               exit 1
             fi
           done
-          
+
           echo "✅ All required files present"
 
   summary:
@@ -187,7 +187,7 @@ jobs:
             echo "❌ CI checks failed"
             exit 1
           fi
-          
+
           echo "✅ All CI checks passed"
 
       - name: Summary

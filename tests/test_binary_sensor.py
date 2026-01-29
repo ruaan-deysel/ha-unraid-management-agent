@@ -2,20 +2,33 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
+import pytest
 from homeassistant.core import HomeAssistant
 
 from custom_components.unraid_management_agent.binary_sensor import (
+    _flash_attributes,
+    _has_flash_info,
+    _has_mover_settings,
+    _has_parity_schedule,
+    _has_update_status,
     _has_ups,
     _has_zfs,
     _is_array_started,
+    _is_flash_healthy,
+    _is_mover_running,
     _is_parity_check_running,
+    _is_parity_check_scheduled,
     _is_parity_invalid,
     _is_physical_network_interface,
+    _is_update_available,
     _is_ups_connected,
     _is_zfs_available,
+    _mover_attributes,
     _parity_check_attributes,
+    _parity_schedule_attributes,
+    _update_attributes,
     _zfs_attributes,
 )
 from custom_components.unraid_management_agent.coordinator import UnraidData
@@ -328,25 +341,17 @@ def test_zfs_attributes_with_pools():
     assert _zfs_attributes(coordinator) == {"pool_count": 2}
 
 
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
 async def test_binary_sensor_setup(
     hass: HomeAssistant,
     mock_config_entry,
-    mock_async_unraid_client,
-    mock_websocket_client,
 ) -> None:
     """Test binary sensor platform setup."""
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
     # Verify binary sensor entities are created
     binary_sensor_entities = [
@@ -358,25 +363,17 @@ async def test_binary_sensor_setup(
     assert len(binary_sensor_entities) > 0
 
 
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
 async def test_array_started_binary_sensor(
     hass: HomeAssistant,
     mock_config_entry,
-    mock_async_unraid_client,
-    mock_websocket_client,
 ) -> None:
     """Test array started binary sensor."""
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
     state = hass.states.get("binary_sensor.unraid_test_array_started")
     if state:
@@ -384,25 +381,17 @@ async def test_array_started_binary_sensor(
         assert state.state == "on"
 
 
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
 async def test_ups_connected_binary_sensor(
     hass: HomeAssistant,
     mock_config_entry,
-    mock_async_unraid_client,
-    mock_websocket_client,
 ) -> None:
     """Test UPS connected binary sensor."""
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
     state = hass.states.get("binary_sensor.unraid_test_ups_connected")
     if state:
@@ -410,25 +399,17 @@ async def test_ups_connected_binary_sensor(
         assert state.state == "on"
 
 
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
 async def test_parity_check_running_binary_sensor(
     hass: HomeAssistant,
     mock_config_entry,
-    mock_async_unraid_client,
-    mock_websocket_client,
 ) -> None:
     """Test parity check running binary sensor."""
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
     state = hass.states.get("binary_sensor.unraid_test_parity_check_running")
     if state:
@@ -436,25 +417,17 @@ async def test_parity_check_running_binary_sensor(
         assert state.state == "off"
 
 
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
 async def test_parity_valid_binary_sensor(
     hass: HomeAssistant,
     mock_config_entry,
-    mock_async_unraid_client,
-    mock_websocket_client,
 ) -> None:
     """Test parity valid binary sensor."""
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
     state = hass.states.get("binary_sensor.unraid_test_parity_valid")
     if state:
@@ -463,25 +436,17 @@ async def test_parity_valid_binary_sensor(
         assert state.state in ("on", "off")
 
 
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
 async def test_network_interface_binary_sensor(
     hass: HomeAssistant,
     mock_config_entry,
-    mock_async_unraid_client,
-    mock_websocket_client,
 ) -> None:
     """Test network interface binary sensor."""
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
     # eth0 is up
     state = hass.states.get("binary_sensor.unraid_test_network_eth0")
@@ -494,25 +459,17 @@ async def test_network_interface_binary_sensor(
         assert state.state == "off"
 
 
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
 async def test_binary_sensor_device_class(
     hass: HomeAssistant,
     mock_config_entry,
-    mock_async_unraid_client,
-    mock_websocket_client,
 ) -> None:
     """Test binary sensor device classes."""
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
     # Array started should have running device class
     state = hass.states.get("binary_sensor.unraid_test_array_started")
@@ -543,11 +500,14 @@ def test_is_physical_network_interface():
     assert _is_physical_network_interface("virbr0") is False
 
 
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
 async def test_ups_binary_sensor_not_created_when_collector_disabled(
     hass: HomeAssistant,
     mock_config_entry,
     mock_async_unraid_client,
-    mock_websocket_client,
 ) -> None:
     """Test UPS binary sensor is not created when ups collector is disabled."""
     from tests.const import mock_collectors_status
@@ -562,18 +522,8 @@ async def test_ups_binary_sensor_not_created_when_collector_disabled(
 
     mock_async_unraid_client.get_collectors_status.return_value = collectors
 
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
     # UPS sensor should not exist when collector is disabled
     state = hass.states.get("binary_sensor.unraid_test_ups_connected")
@@ -582,11 +532,14 @@ async def test_ups_binary_sensor_not_created_when_collector_disabled(
     assert state is None or state.state in ("on", "off", "unavailable")
 
 
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
 async def test_zfs_binary_sensor_not_created_when_collector_disabled(
     hass: HomeAssistant,
     mock_config_entry,
     mock_async_unraid_client,
-    mock_websocket_client,
 ) -> None:
     """Test ZFS binary sensor is not created when zfs collector is disabled."""
     from tests.const import mock_collectors_status
@@ -601,18 +554,8 @@ async def test_zfs_binary_sensor_not_created_when_collector_disabled(
 
     mock_async_unraid_client.get_collectors_status.return_value = collectors
 
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
     # ZFS sensor should not exist when collector is disabled
     state = hass.states.get("binary_sensor.unraid_test_zfs_available")
@@ -620,11 +563,14 @@ async def test_zfs_binary_sensor_not_created_when_collector_disabled(
     assert state is None or state.state in ("on", "off", "unavailable")
 
 
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
 async def test_network_binary_sensor_not_created_when_collector_disabled(
     hass: HomeAssistant,
     mock_config_entry,
     mock_async_unraid_client,
-    mock_websocket_client,
 ) -> None:
     """Test network binary sensors are not created when network collector is disabled."""
     from tests.const import mock_collectors_status
@@ -639,18 +585,8 @@ async def test_network_binary_sensor_not_created_when_collector_disabled(
 
     mock_async_unraid_client.get_collectors_status.return_value = collectors
 
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
     # Network sensors should not exist when collector is disabled
     # Just validate no errors during setup
@@ -795,28 +731,21 @@ async def test_network_interface_binary_sensor_interface_found_down(
     assert sensor.is_on is False
 
 
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
 async def test_binary_sensor_with_no_network_data(
     hass: HomeAssistant,
     mock_config_entry,
     mock_async_unraid_client,
-    mock_websocket_client,
 ) -> None:
     """Test binary sensor setup with no network data."""
     # Return no network data
     mock_async_unraid_client.list_network_interfaces.return_value = []
 
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
     # Should still have some binary sensors (array, ups, parity)
     binary_sensor_entities = [
@@ -825,3 +754,369 @@ async def test_binary_sensor_with_no_network_data(
         if entity_id.startswith("binary_sensor.unraid_")
     ]
     assert len(binary_sensor_entities) > 0
+
+
+# =============================================================================
+# Update Status Function Tests (#19)
+# =============================================================================
+
+
+def test_is_update_available_no_data():
+    """Test _is_update_available when no data."""
+    coordinator = MagicMock()
+    coordinator.data = None
+    assert _is_update_available(coordinator) is False
+
+
+def test_is_update_available_no_update_status():
+    """Test _is_update_available when no update status."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.update_status = None
+    assert _is_update_available(coordinator) is False
+
+
+def test_is_update_available_false():
+    """Test _is_update_available when no update available."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.update_status = MagicMock()
+    coordinator.data.update_status.os_update_available = False
+    assert _is_update_available(coordinator) is False
+
+
+def test_is_update_available_true():
+    """Test _is_update_available when update available."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.update_status = MagicMock()
+    coordinator.data.update_status.os_update_available = True
+    assert _is_update_available(coordinator) is True
+
+
+def test_has_update_status_no_data():
+    """Test _has_update_status when no data."""
+    coordinator = MagicMock()
+    coordinator.data = None
+    assert _has_update_status(coordinator) is False
+
+
+def test_has_update_status_present():
+    """Test _has_update_status when update status present."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.update_status = MagicMock()
+    assert _has_update_status(coordinator) is True
+
+
+def test_update_attributes_no_data():
+    """Test _update_attributes when no data."""
+    coordinator = MagicMock()
+    coordinator.data = None
+    assert _update_attributes(coordinator) == {}
+
+
+def test_update_attributes_no_update_status():
+    """Test _update_attributes when no update status."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.update_status = None
+    assert _update_attributes(coordinator) == {}
+
+
+def test_update_attributes_with_data():
+    """Test _update_attributes with data."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.update_status = MagicMock()
+    coordinator.data.update_status.current_version = "6.12.6"
+    coordinator.data.update_status.plugin_updates_count = 3
+    attrs = _update_attributes(coordinator)
+    assert attrs["current_version"] == "6.12.6"
+    assert attrs["plugin_updates_count"] == 3
+
+
+# =============================================================================
+# Flash Drive Health Function Tests (#20)
+# =============================================================================
+
+
+def test_is_flash_healthy_no_data():
+    """Test _is_flash_healthy when no data."""
+    coordinator = MagicMock()
+    coordinator.data = None
+    assert _is_flash_healthy(coordinator) is True
+
+
+def test_is_flash_healthy_no_flash_info():
+    """Test _is_flash_healthy when no flash info."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.flash_info = None
+    assert _is_flash_healthy(coordinator) is True
+
+
+def test_is_flash_healthy_no_smart():
+    """Test _is_flash_healthy when no SMART support."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.flash_info = MagicMock()
+    coordinator.data.flash_info.smart_available = False
+    coordinator.data.flash_info.usage_percent = 50
+    assert _is_flash_healthy(coordinator) is True
+
+
+def test_is_flash_healthy_low_usage():
+    """Test _is_flash_healthy when usage is low."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.flash_info = MagicMock()
+    coordinator.data.flash_info.smart_available = True
+    coordinator.data.flash_info.usage_percent = 50
+    assert _is_flash_healthy(coordinator) is True
+
+
+def test_is_flash_healthy_high_usage():
+    """Test _is_flash_healthy when usage is high (>90%)."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.flash_info = MagicMock()
+    coordinator.data.flash_info.smart_available = True
+    coordinator.data.flash_info.usage_percent = 95
+    assert _is_flash_healthy(coordinator) is False
+
+
+def test_is_flash_healthy_none_usage():
+    """Test _is_flash_healthy when usage is None."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.flash_info = MagicMock()
+    coordinator.data.flash_info.smart_available = True
+    coordinator.data.flash_info.usage_percent = None
+    assert _is_flash_healthy(coordinator) is True
+
+
+def test_has_flash_info_no_data():
+    """Test _has_flash_info when no data."""
+    coordinator = MagicMock()
+    coordinator.data = None
+    assert _has_flash_info(coordinator) is False
+
+
+def test_has_flash_info_present():
+    """Test _has_flash_info when flash info present."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.flash_info = MagicMock()
+    assert _has_flash_info(coordinator) is True
+
+
+def test_flash_attributes_no_data():
+    """Test _flash_attributes when no data."""
+    coordinator = MagicMock()
+    coordinator.data = None
+    assert _flash_attributes(coordinator) == {}
+
+
+def test_flash_attributes_no_flash_info():
+    """Test _flash_attributes when no flash info."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.flash_info = None
+    assert _flash_attributes(coordinator) == {}
+
+
+def test_flash_attributes_with_data():
+    """Test _flash_attributes with data."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.flash_info = MagicMock()
+    coordinator.data.flash_info.usage_percent = 45.5
+    coordinator.data.flash_info.smart_available = True
+    coordinator.data.flash_info.model = "SanDisk Ultra Fit"
+    attrs = _flash_attributes(coordinator)
+    assert attrs["usage_percent"] == 45.5
+    assert attrs["smart_available"] is True
+    assert attrs["model"] == "SanDisk Ultra Fit"
+
+
+# =============================================================================
+# Mover Function Tests (#17)
+# =============================================================================
+
+
+def test_is_mover_running_no_data():
+    """Test _is_mover_running when no data."""
+    coordinator = MagicMock()
+    coordinator.data = None
+    assert _is_mover_running(coordinator) is False
+
+
+def test_is_mover_running_no_mover_settings():
+    """Test _is_mover_running when no mover settings."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.mover_settings = None
+    assert _is_mover_running(coordinator) is False
+
+
+def test_is_mover_running_inactive():
+    """Test _is_mover_running when mover is inactive."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.mover_settings = MagicMock()
+    coordinator.data.mover_settings.active = False
+    assert _is_mover_running(coordinator) is False
+
+
+def test_is_mover_running_active():
+    """Test _is_mover_running when mover is active."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.mover_settings = MagicMock()
+    coordinator.data.mover_settings.active = True
+    assert _is_mover_running(coordinator) is True
+
+
+def test_has_mover_settings_no_data():
+    """Test _has_mover_settings when no data."""
+    coordinator = MagicMock()
+    coordinator.data = None
+    assert _has_mover_settings(coordinator) is False
+
+
+def test_has_mover_settings_present():
+    """Test _has_mover_settings when mover settings present."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.mover_settings = MagicMock()
+    assert _has_mover_settings(coordinator) is True
+
+
+def test_mover_attributes_no_data():
+    """Test _mover_attributes when no data."""
+    coordinator = MagicMock()
+    coordinator.data = None
+    assert _mover_attributes(coordinator) == {}
+
+
+def test_mover_attributes_no_mover_settings():
+    """Test _mover_attributes when no mover settings."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.mover_settings = None
+    assert _mover_attributes(coordinator) == {}
+
+
+def test_mover_attributes_with_data():
+    """Test _mover_attributes with data."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.mover_settings = MagicMock()
+    coordinator.data.mover_settings.schedule = "0 3 * * *"
+    coordinator.data.mover_settings.logging = True
+    attrs = _mover_attributes(coordinator)
+    assert attrs["schedule"] == "0 3 * * *"
+    assert attrs["logging"] is True
+
+
+# =============================================================================
+# Parity Schedule Function Tests (#16)
+# =============================================================================
+
+
+def test_is_parity_check_scheduled_no_data():
+    """Test _is_parity_check_scheduled when no data."""
+    coordinator = MagicMock()
+    coordinator.data = None
+    assert _is_parity_check_scheduled(coordinator) is False
+
+
+def test_is_parity_check_scheduled_no_schedule():
+    """Test _is_parity_check_scheduled when no schedule."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.parity_schedule = None
+    assert _is_parity_check_scheduled(coordinator) is False
+
+
+def test_is_parity_check_scheduled_disabled():
+    """Test _is_parity_check_scheduled when disabled."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.parity_schedule = MagicMock()
+    coordinator.data.parity_schedule.mode = "disabled"
+    assert _is_parity_check_scheduled(coordinator) is False
+
+
+def test_is_parity_check_scheduled_none_mode():
+    """Test _is_parity_check_scheduled when mode is None."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.parity_schedule = MagicMock()
+    coordinator.data.parity_schedule.mode = None
+    assert _is_parity_check_scheduled(coordinator) is False
+
+
+def test_is_parity_check_scheduled_weekly():
+    """Test _is_parity_check_scheduled when mode is weekly."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.parity_schedule = MagicMock()
+    coordinator.data.parity_schedule.mode = "weekly"
+    assert _is_parity_check_scheduled(coordinator) is True
+
+
+def test_is_parity_check_scheduled_monthly():
+    """Test _is_parity_check_scheduled when mode is monthly."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.parity_schedule = MagicMock()
+    coordinator.data.parity_schedule.mode = "monthly"
+    assert _is_parity_check_scheduled(coordinator) is True
+
+
+def test_has_parity_schedule_no_data():
+    """Test _has_parity_schedule when no data."""
+    coordinator = MagicMock()
+    coordinator.data = None
+    assert _has_parity_schedule(coordinator) is False
+
+
+def test_has_parity_schedule_present():
+    """Test _has_parity_schedule when schedule present."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.parity_schedule = MagicMock()
+    assert _has_parity_schedule(coordinator) is True
+
+
+def test_parity_schedule_attributes_no_data():
+    """Test _parity_schedule_attributes when no data."""
+    coordinator = MagicMock()
+    coordinator.data = None
+    assert _parity_schedule_attributes(coordinator) == {}
+
+
+def test_parity_schedule_attributes_no_schedule():
+    """Test _parity_schedule_attributes when no schedule."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.parity_schedule = None
+    assert _parity_schedule_attributes(coordinator) == {}
+
+
+def test_parity_schedule_attributes_with_data():
+    """Test _parity_schedule_attributes with data."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.parity_schedule = MagicMock()
+    coordinator.data.parity_schedule.mode = "weekly"
+    coordinator.data.parity_schedule.day = 0  # Sunday
+    coordinator.data.parity_schedule.hour = 3
+    coordinator.data.parity_schedule.correcting = True
+    attrs = _parity_schedule_attributes(coordinator)
+    assert attrs["mode"] == "weekly"
+    assert attrs["day"] == 0
+    assert attrs["hour"] == 3
+    assert attrs["correcting"] is True

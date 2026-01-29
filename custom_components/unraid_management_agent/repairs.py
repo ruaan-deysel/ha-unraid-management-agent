@@ -170,21 +170,11 @@ class ParityCheckRepairFlow(RepairsFlow):
         )
 
 
-# Temperature thresholds matching Unraid's default settings
-# HDD thresholds (spinning disks)
-DEFAULT_HDD_TEMP_WARNING = 45  # Warning threshold for HDDs
-DEFAULT_HDD_TEMP_CRITICAL = 55  # Critical threshold for HDDs
-
-# SSD/NVMe thresholds (solid state drives run hotter)
-DEFAULT_SSD_TEMP_WARNING = 60  # Warning threshold for SSDs
-DEFAULT_SSD_TEMP_CRITICAL = 70  # Critical threshold for SSDs
-
-
 def _is_ssd(disk) -> bool:
     """Determine if a disk is an SSD/NVMe based on device name or role."""
-    device = (disk.device or "").lower()
-    role = (disk.role or "").lower()
-    name = (disk.name or "").lower()
+    device = (getattr(disk, "device", None) or "").lower()
+    role = (getattr(disk, "role", None) or "").lower()
+    name = (getattr(disk, "name", None) or "").lower()
 
     # NVMe drives are always SSDs
     if "nvme" in device:
@@ -195,8 +185,45 @@ def _is_ssd(disk) -> bool:
         return True
 
     # Check for SSD in the disk ID/model
-    disk_id = (disk.id or "").lower()
+    disk_id = (getattr(disk, "id", None) or "").lower()
     return "ssd" in disk_id or "nvme" in disk_id
+
+
+def _get_disk_temp_thresholds(disk, disk_settings) -> tuple[int, int] | None:
+    """
+    Get temperature thresholds for a disk.
+
+    Priority:
+    1. Per-disk overrides (temp_warning, temp_critical on the disk object)
+    2. Global settings from disk_settings (hdd/ssd variants)
+
+    Returns:
+        Tuple of (warning_threshold, critical_threshold) or None if not available.
+
+    """
+    is_ssd = _is_ssd(disk)
+
+    # 1. Check for per-disk temperature overrides from the API
+    disk_temp_warning = getattr(disk, "temp_warning", None)
+    disk_temp_critical = getattr(disk, "temp_critical", None)
+
+    if disk_temp_warning is not None and disk_temp_critical is not None:
+        return (int(disk_temp_warning), int(disk_temp_critical))
+
+    # 2. Use global settings from disk_settings if available
+    if disk_settings:
+        if is_ssd:
+            warning = getattr(disk_settings, "ssd_temp_warning_celsius", None)
+            critical = getattr(disk_settings, "ssd_temp_critical_celsius", None)
+        else:
+            warning = getattr(disk_settings, "hdd_temp_warning_celsius", None)
+            critical = getattr(disk_settings, "hdd_temp_critical_celsius", None)
+
+        if warning is not None and critical is not None:
+            return (int(warning), int(critical))
+
+    # No thresholds available - don't create temperature issues
+    return None
 
 
 async def async_check_and_create_issues(hass: HomeAssistant, coordinator) -> None:
@@ -230,13 +257,16 @@ async def async_check_and_create_issues(hass: HomeAssistant, coordinator) -> Non
     if not coordinator.data:
         return
 
+    # Get disk settings for temperature thresholds
+    disk_settings = coordinator.data.disk_settings
+
     # Check for disk health issues
     disks = coordinator.data.disks or []
     for disk in disks:
-        disk_id = disk.id or disk.name or "unknown"
-        smart_errors = disk.smart_errors or 0
-        smart_status = disk.smart_status or "UNKNOWN"
-        temperature = disk.temperature_celsius or 0
+        disk_id = getattr(disk, "id", None) or getattr(disk, "name", None) or "unknown"
+        smart_errors = getattr(disk, "smart_errors", None) or 0
+        smart_status = getattr(disk, "smart_status", None) or "UNKNOWN"
+        temperature = getattr(disk, "temperature_celsius", None) or 0
 
         # Check for SMART errors (only if explicitly reported as having errors)
         smart_issue_id = f"disk_health_{disk_id}_smart_errors"
@@ -249,7 +279,7 @@ async def async_check_and_create_issues(hass: HomeAssistant, coordinator) -> Non
                 severity=ir.IssueSeverity.WARNING,
                 translation_key="disk_smart_errors",
                 translation_placeholders={
-                    "disk_name": disk.name or disk_id,
+                    "disk_name": getattr(disk, "name", None) or disk_id,
                     "smart_errors": str(int(smart_errors)),
                     "smart_status": smart_status,
                 },
@@ -258,18 +288,19 @@ async def async_check_and_create_issues(hass: HomeAssistant, coordinator) -> Non
             # No SMART errors, remove any existing issue
             ir.async_delete_issue(hass, DOMAIN, smart_issue_id)
 
-        # Check for high temperature using Unraid's default thresholds
-        # SSDs have higher thresholds than HDDs
-        is_ssd = _is_ssd(disk)
-        temp_warning = DEFAULT_SSD_TEMP_WARNING if is_ssd else DEFAULT_HDD_TEMP_WARNING
-        temp_critical = (
-            DEFAULT_SSD_TEMP_CRITICAL if is_ssd else DEFAULT_HDD_TEMP_CRITICAL
-        )
+        # Get temperature thresholds using priority: per-disk > global settings
+        thresholds = _get_disk_temp_thresholds(disk, disk_settings)
 
         temp_warning_issue_id = f"disk_health_{disk_id}_high_temp"
         temp_critical_issue_id = f"disk_health_{disk_id}_critical_temp"
 
-        if isinstance(temperature, (int, float)) and temperature > 0:
+        # Only check temperatures if thresholds are available from the API
+        if (
+            thresholds is not None
+            and isinstance(temperature, (int, float))
+            and temperature > 0
+        ):
+            temp_warning, temp_critical = thresholds
             # Check for critical temperature first
             if temperature >= temp_critical:
                 ir.async_create_issue(
@@ -280,7 +311,7 @@ async def async_check_and_create_issues(hass: HomeAssistant, coordinator) -> Non
                     severity=ir.IssueSeverity.ERROR,
                     translation_key="disk_critical_temperature",
                     translation_placeholders={
-                        "disk_name": disk.name or disk_id,
+                        "disk_name": getattr(disk, "name", None) or disk_id,
                         "temperature": str(int(temperature)),
                         "threshold": str(temp_critical),
                     },
@@ -297,7 +328,7 @@ async def async_check_and_create_issues(hass: HomeAssistant, coordinator) -> Non
                     severity=ir.IssueSeverity.WARNING,
                     translation_key="disk_high_temperature",
                     translation_placeholders={
-                        "disk_name": disk.name or disk_id,
+                        "disk_name": getattr(disk, "name", None) or disk_id,
                         "temperature": str(int(temperature)),
                         "threshold": str(temp_warning),
                     },

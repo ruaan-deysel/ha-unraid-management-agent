@@ -123,6 +123,150 @@ def _zfs_attributes(coordinator: UnraidDataUpdateCoordinator) -> dict[str, Any]:
     return {"pool_count": len(data.zfs_pools)}
 
 
+# =============================================================================
+# Update Availability Functions (#19)
+# =============================================================================
+
+
+def _is_update_available(coordinator: UnraidDataUpdateCoordinator) -> bool:
+    """Return true if Unraid OS update is available."""
+    data = coordinator.data
+    if data and data.update_status:
+        return getattr(data.update_status, "os_update_available", False)
+    return False
+
+
+def _has_update_status(coordinator: UnraidDataUpdateCoordinator) -> bool:
+    """Return true if update status data is available."""
+    data = coordinator.data
+    return data is not None and data.update_status is not None
+
+
+def _update_attributes(coordinator: UnraidDataUpdateCoordinator) -> dict[str, Any]:
+    """Return update status attributes."""
+    data = coordinator.data
+    if not data or not data.update_status:
+        return {}
+    update = data.update_status
+    return {
+        "current_version": getattr(update, "current_version", None),
+        "plugin_updates_count": getattr(update, "plugin_updates_count", 0),
+    }
+
+
+# =============================================================================
+# Flash Drive Health Functions (#20)
+# =============================================================================
+
+
+def _is_flash_healthy(coordinator: UnraidDataUpdateCoordinator) -> bool:
+    """Return true if flash drive is healthy (not a problem)."""
+    data = coordinator.data
+    if not data or not data.flash_info:
+        return True  # Assume healthy if no data
+
+    flash = data.flash_info
+    # Check if SMART is available and healthy
+    smart_available = getattr(flash, "smart_available", None)
+    if smart_available is False:
+        # No SMART support, can't determine health
+        return True
+
+    # Check usage - warn if > 90%
+    usage = getattr(flash, "usage_percent", 0) or 0
+    return usage <= 90
+
+
+def _has_flash_info(coordinator: UnraidDataUpdateCoordinator) -> bool:
+    """Return true if flash drive info is available."""
+    data = coordinator.data
+    return data is not None and data.flash_info is not None
+
+
+def _flash_attributes(coordinator: UnraidDataUpdateCoordinator) -> dict[str, Any]:
+    """Return flash drive attributes."""
+    data = coordinator.data
+    if not data or not data.flash_info:
+        return {}
+
+    flash = data.flash_info
+    return {
+        "usage_percent": getattr(flash, "usage_percent", None),
+        "smart_available": getattr(flash, "smart_available", None),
+        "model": getattr(flash, "model", None),
+    }
+
+
+# =============================================================================
+# Mover Functions (#17)
+# =============================================================================
+
+
+def _is_mover_running(coordinator: UnraidDataUpdateCoordinator) -> bool:
+    """Return true if mover is currently running."""
+    data = coordinator.data
+    if data and data.mover_settings:
+        active = getattr(data.mover_settings, "active", False)
+        return active is True
+    return False
+
+
+def _has_mover_settings(coordinator: UnraidDataUpdateCoordinator) -> bool:
+    """Return true if mover settings are available."""
+    data = coordinator.data
+    return data is not None and data.mover_settings is not None
+
+
+def _mover_attributes(coordinator: UnraidDataUpdateCoordinator) -> dict[str, Any]:
+    """Return mover attributes."""
+    data = coordinator.data
+    if not data or not data.mover_settings:
+        return {}
+
+    mover = data.mover_settings
+    return {
+        "schedule": getattr(mover, "schedule", None),
+        "logging": getattr(mover, "logging", None),
+    }
+
+
+# =============================================================================
+# Parity Check Scheduled Functions (#16)
+# =============================================================================
+
+
+def _is_parity_check_scheduled(coordinator: UnraidDataUpdateCoordinator) -> bool:
+    """Return true if parity check is scheduled."""
+    data = coordinator.data
+    if data and data.parity_schedule:
+        mode = getattr(data.parity_schedule, "mode", None)
+        return mode is not None and mode != "disabled"
+    return False
+
+
+def _has_parity_schedule(coordinator: UnraidDataUpdateCoordinator) -> bool:
+    """Return true if parity schedule data is available."""
+    data = coordinator.data
+    return data is not None and data.parity_schedule is not None
+
+
+def _parity_schedule_attributes(
+    coordinator: UnraidDataUpdateCoordinator,
+) -> dict[str, Any]:
+    """Return parity schedule attributes."""
+    data = coordinator.data
+    if not data or not data.parity_schedule:
+        return {}
+
+    schedule = data.parity_schedule
+    return {
+        "mode": getattr(schedule, "mode", None),
+        "day": getattr(schedule, "day", None),
+        "hour": getattr(schedule, "hour", None),
+        "correcting": getattr(schedule, "correcting", False),
+    }
+
+
 BINARY_SENSOR_DESCRIPTIONS: tuple[UnraidBinarySensorEntityDescription, ...] = (
     UnraidBinarySensorEntityDescription(
         key="array_started",
@@ -167,6 +311,51 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[UnraidBinarySensorEntityDescription, ...] = (
         is_on_fn=_is_zfs_available,
         supported_fn=_has_zfs,
         extra_state_attributes_fn=_zfs_attributes,
+    ),
+    # Update availability (#19)
+    UnraidBinarySensorEntityDescription(
+        key="update_available",
+        translation_key="update_available",
+        device_class=BinarySensorDeviceClass.UPDATE,
+        icon="mdi:update",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        is_on_fn=_is_update_available,
+        supported_fn=_has_update_status,
+        extra_state_attributes_fn=_update_attributes,
+    ),
+    # Flash drive health (#20)
+    UnraidBinarySensorEntityDescription(
+        key="flash_healthy",
+        translation_key="flash_healthy",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        icon="mdi:usb-flash-drive",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        # is_on returns True when there's a problem (usage > 90%)
+        is_on_fn=lambda c: not _is_flash_healthy(c),
+        supported_fn=_has_flash_info,
+        extra_state_attributes_fn=_flash_attributes,
+    ),
+    # Mover running (#17)
+    UnraidBinarySensorEntityDescription(
+        key="mover_running",
+        translation_key="mover_running",
+        device_class=BinarySensorDeviceClass.RUNNING,
+        icon="mdi:transfer",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        is_on_fn=_is_mover_running,
+        supported_fn=_has_mover_settings,
+        extra_state_attributes_fn=_mover_attributes,
+    ),
+    # Parity check scheduled (#16)
+    UnraidBinarySensorEntityDescription(
+        key="parity_check_scheduled",
+        translation_key="parity_check_scheduled",
+        device_class=BinarySensorDeviceClass.RUNNING,
+        icon="mdi:calendar-check",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        is_on_fn=_is_parity_check_scheduled,
+        supported_fn=_has_parity_schedule,
+        extra_state_attributes_fn=_parity_schedule_attributes,
     ),
 )
 

@@ -20,7 +20,7 @@ classifiers = [
 keywords = ["home-assistant", "unraid", "hacs", "integration"]
 
 dependencies = [
-    "uma-api[async]>=1.2.0",
+    "uma-api[async]>=1.3.0",
 ]
 
 [project.optional-dependencies]

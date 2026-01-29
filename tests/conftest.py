@@ -33,10 +33,11 @@ pytest_plugins = "pytest_homeassistant_custom_component"
 @pytest.fixture
 def mock_setup_entry() -> Generator[AsyncMock]:
     """Override async_setup_entry."""
+    mock_setup_entry = AsyncMock(return_value=True)
     with patch(
         "custom_components.unraid_management_agent.async_setup_entry",
-        return_value=True,
-    ) as mock_setup_entry:
+        new=mock_setup_entry,
+    ):
         yield mock_setup_entry
 
 
@@ -74,6 +75,17 @@ def mock_async_unraid_client() -> Generator[MagicMock]:
         client.get_zfs_arc_stats = AsyncMock(return_value=None)
         client.get_collectors_status = AsyncMock(return_value=mock_collectors_status())
 
+        # New API methods for uma-api v1.3.0
+        client.get_disk_settings = AsyncMock(return_value=None)
+        client.get_mover_settings = AsyncMock(return_value=None)
+        client.get_parity_schedule = AsyncMock(return_value=None)
+        client.get_parity_history = AsyncMock(return_value=None)
+        client.get_flash_info = AsyncMock(return_value=None)
+        client.list_plugins = AsyncMock(return_value=None)
+        client.get_update_status = AsyncMock(return_value=None)
+        client.get_docker_settings = AsyncMock(return_value=None)
+        client.get_vm_settings = AsyncMock(return_value=None)
+
         # Mock control methods
         client.start_array = AsyncMock(return_value=True)
         client.stop_array = AsyncMock(return_value=True)
@@ -94,6 +106,8 @@ def mock_async_unraid_client() -> Generator[MagicMock]:
         client.hibernate_vm = AsyncMock(return_value=True)
         client.force_stop_vm = AsyncMock(return_value=True)
         client.execute_user_script = AsyncMock(return_value=True)
+        client.shutdown_system = AsyncMock(return_value=True)
+        client.reboot_system = AsyncMock(return_value=True)
 
         # Mock cleanup
         client.close = AsyncMock()
@@ -117,6 +131,32 @@ def mock_websocket_client() -> Generator[MagicMock]:
         ws_client.stop = AsyncMock()
         ws_client.is_connected = False
         yield ws_client
+
+
+@pytest.fixture
+def mock_unraid_client_class(
+    mock_async_unraid_client: MagicMock,
+) -> Generator[MagicMock]:
+    """Patch UnraidClient to return the mocked client instance."""
+    mock_class = MagicMock(return_value=mock_async_unraid_client)
+    with patch(
+        "custom_components.unraid_management_agent.UnraidClient",
+        new=mock_class,
+    ):
+        yield mock_class
+
+
+@pytest.fixture
+def mock_unraid_websocket_client_class(
+    mock_websocket_client: MagicMock,
+) -> Generator[MagicMock]:
+    """Patch UnraidWebSocketClient to return the mocked client instance."""
+    mock_class = MagicMock(return_value=mock_websocket_client)
+    with patch(
+        "custom_components.unraid_management_agent.UnraidWebSocketClient",
+        new=mock_class,
+    ):
+        yield mock_class
 
 
 @pytest.fixture

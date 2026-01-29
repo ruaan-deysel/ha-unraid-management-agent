@@ -60,6 +60,16 @@ async def _async_stop_parity_check(coordinator: UnraidDataUpdateCoordinator) -> 
     await coordinator.async_request_refresh()
 
 
+async def _async_shutdown_system(coordinator: UnraidDataUpdateCoordinator) -> None:
+    """Shutdown the Unraid system."""
+    await coordinator.client.shutdown_system()
+
+
+async def _async_reboot_system(coordinator: UnraidDataUpdateCoordinator) -> None:
+    """Reboot the Unraid system."""
+    await coordinator.client.reboot_system()
+
+
 BUTTON_DESCRIPTIONS: tuple[UnraidButtonEntityDescription, ...] = (
     UnraidButtonEntityDescription(
         key="array_start",
@@ -84,6 +94,18 @@ BUTTON_DESCRIPTIONS: tuple[UnraidButtonEntityDescription, ...] = (
         translation_key="parity_check_stop",
         icon="mdi:shield-check",
         press_fn=_async_stop_parity_check,
+    ),
+    UnraidButtonEntityDescription(
+        key="system_shutdown",
+        translation_key="system_shutdown",
+        icon="mdi:power",
+        press_fn=_async_shutdown_system,
+    ),
+    UnraidButtonEntityDescription(
+        key="system_reboot",
+        translation_key="system_reboot",
+        icon="mdi:restart",
+        press_fn=_async_reboot_system,
     ),
 )
 

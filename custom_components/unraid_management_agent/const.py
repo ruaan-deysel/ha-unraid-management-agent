@@ -6,13 +6,15 @@ from typing import Final
 DOMAIN: Final = "unraid_management_agent"
 
 # Configuration keys
-CONF_UPDATE_INTERVAL: Final = "update_interval"
 CONF_ENABLE_WEBSOCKET: Final = "enable_websocket"
 
 # Default values
 DEFAULT_PORT: Final = 8043
-DEFAULT_UPDATE_INTERVAL: Final = 30  # seconds
 DEFAULT_ENABLE_WEBSOCKET: Final = True
+
+# Fixed update interval (HA Core prohibits user-configurable polling)
+# 30 seconds provides responsive updates for local network polling
+UPDATE_INTERVAL: Final = 30
 
 # Device info
 MANUFACTURER: Final = "Lime Technology"

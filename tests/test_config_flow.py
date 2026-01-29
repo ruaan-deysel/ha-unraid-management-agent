@@ -12,7 +12,6 @@ from uma_api import UnraidConnectionError
 
 from custom_components.unraid_management_agent.const import (
     CONF_ENABLE_WEBSOCKET,
-    CONF_UPDATE_INTERVAL,
     DOMAIN,
     ERROR_CANNOT_CONNECT,
     ERROR_TIMEOUT,
@@ -79,7 +78,6 @@ async def test_form_user_with_options(
     user_input = {
         CONF_HOST: "192.168.1.100",
         CONF_PORT: 8043,
-        CONF_UPDATE_INTERVAL: 60,
         CONF_ENABLE_WEBSOCKET: False,
     }
 
@@ -235,13 +233,11 @@ async def test_options_flow(
     result2 = await hass.config_entries.options.async_configure(
         result["flow_id"],
         user_input={
-            CONF_UPDATE_INTERVAL: 60,
             CONF_ENABLE_WEBSOCKET: False,
         },
     )
 
     assert result2["type"] == FlowResultType.CREATE_ENTRY
-    assert result2["data"][CONF_UPDATE_INTERVAL] == 60
     assert result2["data"][CONF_ENABLE_WEBSOCKET] is False
 
 
@@ -284,7 +280,6 @@ async def test_reconfigure_flow(
             user_input={
                 CONF_HOST: "192.168.1.100",
                 CONF_PORT: 8043,
-                CONF_UPDATE_INTERVAL: 45,
                 CONF_ENABLE_WEBSOCKET: True,
             },
         )
@@ -329,7 +324,6 @@ async def test_reconfigure_flow_timeout(
             user_input={
                 CONF_HOST: "192.168.1.100",
                 CONF_PORT: 8043,
-                CONF_UPDATE_INTERVAL: 30,
                 CONF_ENABLE_WEBSOCKET: True,
             },
         )
@@ -376,7 +370,6 @@ async def test_reconfigure_flow_connection_error(
             user_input={
                 CONF_HOST: "192.168.1.200",
                 CONF_PORT: 8043,
-                CONF_UPDATE_INTERVAL: 30,
                 CONF_ENABLE_WEBSOCKET: True,
             },
         )

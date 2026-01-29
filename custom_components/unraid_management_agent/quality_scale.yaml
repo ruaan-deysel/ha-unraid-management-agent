@@ -8,7 +8,7 @@ rules:
     comment: Services registered in async_setup with proper validation schemas
   appropriate-polling:
     status: done
-    comment: DataUpdateCoordinator with configurable interval (5-300s)
+    comment: DataUpdateCoordinator with fixed 30s interval (local network minimum)
   brands:
     status: todo
     comment: No brand assets in HA brands repository

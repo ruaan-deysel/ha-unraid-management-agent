@@ -2,33 +2,24 @@
 
 from __future__ import annotations
 
-import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 from homeassistant.const import STATE_OFF, STATE_ON
 from homeassistant.core import HomeAssistant
 
 
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
 async def test_switch_setup(
     hass: HomeAssistant,
     mock_config_entry,
-    mock_async_unraid_client,
-    mock_websocket_client,
 ) -> None:
     """Test switch platform setup."""
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
     # Verify switch entities are created
     switch_entities = [
@@ -41,25 +32,17 @@ async def test_switch_setup(
     assert len(switch_entities) > 0
 
 
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
 async def test_container_switch(
     hass: HomeAssistant,
     mock_config_entry,
-    mock_async_unraid_client,
-    mock_websocket_client,
 ) -> None:
     """Test container switch."""
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
     # Check plex container switch (running)
     state = hass.states.get("switch.unraid_test_container_plex")
@@ -72,25 +55,17 @@ async def test_container_switch(
         assert state.state == STATE_OFF
 
 
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
 async def test_vm_switch(
     hass: HomeAssistant,
     mock_config_entry,
-    mock_async_unraid_client,
-    mock_websocket_client,
 ) -> None:
     """Test VM switch."""
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
     # Check Windows 10 VM switch (running)
     state = hass.states.get("switch.unraid_test_vm_windows_10")
@@ -103,169 +78,117 @@ async def test_vm_switch(
         assert state.state == STATE_OFF
 
 
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
 async def test_container_switch_turn_on(
     hass: HomeAssistant,
     mock_config_entry,
     mock_async_unraid_client,
-    mock_websocket_client,
 ) -> None:
     """Test turning on a container switch."""
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
-        # Turn on sonarr container (currently stopped)
-        await hass.services.async_call(
-            "switch",
-            "turn_on",
-            {"entity_id": "switch.unraid_test_container_sonarr"},
-            blocking=True,
-        )
+    # Turn on sonarr container (currently stopped)
+    await hass.services.async_call(
+        "switch",
+        "turn_on",
+        {"entity_id": "switch.unraid_test_container_sonarr"},
+        blocking=True,
+    )
 
     mock_async_unraid_client.start_container.assert_called()
 
 
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
 async def test_container_switch_turn_off(
     hass: HomeAssistant,
     mock_config_entry,
     mock_async_unraid_client,
-    mock_websocket_client,
 ) -> None:
     """Test turning off a container switch."""
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
-        # Turn off plex container (currently running)
-        await hass.services.async_call(
-            "switch",
-            "turn_off",
-            {"entity_id": "switch.unraid_test_container_plex"},
-            blocking=True,
-        )
+    # Turn off plex container (currently running)
+    await hass.services.async_call(
+        "switch",
+        "turn_off",
+        {"entity_id": "switch.unraid_test_container_plex"},
+        blocking=True,
+    )
 
     mock_async_unraid_client.stop_container.assert_called()
 
 
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
 @pytest.mark.timeout(5)
 async def test_vm_switch_turn_on_calls_api(
     hass: HomeAssistant,
     mock_config_entry,
     mock_async_unraid_client,
-    mock_websocket_client,
 ) -> None:
-    """Test turning on a VM switch calls the API (without waiting for state confirmation)."""
-    # Patch sleep to avoid waiting
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.switch.asyncio.sleep",
-            new_callable=AsyncMock,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    """Test turning on a VM switch calls the API."""
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
-        # Turn on Ubuntu VM (currently stopped) - don't block, as the wait loop will run
-        hass.async_create_task(
-            hass.services.async_call(
-                "switch",
-                "turn_on",
-                {"entity_id": "switch.unraid_test_vm_ubuntu_server"},
-                blocking=False,
-            )
-        )
-        # Wait a bit for the call to be initiated
-        await asyncio.sleep(0.1)
+    # Turn on Ubuntu VM (currently stopped)
+    await hass.services.async_call(
+        "switch",
+        "turn_on",
+        {"entity_id": "switch.unraid_test_vm_ubuntu_server"},
+        blocking=True,
+    )
 
-        # Verify start_vm was called
-        mock_async_unraid_client.start_vm.assert_called()
+    # Verify start_vm was called with VM name
+    mock_async_unraid_client.start_vm.assert_called()
 
 
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
 @pytest.mark.timeout(5)
 async def test_vm_switch_turn_off_calls_api(
     hass: HomeAssistant,
     mock_config_entry,
     mock_async_unraid_client,
-    mock_websocket_client,
 ) -> None:
-    """Test turning off a VM switch calls the API (without waiting for state confirmation)."""
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.switch.asyncio.sleep",
-            new_callable=AsyncMock,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    """Test turning off a VM switch calls the API."""
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
-        # Turn off Windows VM (currently running) - don't block
-        hass.async_create_task(
-            hass.services.async_call(
-                "switch",
-                "turn_off",
-                {"entity_id": "switch.unraid_test_vm_windows_10"},
-                blocking=False,
-            )
-        )
-        await asyncio.sleep(0.1)
+    # Turn off Windows VM (currently running)
+    await hass.services.async_call(
+        "switch",
+        "turn_off",
+        {"entity_id": "switch.unraid_test_vm_windows_10"},
+        blocking=True,
+    )
 
-        # Verify stop_vm was called
-        mock_async_unraid_client.stop_vm.assert_called()
+    # Verify stop_vm was called
+    mock_async_unraid_client.stop_vm.assert_called()
 
 
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
 async def test_switch_attributes(
     hass: HomeAssistant,
     mock_config_entry,
-    mock_async_unraid_client,
-    mock_websocket_client,
 ) -> None:
     """Test switch entity attributes."""
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
     # Check container switch has extra attributes
     state = hass.states.get("switch.unraid_test_container_plex")
@@ -280,11 +203,14 @@ async def test_switch_attributes(
         assert "friendly_name" in attrs
 
 
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
 async def test_container_switch_turn_on_error(
     hass: HomeAssistant,
     mock_config_entry,
     mock_async_unraid_client,
-    mock_websocket_client,
 ) -> None:
     """Test container switch turn on error handling."""
     from homeassistant.exceptions import HomeAssistantError
@@ -293,33 +219,26 @@ async def test_container_switch_turn_on_error(
         "Container start failed"
     )
 
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
-        with pytest.raises(HomeAssistantError):
-            await hass.services.async_call(
-                "switch",
-                "turn_on",
-                {"entity_id": "switch.unraid_test_container_sonarr"},
-                blocking=True,
-            )
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            "switch",
+            "turn_on",
+            {"entity_id": "switch.unraid_test_container_sonarr"},
+            blocking=True,
+        )
 
 
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
 async def test_container_switch_turn_off_error(
     hass: HomeAssistant,
     mock_config_entry,
     mock_async_unraid_client,
-    mock_websocket_client,
 ) -> None:
     """Test container switch turn off error handling."""
     from homeassistant.exceptions import HomeAssistantError
@@ -328,228 +247,10 @@ async def test_container_switch_turn_off_error(
         "Container stop failed"
     )
 
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
-        with pytest.raises(HomeAssistantError):
-            await hass.services.async_call(
-                "switch",
-                "turn_off",
-                {"entity_id": "switch.unraid_test_container_plex"},
-                blocking=True,
-            )
-
-
-async def test_vm_switch_turn_on_error(
-    hass: HomeAssistant,
-    mock_config_entry,
-    mock_async_unraid_client,
-    mock_websocket_client,
-) -> None:
-    """Test VM switch turn on error handling."""
-    from homeassistant.exceptions import HomeAssistantError
-
-    mock_async_unraid_client.start_vm.side_effect = Exception("VM start failed")
-
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.switch.asyncio.sleep",
-            new_callable=AsyncMock,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
-
-        with pytest.raises(HomeAssistantError):
-            await hass.services.async_call(
-                "switch",
-                "turn_on",
-                {"entity_id": "switch.unraid_test_vm_ubuntu_server"},
-                blocking=True,
-            )
-
-
-async def test_vm_switch_turn_off_error(
-    hass: HomeAssistant,
-    mock_config_entry,
-    mock_async_unraid_client,
-    mock_websocket_client,
-) -> None:
-    """Test VM switch turn off error handling."""
-    from homeassistant.exceptions import HomeAssistantError
-
-    mock_async_unraid_client.stop_vm.side_effect = Exception("VM stop failed")
-
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.switch.asyncio.sleep",
-            new_callable=AsyncMock,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
-
-        with pytest.raises(HomeAssistantError):
-            await hass.services.async_call(
-                "switch",
-                "turn_off",
-                {"entity_id": "switch.unraid_test_vm_windows_10"},
-                blocking=True,
-            )
-
-
-@pytest.mark.timeout(10)
-async def test_container_switch_turn_on_state_confirmation(
-    hass: HomeAssistant,
-    mock_config_entry,
-    mock_async_unraid_client,
-    mock_websocket_client,
-) -> None:
-    """Test container switch turn on with state confirmation success."""
-    from unittest.mock import MagicMock
-
-    # Track call count for dynamic container state
-    call_count = [0]
-
-    def get_containers_with_state_change() -> list[MagicMock]:
-        """Return containers with state changing after first call."""
-        call_count[0] += 1
-        plex = MagicMock()
-        plex.id = "abc123"
-        plex.name = "plex"
-        plex.state = "running"
-        plex.image = "linuxserver/plex"
-        plex.status = "Up 2 hours"
-        plex.created = "2024-01-01T00:00:00Z"
-
-        sonarr = MagicMock()
-        sonarr.id = "def456"
-        sonarr.name = "sonarr"
-        # After first call, change state to running (simulating successful start)
-        sonarr.state = "running" if call_count[0] > 1 else "exited"
-        sonarr.image = "linuxserver/sonarr"
-        sonarr.status = "Up 1 hour" if call_count[0] > 1 else "Exited"
-        sonarr.created = "2024-01-01T00:00:00Z"
-
-        return [plex, sonarr]
-
-    mock_async_unraid_client.list_containers.side_effect = (
-        get_containers_with_state_change
-    )
-
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.switch.asyncio.sleep",
-            new_callable=AsyncMock,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
-
-        # Turn on sonarr container and wait for state confirmation
-        await hass.services.async_call(
-            "switch",
-            "turn_on",
-            {"entity_id": "switch.unraid_test_container_sonarr"},
-            blocking=True,
-        )
-
-        # Verify state is now on
-        state = hass.states.get("switch.unraid_test_container_sonarr")
-        assert state is not None
-        assert state.state == STATE_ON
-
-
-@pytest.mark.timeout(10)
-async def test_container_switch_turn_off_state_confirmation(
-    hass: HomeAssistant,
-    mock_config_entry,
-    mock_async_unraid_client,
-    mock_websocket_client,
-) -> None:
-    """Test container switch turn off with state confirmation success."""
-    from unittest.mock import MagicMock
-
-    call_count = [0]
-
-    def get_containers_with_state_change() -> list[MagicMock]:
-        """Return containers with state changing after first call."""
-        call_count[0] += 1
-        plex = MagicMock()
-        plex.id = "abc123"
-        plex.name = "plex"
-        # After first call, change state to exited (simulating successful stop)
-        plex.state = "exited" if call_count[0] > 1 else "running"
-        plex.image = "linuxserver/plex"
-        plex.status = "Exited" if call_count[0] > 1 else "Up 2 hours"
-        plex.created = "2024-01-01T00:00:00Z"
-
-        sonarr = MagicMock()
-        sonarr.id = "def456"
-        sonarr.name = "sonarr"
-        sonarr.state = "exited"
-        sonarr.image = "linuxserver/sonarr"
-        sonarr.status = "Exited"
-        sonarr.created = "2024-01-01T00:00:00Z"
-
-        return [plex, sonarr]
-
-    mock_async_unraid_client.list_containers.side_effect = (
-        get_containers_with_state_change
-    )
-
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.switch.asyncio.sleep",
-            new_callable=AsyncMock,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
-
-        # Turn off plex container and wait for state confirmation
+    with pytest.raises(HomeAssistantError):
         await hass.services.async_call(
             "switch",
             "turn_off",
@@ -557,38 +258,25 @@ async def test_container_switch_turn_off_state_confirmation(
             blocking=True,
         )
 
-        # Verify state is now off
-        state = hass.states.get("switch.unraid_test_container_plex")
-        assert state is not None
-        assert state.state == STATE_OFF
 
-
-@pytest.mark.timeout(10)
-async def test_vm_switch_turn_on_api_call_only(
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
+async def test_vm_switch_turn_on_error(
     hass: HomeAssistant,
     mock_config_entry,
     mock_async_unraid_client,
-    mock_websocket_client,
 ) -> None:
-    """Test VM switch turn on calls API without waiting for full state confirmation."""
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.switch.asyncio.sleep",
-            new_callable=AsyncMock,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    """Test VM switch turn on error handling."""
+    from homeassistant.exceptions import HomeAssistantError
 
-        # Turn on Ubuntu VM - the mock won't change state but API should be called
+    mock_async_unraid_client.start_vm.side_effect = Exception("VM start failed")
+
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    with pytest.raises(HomeAssistantError):
         await hass.services.async_call(
             "switch",
             "turn_on",
@@ -596,36 +284,25 @@ async def test_vm_switch_turn_on_api_call_only(
             blocking=True,
         )
 
-        # Verify start_vm was called
-        mock_async_unraid_client.start_vm.assert_called()
 
-
-@pytest.mark.timeout(10)
-async def test_vm_switch_turn_off_api_call_only(
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
+async def test_vm_switch_turn_off_error(
     hass: HomeAssistant,
     mock_config_entry,
     mock_async_unraid_client,
-    mock_websocket_client,
 ) -> None:
-    """Test VM switch turn off calls API without waiting for full state confirmation."""
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.switch.asyncio.sleep",
-            new_callable=AsyncMock,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    """Test VM switch turn off error handling."""
+    from homeassistant.exceptions import HomeAssistantError
 
-        # Turn off Windows VM - the mock won't change state but API should be called
+    mock_async_unraid_client.stop_vm.side_effect = Exception("VM stop failed")
+
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    with pytest.raises(HomeAssistantError):
         await hass.services.async_call(
             "switch",
             "turn_off",
@@ -633,52 +310,154 @@ async def test_vm_switch_turn_off_api_call_only(
             blocking=True,
         )
 
-        # Verify stop_vm was called
-        mock_async_unraid_client.stop_vm.assert_called()
+
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
+@pytest.mark.timeout(10)
+async def test_container_switch_turn_on_state_confirmation(
+    hass: HomeAssistant,
+    mock_config_entry,
+    mock_async_unraid_client,
+) -> None:
+    """Test container switch turn on shows optimistic state."""
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Turn on sonarr container
+    await hass.services.async_call(
+        "switch",
+        "turn_on",
+        {"entity_id": "switch.unraid_test_container_sonarr"},
+        blocking=True,
+    )
+
+    # The optimistic state should show ON
+    state = hass.states.get("switch.unraid_test_container_sonarr")
+    assert state is not None
+    assert state.state == STATE_ON
+
+    # Verify the API was called
+    mock_async_unraid_client.start_container.assert_called()
 
 
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
+@pytest.mark.timeout(10)
+async def test_container_switch_turn_off_state_confirmation(
+    hass: HomeAssistant,
+    mock_config_entry,
+    mock_async_unraid_client,
+) -> None:
+    """Test container switch turn off shows optimistic state."""
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Turn off plex container
+    await hass.services.async_call(
+        "switch",
+        "turn_off",
+        {"entity_id": "switch.unraid_test_container_plex"},
+        blocking=True,
+    )
+
+    # The optimistic state should show OFF
+    state = hass.states.get("switch.unraid_test_container_plex")
+    assert state is not None
+    assert state.state == STATE_OFF
+
+    # Verify the API was called
+    mock_async_unraid_client.stop_container.assert_called()
+
+
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
+@pytest.mark.timeout(10)
+async def test_vm_switch_turn_on_api_call_only(
+    hass: HomeAssistant,
+    mock_config_entry,
+    mock_async_unraid_client,
+) -> None:
+    """Test VM switch turn on calls API and shows optimistic state."""
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Turn on Ubuntu VM
+    await hass.services.async_call(
+        "switch",
+        "turn_on",
+        {"entity_id": "switch.unraid_test_vm_ubuntu_server"},
+        blocking=True,
+    )
+
+    # Verify start_vm was called
+    mock_async_unraid_client.start_vm.assert_called()
+
+
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
+@pytest.mark.timeout(10)
+async def test_vm_switch_turn_off_api_call_only(
+    hass: HomeAssistant,
+    mock_config_entry,
+    mock_async_unraid_client,
+) -> None:
+    """Test VM switch turn off calls API and shows optimistic state."""
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Turn off Windows VM
+    await hass.services.async_call(
+        "switch",
+        "turn_off",
+        {"entity_id": "switch.unraid_test_vm_windows_10"},
+        blocking=True,
+    )
+
+    # Verify stop_vm was called
+    mock_async_unraid_client.stop_vm.assert_called()
+
+
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
 async def test_container_switch_turn_on_timeout(
     hass: HomeAssistant,
     mock_config_entry,
     mock_async_unraid_client,
-    mock_websocket_client,
 ) -> None:
-    """Test container switch turn on with state confirmation timeout."""
-    # Container never changes state, simulating timeout
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.switch.asyncio.sleep",
-            new_callable=AsyncMock,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    """Test container switch turn on calls API (no longer has timeout behavior)."""
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
-        # Turn on sonarr container - it won't change state, so timeout
-        await hass.services.async_call(
-            "switch",
-            "turn_on",
-            {"entity_id": "switch.unraid_test_container_sonarr"},
-            blocking=True,
-        )
+    # Turn on sonarr container
+    await hass.services.async_call(
+        "switch",
+        "turn_on",
+        {"entity_id": "switch.unraid_test_container_sonarr"},
+        blocking=True,
+    )
 
-        # Command completed without error (timeout is just a warning)
-        mock_async_unraid_client.start_container.assert_called()
+    # Command completed without error
+    mock_async_unraid_client.start_container.assert_called()
 
 
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
 async def test_container_switch_no_docker_collector(
     hass: HomeAssistant,
     mock_config_entry,
     mock_async_unraid_client,
-    mock_websocket_client,
 ) -> None:
     """Test container switches are not created when docker collector is disabled."""
     from tests.const import mock_collectors_status
@@ -693,18 +472,8 @@ async def test_container_switch_no_docker_collector(
 
     mock_async_unraid_client.get_collectors_status.return_value = collectors
 
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
     # Container switches should still exist because docker is enabled by default in our mock
     # This test validates the collector check is being called
@@ -716,11 +485,14 @@ async def test_container_switch_no_docker_collector(
     assert len(switch_entities) >= 0  # Just validate no errors
 
 
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
 async def test_vm_switch_no_vm_collector(
     hass: HomeAssistant,
     mock_config_entry,
     mock_async_unraid_client,
-    mock_websocket_client,
 ) -> None:
     """Test VM switches are not created when vm collector is disabled."""
     from tests.const import mock_collectors_status
@@ -735,18 +507,8 @@ async def test_vm_switch_no_vm_collector(
 
     mock_async_unraid_client.get_collectors_status.return_value = collectors
 
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidClient",
-            return_value=mock_async_unraid_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
     # VM switches should still exist because vm is enabled by default in our mock
     switch_entities = [
@@ -772,7 +534,7 @@ class TestContainerSwitch:
         )
 
         switch = object.__new__(UnraidContainerSwitch)
-        switch._container_id = "test_id"
+        switch._container_name = "test_container"
         switch.coordinator = MagicMock()
         switch.coordinator.data = None
 
@@ -789,7 +551,7 @@ class TestContainerSwitch:
         )
 
         switch = object.__new__(UnraidContainerSwitch)
-        switch._container_id = "test_id"
+        switch._container_name = "test_container"
         switch.coordinator = MagicMock()
         switch.coordinator.data = UnraidData()
         switch.coordinator.data.containers = []
@@ -807,12 +569,13 @@ class TestContainerSwitch:
         )
 
         switch = object.__new__(UnraidContainerSwitch)
-        switch._container_id = "missing_id"
+        switch._container_name = "missing_container"
         switch.coordinator = MagicMock()
         switch.coordinator.data = UnraidData()
 
-        # Create container with different ID
+        # Create container with different name
         mock_container = MagicMock()
+        mock_container.name = "other_container"
         mock_container.id = "other_id"
         switch.coordinator.data.containers = [mock_container]
 
@@ -829,18 +592,82 @@ class TestContainerSwitch:
         )
 
         switch = object.__new__(UnraidContainerSwitch)
-        switch._container_id = "plex_id"
+        switch._container_name = "plex"
         switch.coordinator = MagicMock()
         switch.coordinator.data = UnraidData()
 
-        # Create container with matching ID
+        # Create container with matching name
         mock_container = MagicMock()
+        mock_container.name = "plex"
         mock_container.id = "plex_id"
         mock_container.container_id = None
         switch.coordinator.data.containers = [mock_container]
 
         result = switch._find_container()
         assert result == mock_container
+
+    def test_container_id_property_with_id(self) -> None:
+        """Test _container_id returns id when available."""
+        from unittest.mock import MagicMock
+
+        from custom_components.unraid_management_agent.coordinator import UnraidData
+        from custom_components.unraid_management_agent.switch import (
+            UnraidContainerSwitch,
+        )
+
+        switch = object.__new__(UnraidContainerSwitch)
+        switch._container_name = "plex"
+        switch.coordinator = MagicMock()
+        switch.coordinator.data = UnraidData()
+
+        mock_container = MagicMock()
+        mock_container.name = "plex"
+        mock_container.id = "plex_id"
+        switch.coordinator.data.containers = [mock_container]
+
+        result = switch._container_id
+        assert result == "plex_id"
+
+    def test_container_id_property_with_container_id_fallback(self) -> None:
+        """Test _container_id returns container_id when id is None."""
+        from unittest.mock import MagicMock
+
+        from custom_components.unraid_management_agent.coordinator import UnraidData
+        from custom_components.unraid_management_agent.switch import (
+            UnraidContainerSwitch,
+        )
+
+        switch = object.__new__(UnraidContainerSwitch)
+        switch._container_name = "plex"
+        switch.coordinator = MagicMock()
+        switch.coordinator.data = UnraidData()
+
+        # Use a simple class to ensure id is truly None (MagicMock auto-creates attributes)
+        class MockContainer:
+            name = "plex"
+            id = None
+            container_id = "plex_container_id"
+
+        switch.coordinator.data.containers = [MockContainer()]
+
+        result = switch._container_id
+        assert result == "plex_container_id"
+
+    def test_container_id_property_no_container(self) -> None:
+        """Test _container_id returns None when container not found."""
+        from unittest.mock import MagicMock
+
+        from custom_components.unraid_management_agent.switch import (
+            UnraidContainerSwitch,
+        )
+
+        switch = object.__new__(UnraidContainerSwitch)
+        switch._container_name = "missing"
+        switch.coordinator = MagicMock()
+        switch.coordinator.data = None
+
+        result = switch._container_id
+        assert result is None
 
     def test_is_on_optimistic_state(self) -> None:
         """Test is_on returns optimistic state when set."""
@@ -864,7 +691,7 @@ class TestContainerSwitch:
 
         switch = object.__new__(UnraidContainerSwitch)
         switch._optimistic_state = None
-        switch._container_id = "missing"
+        switch._container_name = "missing_container"
         switch.coordinator = MagicMock()
         switch.coordinator.data = None
 
@@ -880,7 +707,7 @@ class TestContainerSwitch:
         )
 
         switch = object.__new__(UnraidContainerSwitch)
-        switch._container_id = "missing"
+        switch._container_name = "missing_container"
         switch.coordinator = MagicMock()
         switch.coordinator.data = None
 
@@ -900,7 +727,7 @@ class TestVMSwitch:
         )
 
         switch = object.__new__(UnraidVMSwitch)
-        switch._vm_id = "test_id"
+        switch._vm_name = "test_vm"
         switch.coordinator = MagicMock()
         switch.coordinator.data = None
 
@@ -917,10 +744,34 @@ class TestVMSwitch:
         )
 
         switch = object.__new__(UnraidVMSwitch)
-        switch._vm_id = "test_id"
+        switch._vm_name = "test_vm"
         switch.coordinator = MagicMock()
         switch.coordinator.data = UnraidData()
         switch.coordinator.data.vms = []
+
+        result = switch._find_vm()
+        assert result is None
+
+    def test_find_vm_not_found(self) -> None:
+        """Test _find_vm returns None when VM name doesn't match any."""
+        from unittest.mock import MagicMock
+
+        from custom_components.unraid_management_agent.coordinator import UnraidData
+        from custom_components.unraid_management_agent.switch import (
+            UnraidVMSwitch,
+        )
+
+        switch = object.__new__(UnraidVMSwitch)
+        switch._vm_name = "nonexistent_vm"
+        switch.coordinator = MagicMock()
+        switch.coordinator.data = UnraidData()
+
+        # Create VMs but with different names
+        mock_vm1 = MagicMock()
+        mock_vm1.name = "VM1"
+        mock_vm2 = MagicMock()
+        mock_vm2.name = "VM2"
+        switch.coordinator.data.vms = [mock_vm1, mock_vm2]
 
         result = switch._find_vm()
         assert result is None
@@ -935,16 +786,80 @@ class TestVMSwitch:
         )
 
         switch = object.__new__(UnraidVMSwitch)
-        switch._vm_id = "windows_id"
+        switch._vm_name = "Windows 10"
         switch.coordinator = MagicMock()
         switch.coordinator.data = UnraidData()
 
         mock_vm = MagicMock()
+        mock_vm.name = "Windows 10"
         mock_vm.id = "windows_id"
         switch.coordinator.data.vms = [mock_vm]
 
         result = switch._find_vm()
         assert result == mock_vm
+
+    def test_vm_id_property_with_id(self) -> None:
+        """Test _vm_id returns name for API calls (UMA uses name, not id)."""
+        from unittest.mock import MagicMock
+
+        from custom_components.unraid_management_agent.coordinator import UnraidData
+        from custom_components.unraid_management_agent.switch import (
+            UnraidVMSwitch,
+        )
+
+        switch = object.__new__(UnraidVMSwitch)
+        switch._vm_name = "Windows 10"
+        switch.coordinator = MagicMock()
+        switch.coordinator.data = UnraidData()
+
+        mock_vm = MagicMock()
+        mock_vm.name = "Windows 10"
+        mock_vm.id = "windows_id"
+        switch.coordinator.data.vms = [mock_vm]
+
+        result = switch._vm_id
+        # UMA API uses VM name for start/stop, not the internal ID
+        assert result == "Windows 10"
+
+    def test_vm_id_property_with_name_fallback(self) -> None:
+        """Test _vm_id returns name when id is None."""
+        from unittest.mock import MagicMock
+
+        from custom_components.unraid_management_agent.coordinator import UnraidData
+        from custom_components.unraid_management_agent.switch import (
+            UnraidVMSwitch,
+        )
+
+        switch = object.__new__(UnraidVMSwitch)
+        switch._vm_name = "Windows 10"
+        switch.coordinator = MagicMock()
+        switch.coordinator.data = UnraidData()
+
+        # Use a simple class to ensure id is truly None (MagicMock auto-creates attributes)
+        class MockVM:
+            name = "Windows 10"
+            id = None
+
+        switch.coordinator.data.vms = [MockVM()]
+
+        result = switch._vm_id
+        assert result == "Windows 10"
+
+    def test_vm_id_property_no_vm(self) -> None:
+        """Test _vm_id returns None when VM not found."""
+        from unittest.mock import MagicMock
+
+        from custom_components.unraid_management_agent.switch import (
+            UnraidVMSwitch,
+        )
+
+        switch = object.__new__(UnraidVMSwitch)
+        switch._vm_name = "missing"
+        switch.coordinator = MagicMock()
+        switch.coordinator.data = None
+
+        result = switch._vm_id
+        assert result is None
 
     def test_is_on_optimistic_state(self) -> None:
         """Test is_on returns optimistic state when set."""
@@ -968,7 +883,7 @@ class TestVMSwitch:
 
         switch = object.__new__(UnraidVMSwitch)
         switch._optimistic_state = None
-        switch._vm_id = "missing"
+        switch._vm_name = "missing_vm"
         switch.coordinator = MagicMock()
         switch.coordinator.data = None
 
@@ -984,7 +899,7 @@ class TestVMSwitch:
         )
 
         switch = object.__new__(UnraidVMSwitch)
-        switch._vm_id = "missing"
+        switch._vm_name = "missing_vm"
         switch.coordinator = MagicMock()
         switch.coordinator.data = None
 
@@ -1001,7 +916,7 @@ class TestVMSwitch:
         )
 
         switch = object.__new__(UnraidVMSwitch)
-        switch._vm_id = "windows_id"
+        switch._vm_name = "Windows 10"
         switch.coordinator = MagicMock()
         switch.coordinator.data = UnraidData()
 
@@ -1025,3 +940,257 @@ class TestVMSwitch:
         assert result["vm_memory"] == "8 GB"
         assert "guest_cpu" in result
         assert "host_cpu" in result
+
+
+class TestContainerSwitchErrors:
+    """Test container switch error handling."""
+
+    async def test_turn_on_api_error(self) -> None:
+        """Test turn on raises HomeAssistantError on API error."""
+        from unittest.mock import MagicMock
+
+        from homeassistant.exceptions import HomeAssistantError
+
+        from custom_components.unraid_management_agent.switch import (
+            UnraidContainerSwitch,
+        )
+
+        switch = object.__new__(UnraidContainerSwitch)
+        switch._container_name = "test_container"
+        switch._optimistic_state = None
+        switch.coordinator = MagicMock()
+        switch.coordinator.client = MagicMock()
+        switch.coordinator.client.start_container = AsyncMock(
+            side_effect=Exception("API Error")
+        )
+        switch.async_write_ha_state = MagicMock()
+
+        # Mock _find_container to return a container with an ID
+        mock_container = MagicMock()
+        mock_container.id = "container_id"
+        switch._find_container = MagicMock(return_value=mock_container)
+
+        with pytest.raises(HomeAssistantError):
+            await switch.async_turn_on()
+
+        # Optimistic state should be reset
+        assert switch._optimistic_state is None
+
+    async def test_turn_off_api_error(self) -> None:
+        """Test turn off raises HomeAssistantError on API error."""
+        from unittest.mock import MagicMock
+
+        from homeassistant.exceptions import HomeAssistantError
+
+        from custom_components.unraid_management_agent.switch import (
+            UnraidContainerSwitch,
+        )
+
+        switch = object.__new__(UnraidContainerSwitch)
+        switch._container_name = "test_container"
+        switch._optimistic_state = None
+        switch.coordinator = MagicMock()
+        switch.coordinator.client = MagicMock()
+        switch.coordinator.client.stop_container = AsyncMock(
+            side_effect=Exception("API Error")
+        )
+        switch.async_write_ha_state = MagicMock()
+
+        # Mock _find_container to return a container with an ID
+        mock_container = MagicMock()
+        mock_container.id = "container_id"
+        switch._find_container = MagicMock(return_value=mock_container)
+
+        with pytest.raises(HomeAssistantError):
+            await switch.async_turn_off()
+
+        # Optimistic state should be reset
+        assert switch._optimistic_state is None
+
+
+class TestVMSwitchErrors:
+    """Test VM switch error handling."""
+
+    async def test_turn_on_api_error(self) -> None:
+        """Test turn on raises HomeAssistantError on API error."""
+        from unittest.mock import MagicMock
+
+        from homeassistant.exceptions import HomeAssistantError
+
+        from custom_components.unraid_management_agent.switch import (
+            UnraidVMSwitch,
+        )
+
+        switch = object.__new__(UnraidVMSwitch)
+        switch._vm_name = "test_vm"
+        switch._optimistic_state = None
+        switch.coordinator = MagicMock()
+        switch.coordinator.client = MagicMock()
+        switch.coordinator.client.start_vm = AsyncMock(
+            side_effect=Exception("API Error")
+        )
+        switch.async_write_ha_state = MagicMock()
+
+        # Mock _find_vm to return a VM with an ID
+        mock_vm = MagicMock()
+        mock_vm.id = "vm_id"
+        switch._find_vm = MagicMock(return_value=mock_vm)
+
+        with pytest.raises(HomeAssistantError):
+            await switch.async_turn_on()
+
+        # Optimistic state should be reset
+        assert switch._optimistic_state is None
+
+    async def test_turn_off_api_error(self) -> None:
+        """Test turn off raises HomeAssistantError on API error."""
+        from unittest.mock import MagicMock
+
+        from homeassistant.exceptions import HomeAssistantError
+
+        from custom_components.unraid_management_agent.switch import (
+            UnraidVMSwitch,
+        )
+
+        switch = object.__new__(UnraidVMSwitch)
+        switch._vm_name = "test_vm"
+        switch._optimistic_state = None
+        switch.coordinator = MagicMock()
+        switch.coordinator.client = MagicMock()
+        switch.coordinator.client.stop_vm = AsyncMock(
+            side_effect=Exception("API Error")
+        )
+        switch.async_write_ha_state = MagicMock()
+
+        # Mock _find_vm to return a VM with an ID
+        mock_vm = MagicMock()
+        mock_vm.id = "vm_id"
+        switch._find_vm = MagicMock(return_value=mock_vm)
+
+        with pytest.raises(HomeAssistantError):
+            await switch.async_turn_off()
+
+        # Optimistic state should be reset
+        assert switch._optimistic_state is None
+
+
+class TestVMSwitchStateConfirmation:
+    """Test VM switch successful state confirmation."""
+
+    async def test_turn_on_state_confirmed_running(self) -> None:
+        """Test turn on calls API and sets optimistic state."""
+        from unittest.mock import MagicMock
+
+        from custom_components.unraid_management_agent.switch import (
+            UnraidVMSwitch,
+        )
+
+        switch = object.__new__(UnraidVMSwitch)
+        switch._vm_name = "test_vm"
+        switch._optimistic_state = None
+        switch.coordinator = MagicMock()
+        switch.coordinator.client = MagicMock()
+        switch.coordinator.client.start_vm = AsyncMock()
+        switch.coordinator.async_request_refresh = AsyncMock()
+        switch.async_write_ha_state = MagicMock()
+
+        mock_vm = MagicMock()
+        mock_vm.name = "test_vm"
+        switch._find_vm = MagicMock(return_value=mock_vm)
+
+        await switch.async_turn_on()
+
+        # API should be called and optimistic state should be True
+        switch.coordinator.client.start_vm.assert_called_once_with("test_vm")
+        assert switch._optimistic_state is True
+        switch.coordinator.async_request_refresh.assert_called_once()
+
+    async def test_turn_off_state_confirmed_stopped(self) -> None:
+        """Test turn off calls API and sets optimistic state."""
+        from unittest.mock import MagicMock
+
+        from custom_components.unraid_management_agent.switch import (
+            UnraidVMSwitch,
+        )
+
+        switch = object.__new__(UnraidVMSwitch)
+        switch._vm_name = "test_vm"
+        switch._optimistic_state = None
+        switch.coordinator = MagicMock()
+        switch.coordinator.client = MagicMock()
+        switch.coordinator.client.stop_vm = AsyncMock()
+        switch.coordinator.async_request_refresh = AsyncMock()
+        switch.async_write_ha_state = MagicMock()
+
+        mock_vm = MagicMock()
+        mock_vm.name = "test_vm"
+        switch._find_vm = MagicMock(return_value=mock_vm)
+
+        await switch.async_turn_off()
+
+        # API should be called and optimistic state should be False
+        switch.coordinator.client.stop_vm.assert_called_once_with("test_vm")
+        assert switch._optimistic_state is False
+        switch.coordinator.async_request_refresh.assert_called_once()
+
+
+class TestContainerSwitchStateConfirmation:
+    """Test container switch successful state confirmation."""
+
+    async def test_turn_on_state_confirmed_running(self) -> None:
+        """Test turn on calls API and sets optimistic state."""
+        from unittest.mock import MagicMock
+
+        from custom_components.unraid_management_agent.switch import (
+            UnraidContainerSwitch,
+        )
+
+        switch = object.__new__(UnraidContainerSwitch)
+        switch._container_name = "test_container"
+        switch._optimistic_state = None
+        switch.coordinator = MagicMock()
+        switch.coordinator.client = MagicMock()
+        switch.coordinator.client.start_container = AsyncMock()
+        switch.coordinator.async_request_refresh = AsyncMock()
+        switch.async_write_ha_state = MagicMock()
+
+        mock_container = MagicMock()
+        mock_container.id = "container_id"
+        switch._find_container = MagicMock(return_value=mock_container)
+
+        await switch.async_turn_on()
+
+        # API should be called and optimistic state should be True
+        switch.coordinator.client.start_container.assert_called_once_with(
+            "container_id"
+        )
+        assert switch._optimistic_state is True
+        switch.coordinator.async_request_refresh.assert_called_once()
+
+    async def test_turn_off_state_confirmed_stopped(self) -> None:
+        """Test turn off calls API and sets optimistic state."""
+        from unittest.mock import MagicMock
+
+        from custom_components.unraid_management_agent.switch import (
+            UnraidContainerSwitch,
+        )
+
+        switch = object.__new__(UnraidContainerSwitch)
+        switch._container_name = "test_container"
+        switch._optimistic_state = None
+        switch.coordinator = MagicMock()
+        switch.coordinator.client = MagicMock()
+        switch.coordinator.client.stop_container = AsyncMock()
+        switch.coordinator.async_request_refresh = AsyncMock()
+        switch.async_write_ha_state = MagicMock()
+
+        mock_container = MagicMock()
+        mock_container.id = "container_id"
+        switch._find_container = MagicMock(return_value=mock_container)
+
+        await switch.async_turn_off()
+
+        # API should be called and optimistic state should be False
+        switch.coordinator.client.stop_container.assert_called_once_with("container_id")
+        assert switch._optimistic_state is False
+        switch.coordinator.async_request_refresh.assert_called_once()

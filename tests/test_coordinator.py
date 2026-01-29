@@ -74,7 +74,6 @@ class TestCoordinatorWebSocketEvents:
             hass,
             entry=entry,
             client=mock_client,
-            update_interval=30,
             enable_websocket=True,
         )
 
@@ -350,7 +349,6 @@ class TestCoordinatorWebSocketManagement:
             hass,
             entry=entry,
             client=mock_client,
-            update_interval=30,
             enable_websocket=True,
         )
 
@@ -365,7 +363,6 @@ class TestCoordinatorWebSocketManagement:
             hass,
             entry=entry,
             client=mock_client,
-            update_interval=30,
             enable_websocket=False,
         )
 
@@ -468,16 +465,16 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        await hass.services.async_call(
-            DOMAIN,
-            "container_start",
-            {"container_id": "test_container"},
-            blocking=True,
-        )
+            await hass.services.async_call(
+                DOMAIN,
+                "container_start",
+                {"container_id": "test_container"},
+                blocking=True,
+            )
 
-        mock_async_unraid_client.start_container.assert_called_once_with(
-            "test_container"
-        )
+            mock_async_unraid_client.start_container.assert_called_once_with(
+                "test_container"
+            )
 
     @pytest.mark.asyncio
     async def test_container_start_service_error(
@@ -533,16 +530,16 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        await hass.services.async_call(
-            DOMAIN,
-            "container_stop",
-            {"container_id": "test_container"},
-            blocking=True,
-        )
+            await hass.services.async_call(
+                DOMAIN,
+                "container_stop",
+                {"container_id": "test_container"},
+                blocking=True,
+            )
 
-        mock_async_unraid_client.stop_container.assert_called_once_with(
-            "test_container"
-        )
+            mock_async_unraid_client.stop_container.assert_called_once_with(
+                "test_container"
+            )
 
     @pytest.mark.asyncio
     async def test_container_stop_service_error(
@@ -598,16 +595,16 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        await hass.services.async_call(
-            DOMAIN,
-            "container_restart",
-            {"container_id": "test_container"},
-            blocking=True,
-        )
+            await hass.services.async_call(
+                DOMAIN,
+                "container_restart",
+                {"container_id": "test_container"},
+                blocking=True,
+            )
 
-        mock_async_unraid_client.restart_container.assert_called_once_with(
-            "test_container"
-        )
+            mock_async_unraid_client.restart_container.assert_called_once_with(
+                "test_container"
+            )
 
     @pytest.mark.asyncio
     async def test_container_restart_service_error(
@@ -665,16 +662,16 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        await hass.services.async_call(
-            DOMAIN,
-            "container_pause",
-            {"container_id": "test_container"},
-            blocking=True,
-        )
+            await hass.services.async_call(
+                DOMAIN,
+                "container_pause",
+                {"container_id": "test_container"},
+                blocking=True,
+            )
 
-        mock_async_unraid_client.pause_container.assert_called_once_with(
-            "test_container"
-        )
+            mock_async_unraid_client.pause_container.assert_called_once_with(
+                "test_container"
+            )
 
     @pytest.mark.asyncio
     async def test_container_pause_service_error(
@@ -730,16 +727,16 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        await hass.services.async_call(
-            DOMAIN,
-            "container_resume",
-            {"container_id": "test_container"},
-            blocking=True,
-        )
+            await hass.services.async_call(
+                DOMAIN,
+                "container_resume",
+                {"container_id": "test_container"},
+                blocking=True,
+            )
 
-        mock_async_unraid_client.unpause_container.assert_called_once_with(
-            "test_container"
-        )
+            mock_async_unraid_client.unpause_container.assert_called_once_with(
+                "test_container"
+            )
 
     @pytest.mark.asyncio
     async def test_container_resume_service_error(
@@ -797,14 +794,14 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        await hass.services.async_call(
-            DOMAIN,
-            "vm_start",
-            {"vm_id": "test_vm"},
-            blocking=True,
-        )
+            await hass.services.async_call(
+                DOMAIN,
+                "vm_start",
+                {"vm_id": "test_vm"},
+                blocking=True,
+            )
 
-        mock_async_unraid_client.start_vm.assert_called_once_with("test_vm")
+            mock_async_unraid_client.start_vm.assert_called_once_with("test_vm")
 
     @pytest.mark.asyncio
     async def test_vm_start_service_error(
@@ -860,14 +857,14 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        await hass.services.async_call(
-            DOMAIN,
-            "vm_stop",
-            {"vm_id": "test_vm"},
-            blocking=True,
-        )
+            await hass.services.async_call(
+                DOMAIN,
+                "vm_stop",
+                {"vm_id": "test_vm"},
+                blocking=True,
+            )
 
-        mock_async_unraid_client.stop_vm.assert_called_once_with("test_vm")
+            mock_async_unraid_client.stop_vm.assert_called_once_with("test_vm")
 
     @pytest.mark.asyncio
     async def test_vm_stop_service_error(
@@ -923,14 +920,14 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        await hass.services.async_call(
-            DOMAIN,
-            "vm_restart",
-            {"vm_id": "test_vm"},
-            blocking=True,
-        )
+            await hass.services.async_call(
+                DOMAIN,
+                "vm_restart",
+                {"vm_id": "test_vm"},
+                blocking=True,
+            )
 
-        mock_async_unraid_client.restart_vm.assert_called_once_with("test_vm")
+            mock_async_unraid_client.restart_vm.assert_called_once_with("test_vm")
 
     @pytest.mark.asyncio
     async def test_vm_restart_service_error(
@@ -986,14 +983,14 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        await hass.services.async_call(
-            DOMAIN,
-            "vm_pause",
-            {"vm_id": "test_vm"},
-            blocking=True,
-        )
+            await hass.services.async_call(
+                DOMAIN,
+                "vm_pause",
+                {"vm_id": "test_vm"},
+                blocking=True,
+            )
 
-        mock_async_unraid_client.pause_vm.assert_called_once_with("test_vm")
+            mock_async_unraid_client.pause_vm.assert_called_once_with("test_vm")
 
     @pytest.mark.asyncio
     async def test_vm_pause_service_error(
@@ -1049,14 +1046,14 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        await hass.services.async_call(
-            DOMAIN,
-            "vm_resume",
-            {"vm_id": "test_vm"},
-            blocking=True,
-        )
+            await hass.services.async_call(
+                DOMAIN,
+                "vm_resume",
+                {"vm_id": "test_vm"},
+                blocking=True,
+            )
 
-        mock_async_unraid_client.resume_vm.assert_called_once_with("test_vm")
+            mock_async_unraid_client.resume_vm.assert_called_once_with("test_vm")
 
     @pytest.mark.asyncio
     async def test_vm_resume_service_error(
@@ -1112,14 +1109,14 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        await hass.services.async_call(
-            DOMAIN,
-            "vm_hibernate",
-            {"vm_id": "test_vm"},
-            blocking=True,
-        )
+            await hass.services.async_call(
+                DOMAIN,
+                "vm_hibernate",
+                {"vm_id": "test_vm"},
+                blocking=True,
+            )
 
-        mock_async_unraid_client.hibernate_vm.assert_called_once_with("test_vm")
+            mock_async_unraid_client.hibernate_vm.assert_called_once_with("test_vm")
 
     @pytest.mark.asyncio
     async def test_vm_hibernate_service_error(
@@ -1177,14 +1174,14 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        await hass.services.async_call(
-            DOMAIN,
-            "vm_force_stop",
-            {"vm_id": "test_vm"},
-            blocking=True,
-        )
+            await hass.services.async_call(
+                DOMAIN,
+                "vm_force_stop",
+                {"vm_id": "test_vm"},
+                blocking=True,
+            )
 
-        mock_async_unraid_client.force_stop_vm.assert_called_once_with("test_vm")
+            mock_async_unraid_client.force_stop_vm.assert_called_once_with("test_vm")
 
     @pytest.mark.asyncio
     async def test_vm_force_stop_service_error(
@@ -1242,14 +1239,14 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        await hass.services.async_call(
-            DOMAIN,
-            "parity_check_pause",
-            {},
-            blocking=True,
-        )
+            await hass.services.async_call(
+                DOMAIN,
+                "parity_check_pause",
+                {},
+                blocking=True,
+            )
 
-        mock_async_unraid_client.pause_parity_check.assert_called_once()
+            mock_async_unraid_client.pause_parity_check.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_parity_check_pause_service_error(
@@ -1307,14 +1304,14 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        await hass.services.async_call(
-            DOMAIN,
-            "parity_check_resume",
-            {},
-            blocking=True,
-        )
+            await hass.services.async_call(
+                DOMAIN,
+                "parity_check_resume",
+                {},
+                blocking=True,
+            )
 
-        mock_async_unraid_client.resume_parity_check.assert_called_once()
+            mock_async_unraid_client.resume_parity_check.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_parity_check_resume_service_error(
@@ -1497,7 +1494,6 @@ class TestCoordinatorIsCollectorEnabled:
             hass,
             entry=entry,
             client=mock_client,
-            update_interval=30,
             enable_websocket=True,
         )
 
@@ -2260,3 +2256,745 @@ class TestUnraidEntity:
             # Should return True
             result = entity.available
             assert result is True
+
+
+class TestCoordinatorServiceSettings:
+    """Tests for service enabled checks in coordinator."""
+
+    @pytest.fixture
+    def coordinator(self, hass: HomeAssistant) -> UnraidDataUpdateCoordinator:
+        """Create a coordinator for testing."""
+        entry = _create_mock_entry(hass)
+        mock_client = MagicMock()
+        mock_client.host = "192.168.1.100"
+        mock_client.port = 8043
+        return UnraidDataUpdateCoordinator(
+            hass,
+            entry=entry,
+            client=mock_client,
+            enable_websocket=False,
+        )
+
+    def test_is_docker_enabled_no_data(self, coordinator) -> None:
+        """Test is_docker_enabled returns True when no data."""
+        coordinator.data = None
+        assert coordinator.is_docker_enabled() is True
+
+    def test_is_docker_enabled_no_settings(self, coordinator) -> None:
+        """Test is_docker_enabled returns True when no docker_settings."""
+        coordinator.data = MagicMock()
+        coordinator.data.docker_settings = None
+        assert coordinator.is_docker_enabled() is True
+
+    def test_is_docker_enabled_true(self, coordinator) -> None:
+        """Test is_docker_enabled returns True when enabled."""
+        coordinator.data = MagicMock()
+        mock_settings = MagicMock()
+        mock_settings.enabled = True
+        coordinator.data.docker_settings = mock_settings
+        assert coordinator.is_docker_enabled() is True
+
+    def test_is_docker_enabled_false(self, coordinator) -> None:
+        """Test is_docker_enabled returns False when disabled."""
+        coordinator.data = MagicMock()
+        mock_settings = MagicMock()
+        mock_settings.enabled = False
+        coordinator.data.docker_settings = mock_settings
+        assert coordinator.is_docker_enabled() is False
+
+    def test_is_vm_enabled_no_data(self, coordinator) -> None:
+        """Test is_vm_enabled returns True when no data."""
+        coordinator.data = None
+        assert coordinator.is_vm_enabled() is True
+
+    def test_is_vm_enabled_no_settings(self, coordinator) -> None:
+        """Test is_vm_enabled returns True when no vm_settings."""
+        coordinator.data = MagicMock()
+        coordinator.data.vm_settings = None
+        assert coordinator.is_vm_enabled() is True
+
+    def test_is_vm_enabled_true(self, coordinator) -> None:
+        """Test is_vm_enabled returns True when enabled."""
+        coordinator.data = MagicMock()
+        mock_settings = MagicMock()
+        mock_settings.enabled = True
+        coordinator.data.vm_settings = mock_settings
+        assert coordinator.is_vm_enabled() is True
+
+    def test_is_vm_enabled_false(self, coordinator) -> None:
+        """Test is_vm_enabled returns False when disabled."""
+        coordinator.data = MagicMock()
+        mock_settings = MagicMock()
+        mock_settings.enabled = False
+        coordinator.data.vm_settings = mock_settings
+        assert coordinator.is_vm_enabled() is False
+
+
+class TestCoordinatorRawMessageHandling:
+    """Tests for raw WebSocket message handling in coordinator."""
+
+    @pytest.fixture
+    def coordinator(self, hass: HomeAssistant) -> UnraidDataUpdateCoordinator:
+        """Create a coordinator for testing."""
+        entry = _create_mock_entry(hass)
+        mock_client = MagicMock()
+        mock_client.host = "192.168.1.100"
+        mock_client.port = 8043
+        return UnraidDataUpdateCoordinator(
+            hass,
+            entry=entry,
+            client=mock_client,
+            enable_websocket=True,
+        )
+
+    def test_handle_raw_message_notifications_response(self, coordinator) -> None:
+        """Test handling raw message with NotificationsResponse format."""
+        coordinator.data = MagicMock()
+
+        # NotificationsResponse format has both notifications and overview keys
+        raw_data = {
+            "notifications": [{"id": 1, "message": "Test notification"}],
+            "overview": {"unread": 1, "archive": 0},
+        }
+
+        with patch.object(coordinator, "async_set_updated_data"):
+            coordinator._handle_raw_message(raw_data)
+
+        assert coordinator.data.notifications is not None
+
+    def test_handle_raw_message_parse_error(self, coordinator) -> None:
+        """Test handling raw message with parse error."""
+        coordinator.data = MagicMock()
+
+        # Data that will fail to parse
+        raw_data = {"invalid": "data"}
+
+        with patch(
+            "custom_components.unraid_management_agent.coordinator.parse_event",
+            side_effect=Exception("Parse error"),
+        ):
+            # Should not raise, just log debug
+            coordinator._handle_raw_message(raw_data)
+
+    def test_handle_raw_message_normal_event(self, coordinator) -> None:
+        """Test handling raw message with normal event."""
+        coordinator.data = MagicMock()
+
+        raw_data = {"type": "system_update", "data": {"hostname": "tower"}}
+
+        mock_event = MagicMock()
+        mock_event.event_type = EventType.SYSTEM_UPDATE
+        mock_event.data = MagicMock()
+
+        with (
+            patch(
+                "custom_components.unraid_management_agent.coordinator.parse_event",
+                return_value=mock_event,
+            ),
+            patch.object(coordinator, "_handle_websocket_event") as mock_handle,
+            patch.object(coordinator, "async_set_updated_data"),
+        ):
+            coordinator._handle_raw_message(raw_data)
+            mock_handle.assert_called_once_with(mock_event)
+
+
+class TestCoordinatorAPIErrorHandling:
+    """Tests for coordinator API error handling branches."""
+
+    @pytest.fixture
+    def coordinator(self, hass: HomeAssistant) -> UnraidDataUpdateCoordinator:
+        """Create a coordinator for testing."""
+        entry = _create_mock_entry(hass)
+        mock_client = MagicMock()
+        mock_client.host = "192.168.1.100"
+        mock_client.port = 8043
+        return UnraidDataUpdateCoordinator(
+            hass,
+            entry=entry,
+            client=mock_client,
+            enable_websocket=False,
+        )
+
+    @pytest.fixture
+    def mock_repairs(self):
+        """Mock the repairs module to prevent import issues."""
+        with patch(
+            "custom_components.unraid_management_agent.repairs.async_check_and_create_issues",
+            new_callable=AsyncMock,
+        ) as mock_check:
+            yield mock_check
+
+    @pytest.mark.asyncio
+    async def test_api_error_logs_warning_once(self, coordinator, mock_repairs) -> None:
+        """Test API error logs warning only once when repairs module fails."""
+        from homeassistant.helpers.update_coordinator import UpdateFailed
+        from uma_api.models import SystemInfo
+
+        # Setup valid API responses
+        coordinator.client.get_system_info = AsyncMock(
+            return_value=SystemInfo(hostname="tower", uptime_seconds=1000)
+        )
+        coordinator.client.get_array_status = AsyncMock(
+            return_value=mock_array_status()
+        )
+        coordinator.client.get_network_interfaces = AsyncMock(
+            return_value=mock_network_interfaces()
+        )
+        coordinator.client.list_disks = AsyncMock(return_value=mock_disks())
+        coordinator.client.list_containers = AsyncMock(return_value=mock_containers())
+        coordinator.client.list_vms = AsyncMock(return_value=mock_vms())
+        coordinator.client.list_shares = AsyncMock(return_value=[])
+        coordinator.client.list_gpus = AsyncMock(return_value=mock_gpu_list())
+        coordinator.client.get_ups_info = AsyncMock(return_value=mock_ups_info())
+        coordinator.client.get_notifications = AsyncMock(return_value=None)
+        coordinator.client.list_zfs_pools = AsyncMock(return_value=[])
+        coordinator.client.list_zfs_datasets = AsyncMock(return_value=[])
+        coordinator.client.list_zfs_snapshots = AsyncMock(return_value=[])
+        coordinator.client.get_zfs_arc_stats = AsyncMock(return_value=None)
+        coordinator.client.get_collectors_status = AsyncMock(
+            return_value=mock_collectors_status()
+        )
+        coordinator.client.get_disk_settings = AsyncMock(return_value=None)
+        coordinator.client.get_mover_settings = AsyncMock(return_value=None)
+        coordinator.client.get_parity_schedule = AsyncMock(return_value=None)
+        coordinator.client.get_parity_history = AsyncMock(return_value=None)
+        coordinator.client.get_flash_info = AsyncMock(return_value=None)
+        coordinator.client.list_plugins = AsyncMock(return_value=None)
+        coordinator.client.get_update_status = AsyncMock(return_value=None)
+        coordinator.client.get_docker_settings = AsyncMock(return_value=None)
+        coordinator.client.get_vm_settings = AsyncMock(return_value=None)
+
+        # Make repairs module throw an error
+        mock_repairs.side_effect = Exception("Repairs error")
+
+        # First error should raise UpdateFailed
+        with pytest.raises(UpdateFailed):
+            await coordinator._async_update_data()
+
+        assert coordinator._unavailable_logged is True
+        assert coordinator.update_success is False
+
+    @pytest.mark.asyncio
+    async def test_disk_settings_error_continues(
+        self, coordinator, mock_repairs
+    ) -> None:
+        """Test disk_settings error is logged but update continues."""
+        from uma_api.models import SystemInfo
+
+        coordinator.client.get_system_info = AsyncMock(
+            return_value=SystemInfo(hostname="tower", uptime_seconds=1000)
+        )
+        coordinator.client.get_array_status = AsyncMock(
+            return_value=mock_array_status()
+        )
+        coordinator.client.get_network_interfaces = AsyncMock(
+            return_value=mock_network_interfaces()
+        )
+        coordinator.client.list_disks = AsyncMock(return_value=mock_disks())
+        coordinator.client.list_containers = AsyncMock(return_value=mock_containers())
+        coordinator.client.list_vms = AsyncMock(return_value=mock_vms())
+        coordinator.client.list_shares = AsyncMock(return_value=[])
+        coordinator.client.list_gpus = AsyncMock(return_value=mock_gpu_list())
+        coordinator.client.get_ups_info = AsyncMock(return_value=mock_ups_info())
+        coordinator.client.get_notifications = AsyncMock(return_value=None)
+        coordinator.client.list_zfs_pools = AsyncMock(return_value=[])
+        coordinator.client.list_zfs_datasets = AsyncMock(return_value=[])
+        coordinator.client.list_zfs_snapshots = AsyncMock(return_value=[])
+        coordinator.client.get_zfs_arc_stats = AsyncMock(return_value=None)
+        coordinator.client.get_collectors_status = AsyncMock(
+            return_value=mock_collectors_status()
+        )
+        # This one fails
+        coordinator.client.get_disk_settings = AsyncMock(
+            side_effect=Exception("Disk settings error")
+        )
+        coordinator.client.get_mover_settings = AsyncMock(return_value=None)
+        coordinator.client.get_parity_schedule = AsyncMock(return_value=None)
+        coordinator.client.get_parity_history = AsyncMock(return_value=None)
+        coordinator.client.get_flash_info = AsyncMock(return_value=None)
+        coordinator.client.list_plugins = AsyncMock(return_value=None)
+        coordinator.client.get_update_status = AsyncMock(return_value=None)
+        coordinator.client.get_docker_settings = AsyncMock(return_value=None)
+        coordinator.client.get_vm_settings = AsyncMock(return_value=None)
+
+        with patch(
+            "custom_components.unraid_management_agent.repairs.async_check_and_create_issues",
+            new_callable=AsyncMock,
+        ):
+            data = await coordinator._async_update_data()
+
+        # Update should succeed despite disk_settings error
+        assert data is not None
+        assert data.disk_settings is None
+
+    @pytest.mark.asyncio
+    async def test_mover_settings_error_continues(
+        self, coordinator, mock_repairs
+    ) -> None:
+        """Test mover_settings error is logged but update continues."""
+        from uma_api.models import SystemInfo
+
+        coordinator.client.get_system_info = AsyncMock(
+            return_value=SystemInfo(hostname="tower", uptime_seconds=1000)
+        )
+        coordinator.client.get_array_status = AsyncMock(
+            return_value=mock_array_status()
+        )
+        coordinator.client.get_network_interfaces = AsyncMock(
+            return_value=mock_network_interfaces()
+        )
+        coordinator.client.list_disks = AsyncMock(return_value=mock_disks())
+        coordinator.client.list_containers = AsyncMock(return_value=mock_containers())
+        coordinator.client.list_vms = AsyncMock(return_value=mock_vms())
+        coordinator.client.list_shares = AsyncMock(return_value=[])
+        coordinator.client.list_gpus = AsyncMock(return_value=mock_gpu_list())
+        coordinator.client.get_ups_info = AsyncMock(return_value=mock_ups_info())
+        coordinator.client.get_notifications = AsyncMock(return_value=None)
+        coordinator.client.list_zfs_pools = AsyncMock(return_value=[])
+        coordinator.client.list_zfs_datasets = AsyncMock(return_value=[])
+        coordinator.client.list_zfs_snapshots = AsyncMock(return_value=[])
+        coordinator.client.get_zfs_arc_stats = AsyncMock(return_value=None)
+        coordinator.client.get_collectors_status = AsyncMock(
+            return_value=mock_collectors_status()
+        )
+        coordinator.client.get_disk_settings = AsyncMock(return_value=None)
+        # This one fails
+        coordinator.client.get_mover_settings = AsyncMock(
+            side_effect=Exception("Mover settings error")
+        )
+        coordinator.client.get_parity_schedule = AsyncMock(return_value=None)
+        coordinator.client.get_parity_history = AsyncMock(return_value=None)
+        coordinator.client.get_flash_info = AsyncMock(return_value=None)
+        coordinator.client.list_plugins = AsyncMock(return_value=None)
+        coordinator.client.get_update_status = AsyncMock(return_value=None)
+        coordinator.client.get_docker_settings = AsyncMock(return_value=None)
+        coordinator.client.get_vm_settings = AsyncMock(return_value=None)
+
+        with patch(
+            "custom_components.unraid_management_agent.repairs.async_check_and_create_issues",
+            new_callable=AsyncMock,
+        ):
+            data = await coordinator._async_update_data()
+
+        # Update should succeed despite mover_settings error
+        assert data is not None
+        assert data.mover_settings is None
+
+    @pytest.mark.asyncio
+    async def test_parity_schedule_error_continues(
+        self, coordinator, mock_repairs
+    ) -> None:
+        """Test parity_schedule error is logged but update continues."""
+        from uma_api.models import SystemInfo
+
+        coordinator.client.get_system_info = AsyncMock(
+            return_value=SystemInfo(hostname="tower", uptime_seconds=1000)
+        )
+        coordinator.client.get_array_status = AsyncMock(
+            return_value=mock_array_status()
+        )
+        coordinator.client.get_network_interfaces = AsyncMock(
+            return_value=mock_network_interfaces()
+        )
+        coordinator.client.list_disks = AsyncMock(return_value=mock_disks())
+        coordinator.client.list_containers = AsyncMock(return_value=mock_containers())
+        coordinator.client.list_vms = AsyncMock(return_value=mock_vms())
+        coordinator.client.list_shares = AsyncMock(return_value=[])
+        coordinator.client.list_gpus = AsyncMock(return_value=mock_gpu_list())
+        coordinator.client.get_ups_info = AsyncMock(return_value=mock_ups_info())
+        coordinator.client.get_notifications = AsyncMock(return_value=None)
+        coordinator.client.list_zfs_pools = AsyncMock(return_value=[])
+        coordinator.client.list_zfs_datasets = AsyncMock(return_value=[])
+        coordinator.client.list_zfs_snapshots = AsyncMock(return_value=[])
+        coordinator.client.get_zfs_arc_stats = AsyncMock(return_value=None)
+        coordinator.client.get_collectors_status = AsyncMock(
+            return_value=mock_collectors_status()
+        )
+        coordinator.client.get_disk_settings = AsyncMock(return_value=None)
+        coordinator.client.get_mover_settings = AsyncMock(return_value=None)
+        # This one fails
+        coordinator.client.get_parity_schedule = AsyncMock(
+            side_effect=Exception("Parity schedule error")
+        )
+        coordinator.client.get_parity_history = AsyncMock(return_value=None)
+        coordinator.client.get_flash_info = AsyncMock(return_value=None)
+        coordinator.client.list_plugins = AsyncMock(return_value=None)
+        coordinator.client.get_update_status = AsyncMock(return_value=None)
+        coordinator.client.get_docker_settings = AsyncMock(return_value=None)
+        coordinator.client.get_vm_settings = AsyncMock(return_value=None)
+
+        with patch(
+            "custom_components.unraid_management_agent.repairs.async_check_and_create_issues",
+            new_callable=AsyncMock,
+        ):
+            data = await coordinator._async_update_data()
+
+        # Update should succeed despite parity_schedule error
+        assert data is not None
+        assert data.parity_schedule is None
+
+    @pytest.mark.asyncio
+    async def test_parity_history_error_continues(
+        self, coordinator, mock_repairs
+    ) -> None:
+        """Test parity_history error is logged but update continues."""
+        from uma_api.models import SystemInfo
+
+        coordinator.client.get_system_info = AsyncMock(
+            return_value=SystemInfo(hostname="tower", uptime_seconds=1000)
+        )
+        coordinator.client.get_array_status = AsyncMock(
+            return_value=mock_array_status()
+        )
+        coordinator.client.get_network_interfaces = AsyncMock(
+            return_value=mock_network_interfaces()
+        )
+        coordinator.client.list_disks = AsyncMock(return_value=mock_disks())
+        coordinator.client.list_containers = AsyncMock(return_value=mock_containers())
+        coordinator.client.list_vms = AsyncMock(return_value=mock_vms())
+        coordinator.client.list_shares = AsyncMock(return_value=[])
+        coordinator.client.list_gpus = AsyncMock(return_value=mock_gpu_list())
+        coordinator.client.get_ups_info = AsyncMock(return_value=mock_ups_info())
+        coordinator.client.get_notifications = AsyncMock(return_value=None)
+        coordinator.client.list_zfs_pools = AsyncMock(return_value=[])
+        coordinator.client.list_zfs_datasets = AsyncMock(return_value=[])
+        coordinator.client.list_zfs_snapshots = AsyncMock(return_value=[])
+        coordinator.client.get_zfs_arc_stats = AsyncMock(return_value=None)
+        coordinator.client.get_collectors_status = AsyncMock(
+            return_value=mock_collectors_status()
+        )
+        coordinator.client.get_disk_settings = AsyncMock(return_value=None)
+        coordinator.client.get_mover_settings = AsyncMock(return_value=None)
+        coordinator.client.get_parity_schedule = AsyncMock(return_value=None)
+        # This one fails
+        coordinator.client.get_parity_history = AsyncMock(
+            side_effect=Exception("Parity history error")
+        )
+        coordinator.client.get_flash_info = AsyncMock(return_value=None)
+        coordinator.client.list_plugins = AsyncMock(return_value=None)
+        coordinator.client.get_update_status = AsyncMock(return_value=None)
+        coordinator.client.get_docker_settings = AsyncMock(return_value=None)
+        coordinator.client.get_vm_settings = AsyncMock(return_value=None)
+
+        with patch(
+            "custom_components.unraid_management_agent.repairs.async_check_and_create_issues",
+            new_callable=AsyncMock,
+        ):
+            data = await coordinator._async_update_data()
+
+        # Update should succeed despite parity_history error
+        assert data is not None
+        assert data.parity_history is None
+
+    @pytest.mark.asyncio
+    async def test_flash_info_error_continues(self, coordinator, mock_repairs) -> None:
+        """Test flash_info error is logged but update continues."""
+        from uma_api.models import SystemInfo
+
+        coordinator.client.get_system_info = AsyncMock(
+            return_value=SystemInfo(hostname="tower", uptime_seconds=1000)
+        )
+        coordinator.client.get_array_status = AsyncMock(
+            return_value=mock_array_status()
+        )
+        coordinator.client.get_network_interfaces = AsyncMock(
+            return_value=mock_network_interfaces()
+        )
+        coordinator.client.list_disks = AsyncMock(return_value=mock_disks())
+        coordinator.client.list_containers = AsyncMock(return_value=mock_containers())
+        coordinator.client.list_vms = AsyncMock(return_value=mock_vms())
+        coordinator.client.list_shares = AsyncMock(return_value=[])
+        coordinator.client.list_gpus = AsyncMock(return_value=mock_gpu_list())
+        coordinator.client.get_ups_info = AsyncMock(return_value=mock_ups_info())
+        coordinator.client.get_notifications = AsyncMock(return_value=None)
+        coordinator.client.list_zfs_pools = AsyncMock(return_value=[])
+        coordinator.client.list_zfs_datasets = AsyncMock(return_value=[])
+        coordinator.client.list_zfs_snapshots = AsyncMock(return_value=[])
+        coordinator.client.get_zfs_arc_stats = AsyncMock(return_value=None)
+        coordinator.client.get_collectors_status = AsyncMock(
+            return_value=mock_collectors_status()
+        )
+        coordinator.client.get_disk_settings = AsyncMock(return_value=None)
+        coordinator.client.get_mover_settings = AsyncMock(return_value=None)
+        coordinator.client.get_parity_schedule = AsyncMock(return_value=None)
+        coordinator.client.get_parity_history = AsyncMock(return_value=None)
+        # This one fails
+        coordinator.client.get_flash_info = AsyncMock(
+            side_effect=Exception("Flash info error")
+        )
+        coordinator.client.list_plugins = AsyncMock(return_value=None)
+        coordinator.client.get_update_status = AsyncMock(return_value=None)
+        coordinator.client.get_docker_settings = AsyncMock(return_value=None)
+        coordinator.client.get_vm_settings = AsyncMock(return_value=None)
+
+        with patch(
+            "custom_components.unraid_management_agent.repairs.async_check_and_create_issues",
+            new_callable=AsyncMock,
+        ):
+            data = await coordinator._async_update_data()
+
+        # Update should succeed despite flash_info error
+        assert data is not None
+        assert data.flash_info is None
+
+    @pytest.mark.asyncio
+    async def test_plugins_error_continues(self, coordinator, mock_repairs) -> None:
+        """Test plugins error is logged but update continues."""
+        from uma_api.models import SystemInfo
+
+        coordinator.client.get_system_info = AsyncMock(
+            return_value=SystemInfo(hostname="tower", uptime_seconds=1000)
+        )
+        coordinator.client.get_array_status = AsyncMock(
+            return_value=mock_array_status()
+        )
+        coordinator.client.get_network_interfaces = AsyncMock(
+            return_value=mock_network_interfaces()
+        )
+        coordinator.client.list_disks = AsyncMock(return_value=mock_disks())
+        coordinator.client.list_containers = AsyncMock(return_value=mock_containers())
+        coordinator.client.list_vms = AsyncMock(return_value=mock_vms())
+        coordinator.client.list_shares = AsyncMock(return_value=[])
+        coordinator.client.list_gpus = AsyncMock(return_value=mock_gpu_list())
+        coordinator.client.get_ups_info = AsyncMock(return_value=mock_ups_info())
+        coordinator.client.get_notifications = AsyncMock(return_value=None)
+        coordinator.client.list_zfs_pools = AsyncMock(return_value=[])
+        coordinator.client.list_zfs_datasets = AsyncMock(return_value=[])
+        coordinator.client.list_zfs_snapshots = AsyncMock(return_value=[])
+        coordinator.client.get_zfs_arc_stats = AsyncMock(return_value=None)
+        coordinator.client.get_collectors_status = AsyncMock(
+            return_value=mock_collectors_status()
+        )
+        coordinator.client.get_disk_settings = AsyncMock(return_value=None)
+        coordinator.client.get_mover_settings = AsyncMock(return_value=None)
+        coordinator.client.get_parity_schedule = AsyncMock(return_value=None)
+        coordinator.client.get_parity_history = AsyncMock(return_value=None)
+        coordinator.client.get_flash_info = AsyncMock(return_value=None)
+        # This one fails
+        coordinator.client.list_plugins = AsyncMock(
+            side_effect=Exception("Plugins error")
+        )
+        coordinator.client.get_update_status = AsyncMock(return_value=None)
+        coordinator.client.get_docker_settings = AsyncMock(return_value=None)
+        coordinator.client.get_vm_settings = AsyncMock(return_value=None)
+
+        with patch(
+            "custom_components.unraid_management_agent.repairs.async_check_and_create_issues",
+            new_callable=AsyncMock,
+        ):
+            data = await coordinator._async_update_data()
+
+        # Update should succeed despite plugins error
+        assert data is not None
+        assert data.plugins is None
+
+    @pytest.mark.asyncio
+    async def test_update_status_error_continues(
+        self, coordinator, mock_repairs
+    ) -> None:
+        """Test update_status error is logged but update continues."""
+        from uma_api.models import SystemInfo
+
+        coordinator.client.get_system_info = AsyncMock(
+            return_value=SystemInfo(hostname="tower", uptime_seconds=1000)
+        )
+        coordinator.client.get_array_status = AsyncMock(
+            return_value=mock_array_status()
+        )
+        coordinator.client.get_network_interfaces = AsyncMock(
+            return_value=mock_network_interfaces()
+        )
+        coordinator.client.list_disks = AsyncMock(return_value=mock_disks())
+        coordinator.client.list_containers = AsyncMock(return_value=mock_containers())
+        coordinator.client.list_vms = AsyncMock(return_value=mock_vms())
+        coordinator.client.list_shares = AsyncMock(return_value=[])
+        coordinator.client.list_gpus = AsyncMock(return_value=mock_gpu_list())
+        coordinator.client.get_ups_info = AsyncMock(return_value=mock_ups_info())
+        coordinator.client.get_notifications = AsyncMock(return_value=None)
+        coordinator.client.list_zfs_pools = AsyncMock(return_value=[])
+        coordinator.client.list_zfs_datasets = AsyncMock(return_value=[])
+        coordinator.client.list_zfs_snapshots = AsyncMock(return_value=[])
+        coordinator.client.get_zfs_arc_stats = AsyncMock(return_value=None)
+        coordinator.client.get_collectors_status = AsyncMock(
+            return_value=mock_collectors_status()
+        )
+        coordinator.client.get_disk_settings = AsyncMock(return_value=None)
+        coordinator.client.get_mover_settings = AsyncMock(return_value=None)
+        coordinator.client.get_parity_schedule = AsyncMock(return_value=None)
+        coordinator.client.get_parity_history = AsyncMock(return_value=None)
+        coordinator.client.get_flash_info = AsyncMock(return_value=None)
+        coordinator.client.list_plugins = AsyncMock(return_value=None)
+        # This one fails
+        coordinator.client.get_update_status = AsyncMock(
+            side_effect=Exception("Update status error")
+        )
+        coordinator.client.get_docker_settings = AsyncMock(return_value=None)
+        coordinator.client.get_vm_settings = AsyncMock(return_value=None)
+
+        with patch(
+            "custom_components.unraid_management_agent.repairs.async_check_and_create_issues",
+            new_callable=AsyncMock,
+        ):
+            data = await coordinator._async_update_data()
+
+        # Update should succeed despite update_status error
+        assert data is not None
+        assert data.update_status is None
+
+    @pytest.mark.asyncio
+    async def test_docker_settings_error_continues(
+        self, coordinator, mock_repairs
+    ) -> None:
+        """Test docker_settings error is logged but update continues."""
+        from uma_api.models import SystemInfo
+
+        coordinator.client.get_system_info = AsyncMock(
+            return_value=SystemInfo(hostname="tower", uptime_seconds=1000)
+        )
+        coordinator.client.get_array_status = AsyncMock(
+            return_value=mock_array_status()
+        )
+        coordinator.client.get_network_interfaces = AsyncMock(
+            return_value=mock_network_interfaces()
+        )
+        coordinator.client.list_disks = AsyncMock(return_value=mock_disks())
+        coordinator.client.list_containers = AsyncMock(return_value=mock_containers())
+        coordinator.client.list_vms = AsyncMock(return_value=mock_vms())
+        coordinator.client.list_shares = AsyncMock(return_value=[])
+        coordinator.client.list_gpus = AsyncMock(return_value=mock_gpu_list())
+        coordinator.client.get_ups_info = AsyncMock(return_value=mock_ups_info())
+        coordinator.client.get_notifications = AsyncMock(return_value=None)
+        coordinator.client.list_zfs_pools = AsyncMock(return_value=[])
+        coordinator.client.list_zfs_datasets = AsyncMock(return_value=[])
+        coordinator.client.list_zfs_snapshots = AsyncMock(return_value=[])
+        coordinator.client.get_zfs_arc_stats = AsyncMock(return_value=None)
+        coordinator.client.get_collectors_status = AsyncMock(
+            return_value=mock_collectors_status()
+        )
+        coordinator.client.get_disk_settings = AsyncMock(return_value=None)
+        coordinator.client.get_mover_settings = AsyncMock(return_value=None)
+        coordinator.client.get_parity_schedule = AsyncMock(return_value=None)
+        coordinator.client.get_parity_history = AsyncMock(return_value=None)
+        coordinator.client.get_flash_info = AsyncMock(return_value=None)
+        coordinator.client.list_plugins = AsyncMock(return_value=None)
+        coordinator.client.get_update_status = AsyncMock(return_value=None)
+        # This one fails
+        coordinator.client.get_docker_settings = AsyncMock(
+            side_effect=Exception("Docker settings error")
+        )
+        coordinator.client.get_vm_settings = AsyncMock(return_value=None)
+
+        with patch(
+            "custom_components.unraid_management_agent.repairs.async_check_and_create_issues",
+            new_callable=AsyncMock,
+        ):
+            data = await coordinator._async_update_data()
+
+        # Update should succeed despite docker_settings error
+        assert data is not None
+        assert data.docker_settings is None
+
+    @pytest.mark.asyncio
+    async def test_vm_settings_error_continues(self, coordinator, mock_repairs) -> None:
+        """Test vm_settings error is logged but update continues."""
+        from uma_api.models import SystemInfo
+
+        coordinator.client.get_system_info = AsyncMock(
+            return_value=SystemInfo(hostname="tower", uptime_seconds=1000)
+        )
+        coordinator.client.get_array_status = AsyncMock(
+            return_value=mock_array_status()
+        )
+        coordinator.client.get_network_interfaces = AsyncMock(
+            return_value=mock_network_interfaces()
+        )
+        coordinator.client.list_disks = AsyncMock(return_value=mock_disks())
+        coordinator.client.list_containers = AsyncMock(return_value=mock_containers())
+        coordinator.client.list_vms = AsyncMock(return_value=mock_vms())
+        coordinator.client.list_shares = AsyncMock(return_value=[])
+        coordinator.client.list_gpus = AsyncMock(return_value=mock_gpu_list())
+        coordinator.client.get_ups_info = AsyncMock(return_value=mock_ups_info())
+        coordinator.client.get_notifications = AsyncMock(return_value=None)
+        coordinator.client.list_zfs_pools = AsyncMock(return_value=[])
+        coordinator.client.list_zfs_datasets = AsyncMock(return_value=[])
+        coordinator.client.list_zfs_snapshots = AsyncMock(return_value=[])
+        coordinator.client.get_zfs_arc_stats = AsyncMock(return_value=None)
+        coordinator.client.get_collectors_status = AsyncMock(
+            return_value=mock_collectors_status()
+        )
+        coordinator.client.get_disk_settings = AsyncMock(return_value=None)
+        coordinator.client.get_mover_settings = AsyncMock(return_value=None)
+        coordinator.client.get_parity_schedule = AsyncMock(return_value=None)
+        coordinator.client.get_parity_history = AsyncMock(return_value=None)
+        coordinator.client.get_flash_info = AsyncMock(return_value=None)
+        coordinator.client.list_plugins = AsyncMock(return_value=None)
+        coordinator.client.get_update_status = AsyncMock(return_value=None)
+        coordinator.client.get_docker_settings = AsyncMock(return_value=None)
+        # This one fails
+        coordinator.client.get_vm_settings = AsyncMock(
+            side_effect=Exception("VM settings error")
+        )
+
+        with patch(
+            "custom_components.unraid_management_agent.repairs.async_check_and_create_issues",
+            new_callable=AsyncMock,
+        ):
+            data = await coordinator._async_update_data()
+
+        # Update should succeed despite vm_settings error
+        assert data is not None
+        assert data.vm_settings is None
+
+    @pytest.mark.asyncio
+    async def test_connection_restored_logs_info(
+        self, coordinator, mock_repairs
+    ) -> None:
+        """Test connection restore logs info when previously unavailable."""
+        from uma_api.models import SystemInfo
+
+        # Set unavailable flag to True first
+        coordinator._unavailable_logged = True
+
+        coordinator.client.get_system_info = AsyncMock(
+            return_value=SystemInfo(hostname="tower", uptime_seconds=1000)
+        )
+        coordinator.client.get_array_status = AsyncMock(
+            return_value=mock_array_status()
+        )
+        coordinator.client.get_network_interfaces = AsyncMock(
+            return_value=mock_network_interfaces()
+        )
+        coordinator.client.list_disks = AsyncMock(return_value=mock_disks())
+        coordinator.client.list_containers = AsyncMock(return_value=mock_containers())
+        coordinator.client.list_vms = AsyncMock(return_value=mock_vms())
+        coordinator.client.list_shares = AsyncMock(return_value=[])
+        coordinator.client.list_gpus = AsyncMock(return_value=mock_gpu_list())
+        coordinator.client.get_ups_info = AsyncMock(return_value=mock_ups_info())
+        coordinator.client.get_notifications = AsyncMock(return_value=None)
+        coordinator.client.list_zfs_pools = AsyncMock(return_value=[])
+        coordinator.client.list_zfs_datasets = AsyncMock(return_value=[])
+        coordinator.client.list_zfs_snapshots = AsyncMock(return_value=[])
+        coordinator.client.get_zfs_arc_stats = AsyncMock(return_value=None)
+        coordinator.client.get_collectors_status = AsyncMock(
+            return_value=mock_collectors_status()
+        )
+        coordinator.client.get_disk_settings = AsyncMock(return_value=None)
+        coordinator.client.get_mover_settings = AsyncMock(return_value=None)
+        coordinator.client.get_parity_schedule = AsyncMock(return_value=None)
+        coordinator.client.get_parity_history = AsyncMock(return_value=None)
+        coordinator.client.get_flash_info = AsyncMock(return_value=None)
+        coordinator.client.list_plugins = AsyncMock(return_value=None)
+        coordinator.client.get_update_status = AsyncMock(return_value=None)
+        coordinator.client.get_docker_settings = AsyncMock(return_value=None)
+        coordinator.client.get_vm_settings = AsyncMock(return_value=None)
+
+        with patch(
+            "custom_components.unraid_management_agent.repairs.async_check_and_create_issues",
+            new_callable=AsyncMock,
+        ):
+            data = await coordinator._async_update_data()
+
+        # Unavailable flag should be reset
+        assert coordinator._unavailable_logged is False
+        assert coordinator.update_success is True
+        assert data is not None

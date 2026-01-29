@@ -290,6 +290,12 @@ async def test_check_and_create_issues_disk_high_temp(
     coordinator.config_entry.entry_id = "test_entry"
     coordinator.config_entry.data = {"host": "192.168.1.100", "port": 8043}
     coordinator.last_update_success = True
+
+    # Mock disk_settings with thresholds
+    mock_disk_settings = MagicMock()
+    mock_disk_settings.hdd_temp_warning_celsius = 45
+    mock_disk_settings.hdd_temp_critical_celsius = 55
+
     coordinator.data = UnraidData(
         disks=[
             DiskInfo(
@@ -302,6 +308,7 @@ async def test_check_and_create_issues_disk_high_temp(
                 temperature_celsius=50,  # Above 45 warning threshold for HDD
             )
         ],
+        disk_settings=mock_disk_settings,
         array=None,
     )
 
@@ -327,6 +334,12 @@ async def test_check_and_create_issues_disk_critical_temp(
     coordinator.config_entry.entry_id = "test_entry"
     coordinator.config_entry.data = {"host": "192.168.1.100", "port": 8043}
     coordinator.last_update_success = True
+
+    # Mock disk_settings with thresholds
+    mock_disk_settings = MagicMock()
+    mock_disk_settings.hdd_temp_warning_celsius = 45
+    mock_disk_settings.hdd_temp_critical_celsius = 55
+
     coordinator.data = UnraidData(
         disks=[
             DiskInfo(
@@ -338,6 +351,7 @@ async def test_check_and_create_issues_disk_critical_temp(
                 temperature_celsius=60,  # Above 55 critical threshold for HDD
             )
         ],
+        disk_settings=mock_disk_settings,
         array=None,
     )
 
@@ -436,3 +450,341 @@ async def test_check_and_create_issues_no_data(
     # Should not create any disk or array issues
     assert not any("disk_" in str(call) for call in mock_create.call_args_list)
     assert not any("array_" in str(call) for call in mock_create.call_args_list)
+
+
+async def test_check_and_create_issues_parity_invalid_no_state(
+    hass: HomeAssistant,
+) -> None:
+    """Test parity invalid issue is created."""
+    coordinator = MagicMock()
+    coordinator.config_entry.entry_id = "test_entry"
+    coordinator.config_entry.data = {"host": "192.168.1.100", "port": 8043}
+    coordinator.last_update_success = True
+    coordinator.data = UnraidData(
+        disks=[],
+        array=ArrayStatus(
+            parity_valid=False,  # Invalid parity
+            parity_check_status=None,
+            parity_check_progress=None,
+        ),
+    )
+
+    with (
+        patch(
+            "custom_components.unraid_management_agent.repairs.ir.async_create_issue"
+        ) as mock_create,
+        patch(
+            "custom_components.unraid_management_agent.repairs.ir.async_delete_issue"
+        ),
+    ):
+        await async_check_and_create_issues(hass, coordinator)
+
+    # Check parity invalid issue was created
+    assert any("parity_invalid" in str(call) for call in mock_create.call_args_list)
+
+
+async def test_check_and_create_issues_parity_valid(
+    hass: HomeAssistant,
+) -> None:
+    """Test parity valid removes existing issue."""
+    coordinator = MagicMock()
+    coordinator.config_entry.entry_id = "test_entry"
+    coordinator.config_entry.data = {"host": "192.168.1.100", "port": 8043}
+    coordinator.last_update_success = True
+    coordinator.data = UnraidData(
+        disks=[],
+        array=ArrayStatus(
+            parity_valid=True,  # Valid parity
+            parity_check_status=None,
+            parity_check_progress=None,
+        ),
+    )
+
+    with (
+        patch(
+            "custom_components.unraid_management_agent.repairs.ir.async_create_issue"
+        ),
+        patch(
+            "custom_components.unraid_management_agent.repairs.ir.async_delete_issue"
+        ) as mock_delete,
+    ):
+        await async_check_and_create_issues(hass, coordinator)
+
+    # Check parity invalid issue was deleted
+    assert any("parity_invalid" in str(call) for call in mock_delete.call_args_list)
+
+
+async def test_check_and_create_issues_temp_warning(
+    hass: HomeAssistant,
+) -> None:
+    """Test temperature warning issue is created when disk is above warning threshold."""
+    coordinator = MagicMock()
+    coordinator.config_entry.entry_id = "test_entry"
+    coordinator.config_entry.data = {"host": "192.168.1.100", "port": 8043}
+    coordinator.last_update_success = True
+    coordinator.last_exception = None
+
+    # Disk with high temperature (warning level: 45+)
+    disk = DiskInfo(
+        device="sda",
+        role="data",
+        name="disk1",
+        id="WDC_WD80EFAX",
+        temperature_celsius=50,  # Above 45 warning threshold, below 55 critical
+    )
+
+    # Mock disk_settings with thresholds
+    mock_disk_settings = MagicMock()
+    mock_disk_settings.hdd_temp_warning_celsius = 45
+    mock_disk_settings.hdd_temp_critical_celsius = 55
+
+    coordinator.data = UnraidData(
+        disks=[disk],
+        disk_settings=mock_disk_settings,
+        array=ArrayStatus(parity_valid=True),
+    )
+
+    with (
+        patch(
+            "custom_components.unraid_management_agent.repairs.ir.async_create_issue"
+        ) as mock_create,
+        patch(
+            "custom_components.unraid_management_agent.repairs.ir.async_delete_issue"
+        ) as mock_delete,
+    ):
+        await async_check_and_create_issues(hass, coordinator)
+
+    # Check temperature warning issue was created
+    create_calls = [str(call) for call in mock_create.call_args_list]
+    assert any("high_temp" in str(call) for call in create_calls)
+
+
+async def test_check_and_create_issues_temp_critical(
+    hass: HomeAssistant,
+) -> None:
+    """Test temperature critical issue is created when disk is above critical threshold."""
+    coordinator = MagicMock()
+    coordinator.config_entry.entry_id = "test_entry"
+    coordinator.config_entry.data = {"host": "192.168.1.100", "port": 8043}
+    coordinator.last_update_success = True
+    coordinator.last_exception = None
+
+    # Disk with critical temperature (55+ for HDD)
+    disk = DiskInfo(
+        device="sda",
+        role="data",
+        name="disk1",
+        id="WDC_WD80EFAX",
+        temperature_celsius=60,  # Above 55 critical threshold
+    )
+
+    # Mock disk_settings with thresholds
+    mock_disk_settings = MagicMock()
+    mock_disk_settings.hdd_temp_warning_celsius = 45
+    mock_disk_settings.hdd_temp_critical_celsius = 55
+
+    coordinator.data = UnraidData(
+        disks=[disk],
+        disk_settings=mock_disk_settings,
+        array=ArrayStatus(parity_valid=True),
+    )
+
+    with (
+        patch(
+            "custom_components.unraid_management_agent.repairs.ir.async_create_issue"
+        ) as mock_create,
+        patch(
+            "custom_components.unraid_management_agent.repairs.ir.async_delete_issue"
+        ) as mock_delete,
+    ):
+        await async_check_and_create_issues(hass, coordinator)
+
+    # Check temperature critical issue was created
+    create_calls = [str(call) for call in mock_create.call_args_list]
+    assert any("critical_temp" in str(call) for call in create_calls)
+
+
+async def test_check_and_create_issues_temp_normal_clears(
+    hass: HomeAssistant,
+) -> None:
+    """Test normal temperature clears existing issues."""
+    coordinator = MagicMock()
+    coordinator.config_entry.entry_id = "test_entry"
+    coordinator.config_entry.data = {"host": "192.168.1.100", "port": 8043}
+    coordinator.last_update_success = True
+    coordinator.last_exception = None
+
+    # Disk with normal temperature (below 45 warning threshold for HDD)
+    disk = DiskInfo(
+        device="sda",
+        role="data",
+        name="disk1",
+        id="WDC_WD80EFAX",
+        temperature_celsius=35,  # Normal temperature
+    )
+
+    # Mock disk_settings with thresholds
+    mock_disk_settings = MagicMock()
+    mock_disk_settings.hdd_temp_warning_celsius = 45
+    mock_disk_settings.hdd_temp_critical_celsius = 55
+
+    coordinator.data = UnraidData(
+        disks=[disk],
+        disk_settings=mock_disk_settings,
+        array=ArrayStatus(parity_valid=True),
+    )
+
+    with (
+        patch(
+            "custom_components.unraid_management_agent.repairs.ir.async_create_issue"
+        ) as mock_create,
+        patch(
+            "custom_components.unraid_management_agent.repairs.ir.async_delete_issue"
+        ) as mock_delete,
+    ):
+        await async_check_and_create_issues(hass, coordinator)
+
+    # Check temperature issues were deleted (for normal temps, both are deleted)
+    delete_calls = [str(call) for call in mock_delete.call_args_list]
+    # Should delete both warning and critical temp issues
+    assert any("high_temp" in str(call) for call in delete_calls)
+    assert any("critical_temp" in str(call) for call in delete_calls)
+
+
+async def test_check_and_create_issues_no_temp_clears(
+    hass: HomeAssistant,
+) -> None:
+    """Test missing temperature clears existing issues."""
+    coordinator = MagicMock()
+    coordinator.config_entry.entry_id = "test_entry"
+    coordinator.config_entry.data = {"host": "192.168.1.100", "port": 8043}
+    coordinator.last_update_success = True
+    coordinator.last_exception = None
+
+    # Disk without temperature reading
+    disk = DiskInfo(
+        device="sda",
+        role="data",
+        name="disk1",
+        id="WDC_WD80EFAX",
+        temperature_celsius=None,
+    )
+
+    coordinator.data = UnraidData(
+        disks=[disk],
+        disk_settings=None,
+        array=ArrayStatus(parity_valid=True),
+    )
+
+    with (
+        patch(
+            "custom_components.unraid_management_agent.repairs.ir.async_create_issue"
+        ) as mock_create,
+        patch(
+            "custom_components.unraid_management_agent.repairs.ir.async_delete_issue"
+        ) as mock_delete,
+    ):
+        await async_check_and_create_issues(hass, coordinator)
+
+    # Check temperature issues were deleted (for missing temp, both are deleted)
+    delete_calls = [str(call) for call in mock_delete.call_args_list]
+    # Should delete both warning and critical temp issues when no temp reading
+    assert any("high_temp" in str(call) for call in delete_calls)
+    assert any("critical_temp" in str(call) for call in delete_calls)
+
+
+def test_get_disk_temp_thresholds_per_disk_override() -> None:
+    """Test _get_disk_temp_thresholds with per-disk override values."""
+    from custom_components.unraid_management_agent.repairs import (
+        _get_disk_temp_thresholds,
+    )
+
+    disk = DiskInfo(
+        device="sda",
+        role="data",
+        name="disk1",
+        id="WDC_WD80EFAX",
+        temp_warning=55,
+        temp_critical=65,
+    )
+
+    result = _get_disk_temp_thresholds(disk, None)
+    assert result == (55, 65)
+
+
+def test_get_disk_temp_thresholds_global_hdd_settings() -> None:
+    """Test _get_disk_temp_thresholds with global HDD settings."""
+    from custom_components.unraid_management_agent.repairs import (
+        _get_disk_temp_thresholds,
+    )
+
+    disk = DiskInfo(
+        device="sda",
+        role="data",
+        name="disk1",
+        id="WDC_WD80EFAX",
+    )
+
+    mock_settings = MagicMock()
+    mock_settings.hdd_temp_warning_celsius = 48
+    mock_settings.hdd_temp_critical_celsius = 58
+
+    result = _get_disk_temp_thresholds(disk, mock_settings)
+    assert result == (48, 58)
+
+
+def test_get_disk_temp_thresholds_global_ssd_settings() -> None:
+    """Test _get_disk_temp_thresholds with global SSD settings."""
+    from custom_components.unraid_management_agent.repairs import (
+        _get_disk_temp_thresholds,
+    )
+
+    disk = DiskInfo(
+        device="nvme0n1",
+        role="cache",
+        name="cache",
+        id="Samsung_SSD_980",
+    )
+
+    mock_settings = MagicMock()
+    mock_settings.ssd_temp_warning_celsius = 60
+    mock_settings.ssd_temp_critical_celsius = 70
+
+    result = _get_disk_temp_thresholds(disk, mock_settings)
+    assert result == (60, 70)
+
+
+def test_get_disk_temp_thresholds_no_thresholds_hdd() -> None:
+    """Test _get_disk_temp_thresholds returns None when no thresholds available for HDD."""
+    from custom_components.unraid_management_agent.repairs import (
+        _get_disk_temp_thresholds,
+    )
+
+    disk = DiskInfo(
+        device="sda",
+        role="data",
+        name="disk1",
+        id="WDC_WD80EFAX",
+    )
+
+    result = _get_disk_temp_thresholds(disk, None)
+    # No thresholds available - should return None
+    assert result is None
+
+
+def test_get_disk_temp_thresholds_no_thresholds_ssd() -> None:
+    """Test _get_disk_temp_thresholds returns None when no thresholds available for SSD."""
+    from custom_components.unraid_management_agent.repairs import (
+        _get_disk_temp_thresholds,
+    )
+
+    disk = DiskInfo(
+        device="nvme0n1",
+        role="cache",
+        name="cache",
+        id="Samsung_SSD_980",
+    )
+
+    result = _get_disk_temp_thresholds(disk, None)
+    # No thresholds available - should return None
+    assert result is None

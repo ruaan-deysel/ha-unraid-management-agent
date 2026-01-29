@@ -13,7 +13,6 @@ MOCK_CONFIG = {
 }
 
 MOCK_OPTIONS = {
-    "update_interval": 30,
     "enable_websocket": True,
 }
 
@@ -75,13 +74,18 @@ def mock_disks() -> list[MagicMock]:
     disk1.device = "sdb"
     disk1.role = "data"
     disk1.size_bytes = 8000000000000
+    disk1.total_bytes = 8000000000000  # Alias for size_bytes used by some sensors
     disk1.used_bytes = 4000000000000
     disk1.free_bytes = 4000000000000
     disk1.temperature_celsius = 35
     disk1.spin_state = "active"
     disk1.status = "DISK_OK"
+    disk1.smart_status = "PASSED"
+    disk1.model = "WD Red 8TB"
+    disk1.serial = "WD-WX12A34567"
     disk1.filesystem = "xfs"
     disk1.serial_number = "WDC_WD80EFAX_12345"
+    disk1.used_percent = 50.0
 
     disk2 = MagicMock()
     disk2.id = "Samsung_SSD_980_67890"
@@ -89,13 +93,18 @@ def mock_disks() -> list[MagicMock]:
     disk2.device = "nvme0n1"
     disk2.role = "cache"
     disk2.size_bytes = 256054571008
+    disk2.total_bytes = 256054571008  # Alias for size_bytes used by some sensors
     disk2.used_bytes = 36332154880
     disk2.free_bytes = 219722416128
     disk2.temperature_celsius = 42
     disk2.spin_state = "active"
     disk2.status = "DISK_OK"
+    disk2.smart_status = "PASSED"
+    disk2.model = "Samsung 980 Pro"
+    disk2.serial = "S5PXNG0R123456"
     disk2.filesystem = "btrfs"
     disk2.serial_number = "Samsung_SSD_980_67890"
+    disk2.used_percent = 14.2
 
     return [disk1, disk2]
 

@@ -20,10 +20,8 @@ from uma_api import UnraidClient, UnraidConnectionError
 
 from .const import (
     CONF_ENABLE_WEBSOCKET,
-    CONF_UPDATE_INTERVAL,
     DEFAULT_ENABLE_WEBSOCKET,
     DEFAULT_PORT,
-    DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     ERROR_CANNOT_CONNECT,
     ERROR_TIMEOUT,
@@ -37,9 +35,6 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_HOST): cv.string,
         vol.Required(CONF_PORT, default=DEFAULT_PORT): vol.All(
             vol.Coerce(int), vol.Range(min=1, max=65535)
-        ),
-        vol.Optional(CONF_UPDATE_INTERVAL, default=DEFAULT_UPDATE_INTERVAL): vol.All(
-            vol.Coerce(int), vol.Range(min=5, max=300)
         ),
         vol.Optional(
             CONF_ENABLE_WEBSOCKET, default=DEFAULT_ENABLE_WEBSOCKET
@@ -85,6 +80,7 @@ class UnraidConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Unraid Management Agent."""
 
     VERSION = 1
+    MINOR_VERSION = 1
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -163,12 +159,6 @@ class UnraidConfigFlow(ConfigFlow, domain=DOMAIN):
                         default=reconfigure_entry.data.get(CONF_PORT, DEFAULT_PORT),
                     ): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
                     vol.Optional(
-                        CONF_UPDATE_INTERVAL,
-                        default=reconfigure_entry.data.get(
-                            CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
-                        ),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=5, max=300)),
-                    vol.Optional(
                         CONF_ENABLE_WEBSOCKET,
                         default=reconfigure_entry.data.get(
                             CONF_ENABLE_WEBSOCKET, DEFAULT_ENABLE_WEBSOCKET
@@ -202,12 +192,6 @@ class UnraidOptionsFlowHandler(OptionsFlowWithReload):
             step_id="init",
             data_schema=vol.Schema(
                 {
-                    vol.Optional(
-                        CONF_UPDATE_INTERVAL,
-                        default=self.config_entry.options.get(
-                            CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
-                        ),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=5, max=300)),
                     vol.Optional(
                         CONF_ENABLE_WEBSOCKET,
                         default=self.config_entry.options.get(
