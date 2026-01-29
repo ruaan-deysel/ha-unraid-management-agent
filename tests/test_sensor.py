@@ -20,6 +20,7 @@ from custom_components.unraid_management_agent.sensor import (
     UPS_SENSOR_DESCRIPTIONS,
     # Dynamic sensor classes
     UnraidDiskHealthSensor,
+    UnraidDiskTemperatureSensor,
     UnraidDiskUsageSensor,
     UnraidFanSensor,
     UnraidNetworkRXSensor,
@@ -2302,6 +2303,107 @@ def test_disk_health_sensor_disk_not_found() -> None:
 
     assert sensor.native_value is None
     assert sensor.extra_state_attributes == {}
+
+
+# =============================================================================
+# Disk Temperature Sensor Tests
+# =============================================================================
+
+
+def test_disk_temperature_sensor_no_data() -> None:
+    """Test disk temperature sensor with no data."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = None
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidDiskTemperatureSensor(
+        mock_coordinator, mock_entry, "disk1", "Disk 1"
+    )
+
+    assert sensor.native_value is None
+    # Verify sensor is disabled by default
+    assert sensor.entity_registry_enabled_default is False
+
+
+def test_disk_temperature_sensor_with_data() -> None:
+    """Test disk temperature sensor with data."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_disk = MagicMock()
+    mock_disk.id = "disk1"
+    mock_disk.name = "Disk 1"
+    mock_disk.temperature_celsius = 35.0
+    mock_disk.device = "/dev/sda"
+    mock_disk.model = "WD Red 4TB"
+    mock_disk.role = "data"
+    mock_coordinator.data.disks = [mock_disk]
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidDiskTemperatureSensor(
+        mock_coordinator, mock_entry, "disk1", "Disk 1"
+    )
+
+    assert sensor.native_value == 35.0
+    attrs = sensor.extra_state_attributes
+    assert attrs["disk_name"] == "Disk 1"
+    assert attrs["device"] == "/dev/sda"
+    assert attrs["model"] == "WD Red 4TB"
+    assert attrs["role"] == "data"
+
+
+def test_disk_temperature_sensor_zero_temperature() -> None:
+    """Test disk temperature sensor with zero temperature returns None."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_disk = MagicMock()
+    mock_disk.id = "disk1"
+    mock_disk.name = "Disk 1"
+    mock_disk.temperature_celsius = 0
+    mock_coordinator.data.disks = [mock_disk]
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidDiskTemperatureSensor(
+        mock_coordinator, mock_entry, "disk1", "Disk 1"
+    )
+
+    # Zero or negative temperature should return None
+    assert sensor.native_value is None
+
+
+def test_disk_temperature_sensor_disk_not_found() -> None:
+    """Test disk temperature sensor when disk not found."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_disk = MagicMock()
+    mock_disk.id = "other"
+    mock_disk.name = "Other Disk"
+    mock_coordinator.data.disks = [mock_disk]
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidDiskTemperatureSensor(
+        mock_coordinator, mock_entry, "disk1", "Disk 1"
+    )
+
+    assert sensor.native_value is None
+    assert sensor.extra_state_attributes == {}
+
+
+def test_disk_temperature_sensor_unique_id() -> None:
+    """Test disk temperature sensor unique_id."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = None
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidDiskTemperatureSensor(
+        mock_coordinator, mock_entry, "disk1", "Disk 1"
+    )
+
+    assert sensor.unique_id == "test_entry_disk_disk1_temperature"
 
 
 # =============================================================================

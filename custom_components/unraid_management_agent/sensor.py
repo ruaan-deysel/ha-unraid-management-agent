@@ -1812,6 +1812,65 @@ class UnraidDiskHealthSensor(UnraidDiskSensorBase):
         return attrs
 
 
+class UnraidDiskTemperatureSensor(UnraidDiskSensorBase):
+    """
+    Disk temperature sensor.
+
+    This sensor is disabled by default. Users can enable individual disk
+    temperature sensors as needed from the entity settings.
+    """
+
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:thermometer"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        entry: UnraidConfigEntry,
+        disk_id: str,
+        disk_name: str,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry, disk_id, disk_name, "temperature")
+        self._attr_name = f"Disk {disk_name} Temperature"
+
+    @property
+    def unique_id(self) -> str:
+        """Return unique ID."""
+        return f"{self._entry.entry_id}_disk_{self._disk_id}_temperature"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the disk temperature in Celsius."""
+        disk = self._get_disk()
+        if not disk:
+            return None
+        temp = getattr(disk, "temperature_celsius", None)
+        if temp is not None and temp > 0:
+            return float(temp)
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra attributes."""
+        disk = self._get_disk()
+        if not disk:
+            return {}
+
+        attrs: dict[str, Any] = {
+            "disk_name": self._disk_name,
+        }
+        _add_attr_if_set(attrs, "device", getattr(disk, "device", None))
+        _add_attr_if_set(attrs, "model", getattr(disk, "model", None))
+        _add_attr_if_set(attrs, "role", getattr(disk, "role", None))
+
+        return attrs
+
+
 class UnraidShareUsageSensor(UnraidBaseEntity, SensorEntity):
     """Share usage sensor."""
 
@@ -2137,6 +2196,11 @@ async def async_setup_entry(
 
             entities.append(
                 UnraidDiskHealthSensor(coordinator, entry, disk_id, disk_name)
+            )
+
+            # Temperature sensor (disabled by default)
+            entities.append(
+                UnraidDiskTemperatureSensor(coordinator, entry, disk_id, disk_name)
             )
 
             if disk_role not in ("parity", "parity2"):
