@@ -10,56 +10,47 @@
       "cpu_temperature": {
         "default": "mdi:thermometer"
       },
+      "motherboard_temperature": {
+        "default": "mdi:thermometer"
+      },
       "uptime": {
         "default": "mdi:clock-outline"
       },
-      "motherboard_temperature": {
-        "default": "mdi:thermometer"
+      "fan": {
+        "default": "mdi:fan"
       },
       "array_usage": {
         "default": "mdi:harddisk"
       },
-      "array_size": {
+      "parity_progress": {
+        "default": "mdi:shield-check"
+      },
+      "disk_usage": {
         "default": "mdi:harddisk"
       },
-      "array_used": {
+      "disk_health": {
         "default": "mdi:harddisk"
       },
-      "array_free": {
-        "default": "mdi:harddisk"
-      },
-      "cache_usage": {
-        "default": "mdi:harddisk"
-      },
-      "cache_size": {
-        "default": "mdi:harddisk"
-      },
-      "active_containers": {
+      "docker_vdisk_usage": {
         "default": "mdi:docker"
       },
-      "total_containers": {
-        "default": "mdi:docker"
+      "log_filesystem_usage": {
+        "default": "mdi:harddisk"
       },
-      "notifications": {
-        "default": "mdi:bell"
-      },
-      "total_shares": {
+      "share_usage": {
         "default": "mdi:folder-network"
       },
-      "parity_errors": {
-        "default": "mdi:alert-circle"
+      "gpu_utilization": {
+        "default": "mdi:expansion-card"
       },
-      "parity_progress": {
-        "default": "mdi:sync"
+      "gpu_temperature": {
+        "default": "mdi:thermometer"
       },
-      "parity_speed": {
-        "default": "mdi:speedometer"
+      "gpu_power": {
+        "default": "mdi:power"
       },
-      "parity_eta": {
-        "default": "mdi:timer-sand"
-      },
-      "ups_status": {
-        "default": "mdi:battery"
+      "gpu_energy": {
+        "default": "mdi:expansion-card"
       },
       "ups_battery": {
         "default": "mdi:battery",
@@ -78,44 +69,77 @@
         }
       },
       "ups_load": {
-        "default": "mdi:power-plug"
+        "default": "mdi:battery"
       },
       "ups_runtime": {
-        "default": "mdi:timer"
+        "default": "mdi:battery"
       },
-      "ups_input_voltage": {
-        "default": "mdi:flash"
+      "ups_power": {
+        "default": "mdi:power"
       },
-      "ups_output_voltage": {
-        "default": "mdi:flash"
+      "ups_energy": {
+        "default": "mdi:battery"
+      },
+      "network_rx": {
+        "default": "mdi:ethernet"
+      },
+      "network_tx": {
+        "default": "mdi:ethernet"
+      },
+      "zfs_pool_usage": {
+        "default": "mdi:database-outline"
+      },
+      "zfs_pool_health": {
+        "default": "mdi:database-outline"
+      },
+      "zfs_arc_hit_ratio": {
+        "default": "mdi:memory-arrow-down"
+      },
+      "notifications": {
+        "default": "mdi:bell-alert"
       }
     },
     "binary_sensor": {
       "array_started": {
-        "default": "mdi:harddisk"
+        "default": "mdi:harddisk",
+        "state": {
+          "on": "mdi:harddisk",
+          "off": "mdi:harddisk-remove"
+        }
       },
       "parity_check_running": {
-        "default": "mdi:sync"
+        "default": "mdi:shield-check",
+        "state": {
+          "on": "mdi:shield-sync",
+          "off": "mdi:shield-check"
+        }
       },
       "parity_valid": {
-        "default": "mdi:check-circle",
+        "default": "mdi:shield-check",
         "state": {
-          "on": "mdi:check-circle",
-          "off": "mdi:alert-circle"
+          "on": "mdi:shield-alert",
+          "off": "mdi:shield-check"
         }
       },
-      "ups_on_battery": {
+      "ups_connected": {
         "default": "mdi:battery",
         "state": {
-          "on": "mdi:battery-alert",
-          "off": "mdi:power-plug"
+          "on": "mdi:battery-check",
+          "off": "mdi:battery-off"
         }
       },
-      "ups_online": {
-        "default": "mdi:power-plug",
+      "network_interface": {
+        "default": "mdi:ethernet",
         "state": {
-          "on": "mdi:power-plug",
-          "off": "mdi:power-plug-off"
+          "on": "mdi:ethernet",
+          "off": "mdi:ethernet-off"
+        }
+      },
+      "zfs_available": {
+        "default": "mdi:database",
+        "state": {
+          "on": "mdi:database-check",
+          "off": "mdi:database-off"
         }
       }
     },
@@ -128,25 +152,25 @@
         }
       },
       "vm": {
-        "default": "mdi:desktop-classic",
+        "default": "mdi:desktop-tower",
         "state": {
-          "on": "mdi:desktop-classic",
-          "off": "mdi:desktop-classic"
+          "on": "mdi:desktop-tower",
+          "off": "mdi:desktop-tower"
         }
       }
     },
     "button": {
       "array_start": {
-        "default": "mdi:play"
+        "default": "mdi:harddisk"
       },
       "array_stop": {
-        "default": "mdi:stop"
+        "default": "mdi:harddisk"
       },
       "parity_check_start": {
-        "default": "mdi:play-circle"
+        "default": "mdi:shield-check"
       },
       "parity_check_stop": {
-        "default": "mdi:stop-circle"
+        "default": "mdi:shield-check"
       },
       "user_script": {
         "default": "mdi:script-text"

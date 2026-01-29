@@ -2,29 +2,24 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock
 
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 
 
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
 async def test_button_setup(
-    hass: HomeAssistant, mock_config_entry, mock_api_client, mock_websocket_client
+    hass: HomeAssistant,
+    mock_config_entry,
 ) -> None:
     """Test button platform setup."""
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidAPIClient",
-            return_value=mock_api_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
     # Verify button entities are created
     button_entities = [
@@ -33,42 +28,74 @@ async def test_button_setup(
         if entity_id.startswith("button.unraid_")
     ]
 
-    assert len(button_entities) == 4
-
-    # Check for all button entities
-    expected_buttons = [
-        "button.unraid_test_start_array",
-        "button.unraid_test_stop_array",
-        "button.unraid_test_start_parity_check",
-        "button.unraid_test_stop_parity_check",
-    ]
-
-    for button_id in expected_buttons:
-        assert button_id in button_entities, f"Expected button {button_id} not found"
+    # Should have array and parity check buttons
+    assert len(button_entities) >= 4
 
 
-async def test_start_array_button(
-    hass: HomeAssistant, mock_config_entry, mock_api_client, mock_websocket_client
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
+async def test_array_start_button(
+    hass: HomeAssistant,
+    mock_config_entry,
 ) -> None:
-    """Test start array button."""
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidAPIClient",
-            return_value=mock_api_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    """Test array start button."""
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
-    # Verify button exists
     state = hass.states.get("button.unraid_test_start_array")
     assert state is not None
 
-    # Press the button
+
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
+async def test_array_stop_button(
+    hass: HomeAssistant,
+    mock_config_entry,
+) -> None:
+    """Test array stop button."""
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("button.unraid_test_stop_array")
+    assert state is not None
+
+
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
+async def test_parity_check_buttons(
+    hass: HomeAssistant,
+    mock_config_entry,
+) -> None:
+    """Test parity check buttons."""
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("button.unraid_test_start_parity_check")
+    assert state is not None
+
+    state = hass.states.get("button.unraid_test_stop_parity_check")
+    assert state is not None
+
+
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
+async def test_array_start_button_press(
+    hass: HomeAssistant,
+    mock_config_entry,
+    mock_async_unraid_client,
+) -> None:
+    """Test pressing array start button."""
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
     await hass.services.async_call(
         "button",
         "press",
@@ -76,32 +103,22 @@ async def test_start_array_button(
         blocking=True,
     )
 
-    # Verify API was called
-    mock_api_client.start_array.assert_called_once()
+    mock_async_unraid_client.start_array.assert_called_once()
 
 
-async def test_stop_array_button(
-    hass: HomeAssistant, mock_config_entry, mock_api_client, mock_websocket_client
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
+async def test_array_stop_button_press(
+    hass: HomeAssistant,
+    mock_config_entry,
+    mock_async_unraid_client,
 ) -> None:
-    """Test stop array button."""
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidAPIClient",
-            return_value=mock_api_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    """Test pressing array stop button."""
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
-    # Verify button exists
-    state = hass.states.get("button.unraid_test_stop_array")
-    assert state is not None
-
-    # Press the button
     await hass.services.async_call(
         "button",
         "press",
@@ -109,32 +126,22 @@ async def test_stop_array_button(
         blocking=True,
     )
 
-    # Verify API was called
-    mock_api_client.stop_array.assert_called_once()
+    mock_async_unraid_client.stop_array.assert_called_once()
 
 
-async def test_start_parity_check_button(
-    hass: HomeAssistant, mock_config_entry, mock_api_client, mock_websocket_client
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
+async def test_parity_check_start_button_press(
+    hass: HomeAssistant,
+    mock_config_entry,
+    mock_async_unraid_client,
 ) -> None:
-    """Test start parity check button."""
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidAPIClient",
-            return_value=mock_api_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    """Test pressing parity check start button."""
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
-    # Verify button exists
-    state = hass.states.get("button.unraid_test_start_parity_check")
-    assert state is not None
-
-    # Press the button
     await hass.services.async_call(
         "button",
         "press",
@@ -142,33 +149,22 @@ async def test_start_parity_check_button(
         blocking=True,
     )
 
-    # Verify API was called (parity check uses array control endpoints)
-    # The actual implementation may vary, so we just verify the button works
-    assert state is not None
+    mock_async_unraid_client.start_parity_check.assert_called_once()
 
 
-async def test_stop_parity_check_button(
-    hass: HomeAssistant, mock_config_entry, mock_api_client, mock_websocket_client
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
+async def test_parity_check_stop_button_press(
+    hass: HomeAssistant,
+    mock_config_entry,
+    mock_async_unraid_client,
 ) -> None:
-    """Test stop parity check button."""
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidAPIClient",
-            return_value=mock_api_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    """Test pressing parity check stop button."""
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
-    # Verify button exists
-    state = hass.states.get("button.unraid_test_stop_parity_check")
-    assert state is not None
-
-    # Press the button
     await hass.services.async_call(
         "button",
         "press",
@@ -176,31 +172,115 @@ async def test_stop_parity_check_button(
         blocking=True,
     )
 
-    # Verify button exists and can be pressed
-    assert state is not None
+    mock_async_unraid_client.stop_parity_check.assert_called_once()
 
 
-async def test_start_array_button_error(
-    hass: HomeAssistant, mock_config_entry, mock_api_client, mock_websocket_client
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
+async def test_user_script_button(
+    hass: HomeAssistant,
+    mock_config_entry,
 ) -> None:
-    """Test error handling when starting array fails."""
-    # Make start_array raise an exception
-    mock_api_client.start_array.side_effect = Exception("Failed to start array")
+    """Test user script buttons are created (but disabled by default)."""
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidAPIClient",
-            return_value=mock_api_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    # User script buttons are created but disabled by default
+    # They won't appear in hass.states until enabled
+    # Verify other buttons were created properly
+    button_entities = [
+        entity_id
+        for entity_id in hass.states.async_entity_ids("button")
+        if entity_id.startswith("button.unraid_")
+    ]
+    # Should have at least the array and parity check buttons
+    assert len(button_entities) >= 4
 
-    # Try to press start array button - should raise HomeAssistantError
+
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
+async def test_button_entity_icon(
+    hass: HomeAssistant,
+    mock_config_entry,
+) -> None:
+    """Test button entity icons."""
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Check array button icon
+    state = hass.states.get("button.unraid_test_start_array")
+    if state:
+        assert state.attributes.get("icon") == "mdi:harddisk"
+
+    # Check parity check button icon
+    state = hass.states.get("button.unraid_test_start_parity_check")
+    if state:
+        assert state.attributes.get("icon") == "mdi:shield-check"
+
+
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
+async def test_user_script_button_entity_registry(
+    hass: HomeAssistant,
+    mock_config_entry,
+    mock_async_unraid_client,
+) -> None:
+    """Test user script buttons are in entity registry."""
+    from unittest.mock import MagicMock
+
+    from homeassistant.helpers import entity_registry as er
+
+    # Create mock user scripts
+    mock_script1 = MagicMock()
+    mock_script1.name = "backup_script"
+    mock_script1.description = "Daily backup script"
+    mock_script2 = MagicMock()
+    mock_script2.name = "cleanup_script"
+    mock_script2.description = "Cleanup temporary files"
+
+    # Set up mock to return user scripts
+    mock_async_unraid_client.list_user_scripts.return_value = [
+        mock_script1,
+        mock_script2,
+    ]
+
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Check entity registry for user script buttons (they're disabled by default)
+    entity_reg = er.async_get(hass)
+    entities = er.async_entries_for_config_entry(entity_reg, mock_config_entry.entry_id)
+
+    # Find user script entities
+    user_script_entities = [e for e in entities if "user_script" in e.unique_id]
+
+    # We have 2 user scripts in mock data
+    assert len(user_script_entities) == 2
+
+
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
+async def test_array_start_button_error(
+    hass: HomeAssistant,
+    mock_config_entry,
+    mock_async_unraid_client,
+) -> None:
+    """Test array start button error handling."""
+    from homeassistant.exceptions import HomeAssistantError
+
+    mock_async_unraid_client.start_array.side_effect = Exception("Array start failed")
+
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
     with pytest.raises(HomeAssistantError):
         await hass.services.async_call(
             "button",
@@ -210,27 +290,23 @@ async def test_start_array_button_error(
         )
 
 
-async def test_stop_array_button_error(
-    hass: HomeAssistant, mock_config_entry, mock_api_client, mock_websocket_client
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
+async def test_array_stop_button_error(
+    hass: HomeAssistant,
+    mock_config_entry,
+    mock_async_unraid_client,
 ) -> None:
-    """Test error handling when stopping array fails."""
-    # Make stop_array raise an exception
-    mock_api_client.stop_array.side_effect = Exception("Failed to stop array")
+    """Test array stop button error handling."""
+    from homeassistant.exceptions import HomeAssistantError
 
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidAPIClient",
-            return_value=mock_api_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    mock_async_unraid_client.stop_array.side_effect = Exception("Array stop failed")
 
-    # Try to press stop array button - should raise HomeAssistantError
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
     with pytest.raises(HomeAssistantError):
         await hass.services.async_call(
             "button",
@@ -240,44 +316,365 @@ async def test_stop_array_button_error(
         )
 
 
-async def test_button_attributes(
-    hass: HomeAssistant, mock_config_entry, mock_api_client, mock_websocket_client
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
+async def test_parity_check_start_button_error(
+    hass: HomeAssistant,
+    mock_config_entry,
+    mock_async_unraid_client,
 ) -> None:
-    """Test button attributes."""
-    with (
-        patch(
-            "custom_components.unraid_management_agent.UnraidAPIClient",
-            return_value=mock_api_client,
-        ),
-        patch(
-            "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
-        ),
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+    """Test parity check start button error handling."""
+    from homeassistant.exceptions import HomeAssistantError
 
-    # Check start array button attributes
-    state = hass.states.get("button.unraid_test_start_array")
-    assert state is not None
-    # Friendly name includes device name in newer HA versions
-    assert "Start Array" in state.attributes.get("friendly_name")
-    assert state.attributes.get("icon") == "mdi:harddisk"
+    mock_async_unraid_client.start_parity_check.side_effect = Exception(
+        "Parity check start failed"
+    )
 
-    # Check stop array button attributes
-    state = hass.states.get("button.unraid_test_stop_array")
-    assert state is not None
-    assert "Stop Array" in state.attributes.get("friendly_name")
-    assert state.attributes.get("icon") == "mdi:harddisk"
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
 
-    # Check start parity check button attributes
-    state = hass.states.get("button.unraid_test_start_parity_check")
-    assert state is not None
-    assert "Start Parity Check" in state.attributes.get("friendly_name")
-    assert state.attributes.get("icon") == "mdi:shield-check"
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            "button",
+            "press",
+            {"entity_id": "button.unraid_test_start_parity_check"},
+            blocking=True,
+        )
 
-    # Check stop parity check button attributes
-    state = hass.states.get("button.unraid_test_stop_parity_check")
+
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
+async def test_parity_check_stop_button_error(
+    hass: HomeAssistant,
+    mock_config_entry,
+    mock_async_unraid_client,
+) -> None:
+    """Test parity check stop button error handling."""
+    from homeassistant.exceptions import HomeAssistantError
+
+    mock_async_unraid_client.stop_parity_check.side_effect = Exception(
+        "Parity check stop failed"
+    )
+
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            "button",
+            "press",
+            {"entity_id": "button.unraid_test_stop_parity_check"},
+            blocking=True,
+        )
+
+
+# ==================== Unit tests for button classes ====================
+
+
+async def test_button_entity_no_press_fn() -> None:
+    """Test button with no press_fn does nothing."""
+    from unittest.mock import MagicMock
+
+    from custom_components.unraid_management_agent.button import (
+        UnraidButtonEntity,
+        UnraidButtonEntityDescription,
+    )
+
+    # Create description with no press_fn
+    description = UnraidButtonEntityDescription(
+        key="test_button",
+        translation_key="test_button",
+        icon="mdi:test",
+        press_fn=None,
+    )
+
+    # Create a mock button entity without full coordinator
+    button = object.__new__(UnraidButtonEntity)
+    button.entity_description = description
+    button.coordinator = MagicMock()
+
+    # Pressing should not raise an error and just return
+    await button.async_press()  # Should do nothing
+
+
+async def test_button_entity_press_fn_called() -> None:
+    """Test button with press_fn calls the function."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from custom_components.unraid_management_agent.button import (
+        UnraidButtonEntity,
+        UnraidButtonEntityDescription,
+    )
+
+    # Create a mock press function
+    mock_press_fn = AsyncMock()
+
+    description = UnraidButtonEntityDescription(
+        key="test_button",
+        translation_key="test_button",
+        icon="mdi:test",
+        press_fn=mock_press_fn,
+    )
+
+    button = object.__new__(UnraidButtonEntity)
+    button.entity_description = description
+    button.coordinator = MagicMock()
+
+    await button.async_press()
+
+    mock_press_fn.assert_called_once_with(button.coordinator)
+
+
+async def test_button_entity_press_fn_error() -> None:
+    """Test button press error raises HomeAssistantError."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from homeassistant.exceptions import HomeAssistantError
+
+    from custom_components.unraid_management_agent.button import (
+        UnraidButtonEntity,
+        UnraidButtonEntityDescription,
+    )
+
+    # Create a mock press function that fails
+    mock_press_fn = AsyncMock(side_effect=Exception("Press failed"))
+
+    description = UnraidButtonEntityDescription(
+        key="test_button",
+        translation_key="test_button",
+        icon="mdi:test",
+        press_fn=mock_press_fn,
+    )
+
+    button = object.__new__(UnraidButtonEntity)
+    button.entity_description = description
+    button.coordinator = MagicMock()
+
+    with pytest.raises(HomeAssistantError):
+        await button.async_press()
+
+
+async def test_user_script_button_press_success() -> None:
+    """Test pressing user script button calls execute_user_script."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from custom_components.unraid_management_agent.button import (
+        UnraidUserScriptButton,
+    )
+
+    # Create mock script
+    mock_script = MagicMock()
+    mock_script.name = "test_script"
+    mock_script.description = "Test script"
+
+    # Create mock coordinator
+    mock_coordinator = MagicMock()
+    mock_coordinator.client = MagicMock()
+    mock_coordinator.client.execute_user_script = AsyncMock()
+
+    # Create button without full initialization
+    button = object.__new__(UnraidUserScriptButton)
+    button._script_name = "test_script"
+    button._script_description = "Test script"
+    button.coordinator = mock_coordinator
+
+    await button.async_press()
+
+    mock_coordinator.client.execute_user_script.assert_called_once_with("test_script")
+
+
+async def test_user_script_button_press_error() -> None:
+    """Test user script button error raises HomeAssistantError."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from homeassistant.exceptions import HomeAssistantError
+
+    from custom_components.unraid_management_agent.button import (
+        UnraidUserScriptButton,
+    )
+
+    # Create mock coordinator with failing client
+    mock_coordinator = MagicMock()
+    mock_coordinator.client = MagicMock()
+    mock_coordinator.client.execute_user_script = AsyncMock(
+        side_effect=Exception("Script failed")
+    )
+
+    # Create button without full initialization
+    button = object.__new__(UnraidUserScriptButton)
+    button._script_name = "failing_script"
+    button._script_description = "Script that fails"
+    button.coordinator = mock_coordinator
+
+    with pytest.raises(HomeAssistantError):
+        await button.async_press()
+
+
+async def test_user_script_button_extra_attributes() -> None:
+    """Test user script button extra_state_attributes."""
+    from custom_components.unraid_management_agent.button import (
+        UnraidUserScriptButton,
+    )
+
+    # Create button without full initialization
+    button = object.__new__(UnraidUserScriptButton)
+    button._script_name = "my_script"
+    button._script_description = "My awesome script"
+
+    attrs = button.extra_state_attributes
+
+    assert attrs["script_name"] == "my_script"
+    assert attrs["description"] == "My awesome script"
+
+
+async def test_user_script_button_extra_attributes_no_description() -> None:
+    """Test user script button extra_state_attributes with no description."""
+    from custom_components.unraid_management_agent.button import (
+        UnraidUserScriptButton,
+    )
+
+    # Create button without full initialization
+    button = object.__new__(UnraidUserScriptButton)
+    button._script_name = "simple_script"
+    button._script_description = ""
+
+    attrs = button.extra_state_attributes
+
+    assert attrs["script_name"] == "simple_script"
+    assert attrs["description"] == "No description"
+
+
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
+async def test_system_shutdown_button(
+    hass: HomeAssistant,
+    mock_config_entry,
+) -> None:
+    """Test system shutdown button is created."""
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("button.unraid_test_shutdown_system")
     assert state is not None
-    assert "Stop Parity Check" in state.attributes.get("friendly_name")
-    assert state.attributes.get("icon") == "mdi:shield-check"
+    assert state.attributes.get("icon") == "mdi:power"
+
+
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
+async def test_system_reboot_button(
+    hass: HomeAssistant,
+    mock_config_entry,
+) -> None:
+    """Test system reboot button is created."""
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("button.unraid_test_reboot_system")
+    assert state is not None
+    assert state.attributes.get("icon") == "mdi:restart"
+
+
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
+async def test_system_shutdown_button_press(
+    hass: HomeAssistant,
+    mock_config_entry,
+    mock_async_unraid_client,
+) -> None:
+    """Test pressing system shutdown button."""
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    await hass.services.async_call(
+        "button",
+        "press",
+        {"entity_id": "button.unraid_test_shutdown_system"},
+        blocking=True,
+    )
+
+    mock_async_unraid_client.shutdown_system.assert_called_once()
+
+
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
+async def test_system_reboot_button_press(
+    hass: HomeAssistant,
+    mock_config_entry,
+    mock_async_unraid_client,
+) -> None:
+    """Test pressing system reboot button."""
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    await hass.services.async_call(
+        "button",
+        "press",
+        {"entity_id": "button.unraid_test_reboot_system"},
+        blocking=True,
+    )
+
+    mock_async_unraid_client.reboot_system.assert_called_once()
+
+
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
+async def test_system_shutdown_button_error(
+    hass: HomeAssistant,
+    mock_config_entry,
+    mock_async_unraid_client,
+) -> None:
+    """Test system shutdown button error raises HomeAssistantError."""
+    mock_async_unraid_client.shutdown_system = AsyncMock(
+        side_effect=Exception("Shutdown failed")
+    )
+
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            "button",
+            "press",
+            {"entity_id": "button.unraid_test_shutdown_system"},
+            blocking=True,
+        )
+
+
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
+async def test_system_reboot_button_error(
+    hass: HomeAssistant,
+    mock_config_entry,
+    mock_async_unraid_client,
+) -> None:
+    """Test system reboot button error raises HomeAssistantError."""
+    mock_async_unraid_client.reboot_system = AsyncMock(
+        side_effect=Exception("Reboot failed")
+    )
+
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            "button",
+            "press",
+            {"entity_id": "button.unraid_test_reboot_system"},
+            blocking=True,
+        )

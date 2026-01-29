@@ -5,9 +5,8 @@
         "title": "Connect to Unraid Server",
         "description": "Enter the connection details for your Unraid Management Agent",
         "data": {
-          "host": "Host (IP address or hostname)",
-          "port": "Port",
-          "update_interval": "Update interval (seconds)",
+          "host": "[%key:common::config_flow::data::host%]",
+          "port": "[%key:common::config_flow::data::port%]",
           "enable_websocket": "Enable WebSocket for real-time updates"
         }
       },
@@ -15,22 +14,21 @@
         "title": "Reconfigure Unraid Server",
         "description": "Update the connection details for your Unraid Management Agent",
         "data": {
-          "host": "Host (IP address or hostname)",
-          "port": "Port",
-          "update_interval": "Update interval (seconds)",
+          "host": "[%key:common::config_flow::data::host%]",
+          "port": "[%key:common::config_flow::data::port%]",
           "enable_websocket": "Enable WebSocket for real-time updates"
         }
       }
     },
     "error": {
-      "cannot_connect": "Failed to connect to the Unraid server. Please check the host and port.",
-      "invalid_auth": "Invalid authentication credentials.",
-      "timeout": "Connection timeout. Please check your network connection.",
-      "already_configured": "This Unraid server is already configured.",
-      "unknown": "An unknown error occurred. Please check the logs."
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
+      "timeout": "[%key:common::config_flow::error::timeout%]",
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]",
+      "unknown": "[%key:common::config_flow::error::unknown%]"
     },
     "abort": {
-      "already_configured": "This Unraid server is already configured.",
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]",
       "unique_id_mismatch": "The server at this address has a different unique ID. Create a new entry instead."
     }
   },
@@ -38,10 +36,12 @@
     "step": {
       "init": {
         "title": "Unraid Management Agent Options",
-        "description": "Configure update intervals and features",
+        "description": "Configure integration features",
         "data": {
-          "update_interval": "Update interval (seconds)",
           "enable_websocket": "Enable WebSocket for real-time updates"
+        },
+        "data_description": {
+          "enable_websocket": "WebSocket provides instant updates instead of polling"
         }
       }
     }
@@ -56,6 +56,9 @@
       },
       "cpu_temperature": {
         "name": "CPU Temperature"
+      },
+      "motherboard_temperature": {
+        "name": "Motherboard Temperature"
       },
       "uptime": {
         "name": "Uptime"
@@ -72,8 +75,8 @@
       "gpu_utilization": {
         "name": "GPU Utilization"
       },
-      "gpu_cpu_temperature": {
-        "name": "GPU CPU Temperature"
+      "gpu_temperature": {
+        "name": "GPU Temperature"
       },
       "gpu_power": {
         "name": "GPU Power"
@@ -86,6 +89,42 @@
       },
       "ups_runtime": {
         "name": "UPS Runtime"
+      },
+      "ups_power": {
+        "name": "UPS Power"
+      },
+      "flash_usage": {
+        "name": "Flash Usage"
+      },
+      "flash_free_space": {
+        "name": "Flash Free Space"
+      },
+      "plugins": {
+        "name": "Installed Plugins"
+      },
+      "latest_version": {
+        "name": "Unraid Version"
+      },
+      "plugins_with_updates": {
+        "name": "Plugins With Updates"
+      },
+      "next_parity_check": {
+        "name": "Next Parity Check"
+      },
+      "last_parity_check": {
+        "name": "Last Parity Check"
+      },
+      "notifications": {
+        "name": "Notifications"
+      },
+      "docker_vdisk_usage": {
+        "name": "Docker vDisk Usage"
+      },
+      "log_filesystem_usage": {
+        "name": "Log Filesystem Usage"
+      },
+      "zfs_arc_hit_ratio": {
+        "name": "ZFS ARC Hit Ratio"
       }
     },
     "binary_sensor": {
@@ -100,6 +139,24 @@
       },
       "ups_connected": {
         "name": "UPS Connected"
+      },
+      "zfs_available": {
+        "name": "ZFS Available"
+      },
+      "network_interface": {
+        "name": "Network {interface}"
+      },
+      "update_available": {
+        "name": "Update Available"
+      },
+      "flash_healthy": {
+        "name": "Flash Healthy"
+      },
+      "mover_running": {
+        "name": "Mover Running"
+      },
+      "parity_check_scheduled": {
+        "name": "Parity Check Scheduled"
       }
     },
     "switch": {
@@ -122,7 +179,96 @@
       },
       "parity_check_stop": {
         "name": "Stop Parity Check"
+      },
+      "user_script": {
+        "name": "User Script {script_name}"
+      },
+      "system_shutdown": {
+        "name": "Shutdown System"
+      },
+      "system_reboot": {
+        "name": "Reboot System"
       }
+    }
+  },
+  "exceptions": {
+    "api_error": {
+      "message": "Error communicating with Unraid API"
+    },
+    "no_config_entries": {
+      "message": "No Unraid Management Agent entries configured"
+    },
+    "container_start_failed": {
+      "message": "Failed to start container {container_id}"
+    },
+    "container_stop_failed": {
+      "message": "Failed to stop container {container_id}"
+    },
+    "container_restart_failed": {
+      "message": "Failed to restart container {container_id}"
+    },
+    "container_pause_failed": {
+      "message": "Failed to pause container {container_id}"
+    },
+    "container_resume_failed": {
+      "message": "Failed to resume container {container_id}"
+    },
+    "vm_start_failed": {
+      "message": "Failed to start VM {vm_id}"
+    },
+    "vm_stop_failed": {
+      "message": "Failed to stop VM {vm_id}"
+    },
+    "vm_restart_failed": {
+      "message": "Failed to restart VM {vm_id}"
+    },
+    "vm_pause_failed": {
+      "message": "Failed to pause VM {vm_id}"
+    },
+    "vm_resume_failed": {
+      "message": "Failed to resume VM {vm_id}"
+    },
+    "vm_hibernate_failed": {
+      "message": "Failed to hibernate VM {vm_id}"
+    },
+    "vm_force_stop_failed": {
+      "message": "Failed to force stop VM {vm_id}"
+    },
+    "array_start_failed": {
+      "message": "Failed to start array"
+    },
+    "array_stop_failed": {
+      "message": "Failed to stop array"
+    },
+    "parity_check_start_failed": {
+      "message": "Failed to start parity check"
+    },
+    "parity_check_stop_failed": {
+      "message": "Failed to stop parity check"
+    },
+    "parity_check_pause_failed": {
+      "message": "Failed to pause parity check"
+    },
+    "parity_check_resume_failed": {
+      "message": "Failed to resume parity check"
+    },
+    "button_error": {
+      "message": "Failed to execute button action: {key}"
+    },
+    "user_script_error": {
+      "message": "Failed to execute user script: {script_name}"
+    },
+    "container_start_error": {
+      "message": "Failed to start container: {name}"
+    },
+    "container_stop_error": {
+      "message": "Failed to stop container: {name}"
+    },
+    "vm_start_error": {
+      "message": "Failed to start VM: {name}"
+    },
+    "vm_stop_error": {
+      "message": "Failed to stop VM: {name}"
     }
   },
   "services": {
@@ -298,4 +444,3 @@
     }
   }
 }
-

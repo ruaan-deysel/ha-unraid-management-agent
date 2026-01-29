@@ -6,20 +6,22 @@ import logging
 from typing import Any
 
 import voluptuous as vol
-from homeassistant import config_entries
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlowWithReload,
+)
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from uma_api import UnraidClient, UnraidConnectionError
 
-from .api_client import UnraidAPIClient
 from .const import (
     CONF_ENABLE_WEBSOCKET,
-    CONF_UPDATE_INTERVAL,
     DEFAULT_ENABLE_WEBSOCKET,
     DEFAULT_PORT,
-    DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     ERROR_CANNOT_CONNECT,
     ERROR_TIMEOUT,
@@ -34,9 +36,6 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_PORT, default=DEFAULT_PORT): vol.All(
             vol.Coerce(int), vol.Range(min=1, max=65535)
         ),
-        vol.Optional(CONF_UPDATE_INTERVAL, default=DEFAULT_UPDATE_INTERVAL): vol.All(
-            vol.Coerce(int), vol.Range(min=5, max=300)
-        ),
         vol.Optional(
             CONF_ENABLE_WEBSOCKET, default=DEFAULT_ENABLE_WEBSOCKET
         ): cv.boolean,
@@ -50,41 +49,42 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
     Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
     """
+    # Use Home Assistant's shared client session (inject-websession)
     session = async_get_clientsession(hass)
-    client = UnraidAPIClient(
+    async with UnraidClient(
         host=data[CONF_HOST],
         port=data[CONF_PORT],
         session=session,
-    )
+    ) as client:
+        try:
+            # Test connection by getting system info - returns typed Pydantic model
+            system_info = await client.get_system_info()
+            hostname = system_info.hostname or "unknown"
 
-    try:
-        # Test connection by getting system info
-        system_info = await client.get_system_info()
-        hostname = system_info.get("hostname", "unknown")
-
-        return {
-            "title": f"Unraid ({hostname})",
-            "hostname": hostname,
-        }
-    except TimeoutError as err:
-        _LOGGER.error("Timeout connecting to Unraid server: %s", err)
-        raise TimeoutError(ERROR_TIMEOUT) from err
-    except ConnectionError as err:
-        _LOGGER.error("Cannot connect to Unraid server: %s", err)
-        raise ConnectionError(ERROR_CANNOT_CONNECT) from err
-    except Exception as err:
-        _LOGGER.exception("Unexpected exception: %s", err)
-        raise Exception(ERROR_UNKNOWN) from err
+            return {
+                "title": f"Unraid ({hostname})",
+                "hostname": hostname,
+            }
+        except TimeoutError as err:
+            _LOGGER.error("Timeout connecting to Unraid server: %s", err)
+            raise TimeoutError(ERROR_TIMEOUT) from err
+        except UnraidConnectionError as err:
+            _LOGGER.error("Cannot connect to Unraid server: %s", err)
+            raise ConnectionError(ERROR_CANNOT_CONNECT) from err
+        except Exception as err:
+            _LOGGER.exception("Unexpected exception: %s", err)
+            raise Exception(ERROR_UNKNOWN) from err
 
 
-class UnraidConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class UnraidConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Unraid Management Agent."""
 
     VERSION = 1
+    MINOR_VERSION = 1
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Handle the initial step."""
         errors: dict[str, str] = {}
 
@@ -95,7 +95,7 @@ class UnraidConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = ERROR_TIMEOUT
             except ConnectionError:
                 errors["base"] = ERROR_CANNOT_CONNECT
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = ERROR_UNKNOWN
             else:
@@ -118,7 +118,7 @@ class UnraidConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Handle reconfiguration of the integration."""
         reconfigure_entry = self._get_reconfigure_entry()
         errors: dict[str, str] = {}
@@ -130,7 +130,7 @@ class UnraidConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = ERROR_TIMEOUT
             except ConnectionError:
                 errors["base"] = ERROR_CANNOT_CONNECT
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 _LOGGER.exception("Unexpected exception during reconfigure")
                 errors["base"] = ERROR_UNKNOWN
             else:
@@ -159,12 +159,6 @@ class UnraidConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         default=reconfigure_entry.data.get(CONF_PORT, DEFAULT_PORT),
                     ): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
                     vol.Optional(
-                        CONF_UPDATE_INTERVAL,
-                        default=reconfigure_entry.data.get(
-                            CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
-                        ),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=5, max=300)),
-                    vol.Optional(
                         CONF_ENABLE_WEBSOCKET,
                         default=reconfigure_entry.data.get(
                             CONF_ENABLE_WEBSOCKET, DEFAULT_ENABLE_WEBSOCKET
@@ -178,18 +172,18 @@ class UnraidConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(
-        _config_entry: config_entries.ConfigEntry,
+        config_entry: ConfigEntry,  # noqa: ARG004
     ) -> UnraidOptionsFlowHandler:
         """Get the options flow for this handler."""
         return UnraidOptionsFlowHandler()
 
 
-class UnraidOptionsFlowHandler(config_entries.OptionsFlow):
+class UnraidOptionsFlowHandler(OptionsFlowWithReload):
     """Handle options flow for Unraid Management Agent."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
@@ -198,12 +192,6 @@ class UnraidOptionsFlowHandler(config_entries.OptionsFlow):
             step_id="init",
             data_schema=vol.Schema(
                 {
-                    vol.Optional(
-                        CONF_UPDATE_INTERVAL,
-                        default=self.config_entry.options.get(
-                            CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
-                        ),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=5, max=300)),
                     vol.Optional(
                         CONF_ENABLE_WEBSOCKET,
                         default=self.config_entry.options.get(

@@ -3,14 +3,15 @@ name: Feature Request
 about: Suggest an enhancement for the Unraid Management Agent integration
 title: "[FEATURE] "
 labels: enhancement
-assignees: ''
-
+assignees: ""
 ---
 
 > Important: If this feature request is for the Unraid Management Agent backend/plugin/API (not the Home Assistant integration), please open it here instead: https://github.com/ruaan-deysel/unraid-management-agent/issues/new/choose
 
 ## What Unraid Component?
+
 Select what you want to monitor/control:
+
 - [ ] System metrics (CPU, RAM, temp)
 - [ ] Array & disk management
 - [ ] Docker containers
@@ -21,15 +22,18 @@ Select what you want to monitor/control:
 - [ ] UPS / Power monitoring
 - [ ] Notifications
 - [ ] User scripts
-- [ ] Other: ___
+- [ ] Other: \_\_\_
 
 ## Feature Description
+
 A clear and concise description of the feature you want to add.
 
 ## Use Case
+
 Why would this be helpful? What problem does it solve?
 
 ## Proposed Implementation
+
 How would you like this feature to work? What entities/sensors would be created?
 
 ```yaml
@@ -39,10 +43,13 @@ How would you like this feature to work? What entities/sensors would be created?
 ```
 
 ## Data Requirements
+
 What data from Unraid would be needed? Is this available from the Unraid Management Agent API?
 
 ## Alternatives Considered
+
 Any alternative approaches or existing workarounds?
 
 ## Related Issues
+
 Link any related issues here (e.g., Related to #456).

@@ -12,6 +12,7 @@ custom_components/*/*.py[cod]
 
 # Virtual environment
 venv/
+.venv/
 ENV/
 env/
 env.bak/
@@ -25,21 +26,24 @@ env.bak/
 
 # Test coverage reports
 .coverage
-coverage/
 .coverage.*
+coverage/
+coverage.xml
+htmlcov/
 
 # Cache directories
 .cache/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
 
 # Logs
 *.log
+*.log.*
 
 # Unit test / Coverage reports
-htmlcov/
 .tox/
 .nox/
-.cache/
-coverage.xml
 nosetests.xml
 test-results.xml
 
@@ -82,10 +86,8 @@ __pycache__
 
 
 # misc
-.coverage
+.python-version
 .vscode
-coverage.xml
-.ruff_cache
 
 
 # Home Assistant configuration

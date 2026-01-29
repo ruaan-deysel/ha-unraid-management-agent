@@ -2,6 +2,8 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
 [![GitHub Release](https://img.shields.io/github/release/ruaan-deysel/ha-unraid-management-agent.svg)](https://github.com/ruaan-deysel/ha-unraid-management-agent/releases)
+[![codecov](https://codecov.io/gh/ruaan-deysel/ha-unraid-management-agent/branch/main/graph/badge.svg)](https://codecov.io/gh/ruaan-deysel/ha-unraid-management-agent)
+[![CI](https://github.com/ruaan-deysel/ha-unraid-management-agent/workflows/CI/badge.svg)](https://github.com/ruaan-deysel/ha-unraid-management-agent/actions/workflows/ci.yml)
 [![Community Forum](https://img.shields.io/badge/Community-Forum-blue)](https://community.home-assistant.io/t/unraid-integration)
 [![License](https://img.shields.io/github/license/ruaan-deysel/ha-unraid-management-agent.svg)](https://github.com/ruaan-deysel/ha-unraid-management-agent/blob/main/LICENSE)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ruaan-deysel/ha-unraid-management-agent)
@@ -34,6 +36,13 @@ Complete Home Assistant custom integration for monitoring and controlling Unraid
 - **Automatic Fallback**: Falls back to REST API polling if WebSocket fails
 - **Exponential Backoff**: Smart reconnection strategy
 - **No Data Loss**: Seamless transition between WebSocket and polling
+
+### 🧠 Smart Entity Management
+
+- **Collector-Based Filtering**: Only creates entities for enabled collectors on your Unraid server
+- **Physical Disk Detection**: Automatically filters out virtual disks (docker_vdisk, log) and empty disk slots
+- **Dynamic Discovery**: Automatically discovers containers, VMs, disks, network interfaces, and more
+- **Minimal Clutter**: Disabled collectors result in no orphan entities
 
 ### 🏠 Home Assistant Native
 
@@ -439,6 +448,34 @@ ha-unraid-management-agent/
 
 ### Testing
 
+Run the test suite:
+
+```bash
+# Run all tests
+pytest
+
+# Run tests with coverage report
+pytest --cov --cov-report=term-missing --cov-report=html
+
+# Run specific test file
+pytest tests/test_coordinator.py -v
+
+# Run tests in parallel
+pytest -n auto
+```
+
+**CI/CD Pipeline:**
+
+- Automated tests run on every push and pull request
+- Tests run on Python 3.12 and 3.13
+- Coverage reports automatically uploaded to Codecov
+- Test results tracked in GitHub Actions
+
+**Coverage Requirements:**
+
+- Minimum coverage: 60%
+- Coverage reports available at [Codecov](https://codecov.io/gh/ruaan-deysel/ha-unraid-management-agent)
+
 1. Install in development mode
 2. Enable debug logging:
 
@@ -478,9 +515,33 @@ For detailed release process documentation, see [docs/RELEASE_PROCESS.md](docs/R
 Contributions are welcome! Please:
 
 1. Fork the repository
-2. Create a feature branch
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Make your changes
-4. Test thoroughly
+4. Run linting and tests:
+   ```bash
+   scripts/lint
+   pytest
+   ```
+5. Commit your changes (`git commit -m 'Add amazing feature'`)
+6. Push to the branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
+
+**Development Guidelines:**
+
+- Follow Home Assistant core integration best practices
+- Maintain 60%+ code coverage
+- Use type hints throughout
+- Add tests for new features
+- Update documentation as needed
+
+**CI Checks:**
+All pull requests must pass:
+
+- ✅ Ruff linting (format and check)
+- ✅ Pytest test suite (Python 3.12 & 3.13)
+- ✅ Coverage threshold (60% minimum)
+- ✅ Manifest and configuration validation
+
 5. Submit a pull request
 
 ## License

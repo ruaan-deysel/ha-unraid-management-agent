@@ -5,25 +5,25 @@ rules:
   # Bronze
   action-setup:
     status: done
-    comment: Services registered in async_setup (domain-level, not per-entry)
+    comment: Services registered in async_setup with proper validation schemas
   appropriate-polling:
     status: done
-    comment: DataUpdateCoordinator with configurable interval (5-300s)
+    comment: DataUpdateCoordinator with fixed 30s interval (local network minimum)
   brands:
     status: todo
     comment: No brand assets in HA brands repository
   common-modules:
     status: done
-    comment: Shared base classes, const.py, api_client.py
+    comment: Shared base classes, const.py, coordinator.py, entity.py
   config-flow:
     status: done
-    comment: Full UI config flow with options
+    comment: Full UI config flow with options and reconfigure support
   config-flow-test-coverage:
     status: done
     comment: tests/test_config_flow.py covers success, errors, options
   dependency-transparency:
     status: done
-    comment: Only aiohttp>=3.9.0 in requirements
+    comment: Only uma-api>=1.2.1 in requirements
   docs-actions:
     status: todo
     comment: README lacks detailed service action documentation
@@ -41,10 +41,10 @@ rules:
     comment: Uses CoordinatorEntity pattern correctly
   entity-unique-id:
     status: done
-    comment: All entities have unique_id property
+    comment: All entities have unique_id based on entry_id and key
   has-entity-name:
     status: done
-    comment: _attr_has_entity_name = True in all base classes
+    comment: _attr_has_entity_name = True in base entity class
   runtime-data:
     status: done
     comment: Uses entry.runtime_data with UnraidRuntimeData dataclass
@@ -61,10 +61,10 @@ rules:
   # Silver
   action-exceptions:
     status: done
-    comment: Services raise HomeAssistantError on failure
+    comment: Services raise HomeAssistantError with proper messages on failure
   config-entry-unloading:
     status: done
-    comment: async_unload_entry properly implemented
+    comment: async_unload_entry properly stops WebSocket and closes client
   docs-configuration-parameters:
     status: todo
     comment: Options in strings.json but not documented in README
@@ -93,7 +93,7 @@ rules:
   # Gold
   devices:
     status: done
-    comment: All entities grouped under single Unraid device
+    comment: All entities grouped under single Unraid device with proper DeviceInfo
   diagnostics:
     status: done
     comment: diagnostics.py with redacted config and coordinator data
@@ -126,22 +126,22 @@ rules:
     comment: No use case examples in documentation
   dynamic-devices:
     status: exempt
-    comment: Single device per config entry, entities created at setup
+    comment: Single device per config entry, dynamic entities created at setup
   entity-category:
     status: done
-    comment: EntityCategory.DIAGNOSTIC used for status sensors
+    comment: EntityCategory.DIAGNOSTIC used for appropriate sensors
   entity-device-class:
     status: done
-    comment: Proper device classes (temperature, power, battery, etc.)
+    comment: Proper device classes (temperature, power, battery, duration, etc.)
   entity-disabled-by-default:
     status: done
-    comment: Less important entities (fans, network RX/TX, ZFS ARC, disk health, user scripts) disabled by default
+    comment: User scripts disabled by default with _attr_entity_registry_enabled_default
   entity-translations:
     status: done
     comment: Entity translations defined in strings.json entity section
   exception-translations:
-    status: todo
-    comment: Exception messages not translatable
+    status: done
+    comment: All HomeAssistantError and UpdateFailed use translation_domain/translation_key/translation_placeholders
   icon-translations:
     status: done
     comment: icons.json with state-based icons for entities and services
@@ -150,7 +150,7 @@ rules:
     comment: async_step_reconfigure implemented to change host/port
   repair-issues:
     status: done
-    comment: repairs.py implemented for issue detection
+    comment: repairs.py implemented for disk health and temperature issues
   stale-devices:
     status: exempt
     comment: Single device per entry, removed on unload
@@ -158,10 +158,10 @@ rules:
   # Platinum
   async-dependency:
     status: done
-    comment: aiohttp is fully async
+    comment: uma-api is fully async
   inject-websession:
     status: done
-    comment: Uses async_get_clientsession(hass)
+    comment: Uses async_get_clientsession(hass) for shared session pooling in __init__.py and config_flow.py
   strict-typing:
     status: done
     comment: Type hints present with py.typed marker
