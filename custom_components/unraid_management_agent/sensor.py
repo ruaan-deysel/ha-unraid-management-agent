@@ -26,6 +26,7 @@ from homeassistant.const import (
     PERCENTAGE,
     EntityCategory,
     UnitOfDataRate,
+    UnitOfEnergy,
     UnitOfInformation,
     UnitOfPower,
     UnitOfTemperature,
@@ -33,6 +34,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 from uma_api.formatting import format_bytes, format_duration
 
 from . import UnraidConfigEntry, UnraidDataUpdateCoordinator
@@ -1237,6 +1239,15 @@ UPS_SENSOR_DESCRIPTIONS: tuple[UnraidSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=_get_ups_power,
     ),
+    UnraidSensorEntityDescription(
+        key="ups_energy",
+        translation_key="ups_energy",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=3,
+        value_fn=lambda _: None,  # Handled by specialized entity class
+    ),
 )
 
 
@@ -2098,6 +2109,122 @@ class UnraidZFSPoolHealthSensor(UnraidZFSPoolSensorBase):
 
 
 # =============================================================================
+# UPS Energy Sensor (Calculated from Power)
+# =============================================================================
+
+
+class UnraidUPSEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
+    """
+    UPS Energy sensor that calculates cumulative energy from power readings.
+
+    This sensor integrates power readings over time to calculate total energy
+    consumption in kWh. It persists its state across restarts using RestoreEntity.
+    """
+
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_has_entity_name = True
+    _attr_suggested_display_precision = 3
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        entry: UnraidConfigEntry,
+    ) -> None:
+        """Initialize the UPS energy sensor."""
+        super().__init__(coordinator, "ups_energy")
+        self._entry = entry
+        self._attr_translation_key = "ups_energy"
+        self._total_energy: float = 0.0
+        self._last_update: datetime | None = None
+        self._last_power: float | None = None
+
+    async def async_added_to_hass(self) -> None:
+        """Restore previous state when added to hass."""
+        await super().async_added_to_hass()
+
+        # Restore previous state
+        if (last_state := await self.async_get_last_state()) is not None:
+            if last_state.state not in (None, "unknown", "unavailable"):
+                try:
+                    self._total_energy = float(last_state.state)
+                except (ValueError, TypeError):
+                    self._total_energy = 0.0
+
+            # Restore last update time from attributes if available
+            if last_state.attributes.get("last_reset"):
+                try:
+                    self._last_update = datetime.fromisoformat(
+                        str(last_state.attributes["last_reset"])
+                    )
+                except (ValueError, TypeError):
+                    self._last_update = None
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        self._update_energy()
+        self.async_write_ha_state()
+
+    def _update_energy(self) -> None:
+        """Calculate and update energy based on current power reading."""
+        if not self.coordinator.data or not self.coordinator.data.ups:
+            return
+
+        ups = self.coordinator.data.ups
+        current_power = getattr(ups, "power_watts", None)
+
+        if current_power is None or current_power < 0:
+            return
+
+        now = datetime.now(UTC)
+
+        if self._last_update is not None and self._last_power is not None:
+            # Calculate time delta in hours
+            time_delta = (now - self._last_update).total_seconds() / 3600
+
+            # Sanity check: only calculate if time delta is reasonable (< 1 hour)
+            # This prevents huge jumps after restarts or long unavailability
+            if 0 < time_delta < 1:
+                # Use trapezoidal integration (average of last and current power)
+                avg_power = (self._last_power + current_power) / 2
+                # Energy (kWh) = Power (W) * Time (h) / 1000
+                energy_increment = (avg_power * time_delta) / 1000
+                self._total_energy += energy_increment
+
+        self._last_update = now
+        self._last_power = current_power
+
+    @property
+    def native_value(self) -> float:
+        """Return the total energy consumed in kWh."""
+        return round(self._total_energy, 3)
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        if not self.coordinator.last_update_success:
+            return False
+        if not self.coordinator.data:
+            return False
+        return self.coordinator.data.ups is not None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        attrs: dict[str, Any] = {}
+
+        if self._last_update:
+            attrs["last_reset"] = self._last_update.isoformat()
+
+        if self._last_power is not None:
+            attrs["current_power_watts"] = self._last_power
+
+        return attrs
+
+
+# =============================================================================
 # Helper Functions
 # =============================================================================
 
@@ -2181,7 +2308,13 @@ async def async_setup_entry(
         and getattr(data.ups, "status", None) is not None
     ):
         for description in UPS_SENSOR_DESCRIPTIONS:
+            # Skip ups_energy - it uses a specialized entity class
+            if description.key == "ups_energy":
+                continue
             entities.append(UnraidSensorEntity(coordinator, description))
+
+        # Add UPS Energy sensor (uses specialized class for state restoration)
+        entities.append(UnraidUPSEnergySensor(coordinator, entry))
 
     # Disk sensors - only if disk collector is enabled
     if coordinator.is_collector_enabled("disk"):

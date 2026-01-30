@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2026.2.0] - 2026-01-29
+## [2026.2.0] - 2026-01-30
 
 ### Added
 
@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added `is_collector_enabled()` helper method to coordinator for checking collector status
   - If a collector is disabled (e.g., nut, zfs, unassigned), its corresponding entities are not created
   - Reduces entity clutter by only showing relevant entities based on server configuration
+
+- **UPS Energy Sensor**: New `sensor.{hostname}_ups_energy` - Tracks cumulative UPS energy consumption in kWh
+  - Attributes: rated_power (W), load_status, battery_status, estimated_runtime, current_load (%), battery_charge (%)
+  - Uses trapezoidal integration to convert instantaneous power (W) to cumulative energy (kWh)
+  - Compatible with Home Assistant Energy Dashboard for UPS energy monitoring
 
 - **Physical Disk Filtering**: Improved disk entity creation to only include actual physical disks
   - Excludes virtual disks (`docker_vdisk`, `log` roles)

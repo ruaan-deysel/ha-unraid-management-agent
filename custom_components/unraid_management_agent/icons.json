@@ -75,10 +75,10 @@
         "default": "mdi:battery"
       },
       "ups_power": {
-        "default": "mdi:power"
+        "default": "mdi:flash"
       },
       "ups_energy": {
-        "default": "mdi:battery"
+        "default": "mdi:lightning-bolt"
       },
       "network_rx": {
         "default": "mdi:ethernet"
