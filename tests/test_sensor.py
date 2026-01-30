@@ -28,6 +28,7 @@ from custom_components.unraid_management_agent.sensor import (
     # Entity description pattern classes
     UnraidSensorEntity,
     UnraidShareUsageSensor,
+    UnraidUPSEnergySensor,
     UnraidZFSPoolHealthSensor,
     UnraidZFSPoolUsageSensor,
     # Value functions for testing
@@ -4535,3 +4536,258 @@ def test_network_sensor_get_interface_no_network() -> None:
 
     result = sensor._get_interface()
     assert result is None
+
+
+# =============================================================================
+# UPS Energy Sensor Tests
+# =============================================================================
+
+
+def test_ups_energy_sensor_initialization() -> None:
+    """Test UPS energy sensor initialization."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
+
+    assert sensor._total_energy == 0.0
+    assert sensor._last_update is None
+    assert sensor._last_power is None
+    assert sensor._attr_translation_key == "ups_energy"
+
+
+def test_ups_energy_sensor_native_value() -> None:
+    """Test UPS energy sensor native_value property."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
+    sensor._total_energy = 1.2345
+
+    assert sensor.native_value == 1.234  # Rounded to 3 decimal places
+
+
+def test_ups_energy_sensor_update_energy_no_data() -> None:
+    """Test UPS energy sensor _update_energy with no data."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = None
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
+    sensor._update_energy()
+
+    assert sensor._total_energy == 0.0
+
+
+def test_ups_energy_sensor_update_energy_no_ups() -> None:
+    """Test UPS energy sensor _update_energy with no UPS data."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.data.ups = None
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
+    sensor._update_energy()
+
+    assert sensor._total_energy == 0.0
+
+
+def test_ups_energy_sensor_update_energy_first_reading() -> None:
+    """Test UPS energy sensor _update_energy with first reading."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.data.ups = MagicMock()
+    mock_coordinator.data.ups.power_watts = 100.0
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
+    sensor._update_energy()
+
+    # First reading should only set last_power and last_update, no energy increment
+    assert sensor._total_energy == 0.0
+    assert sensor._last_power == 100.0
+    assert sensor._last_update is not None
+
+
+def test_ups_energy_sensor_update_energy_subsequent_reading() -> None:
+    """Test UPS energy sensor _update_energy with subsequent reading."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.data.ups = MagicMock()
+    mock_coordinator.data.ups.power_watts = 100.0
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
+
+    # Set up previous reading (30 minutes ago, 100W)
+    sensor._last_power = 100.0
+    sensor._last_update = datetime.now(UTC) - timedelta(minutes=30)
+
+    sensor._update_energy()
+
+    # Energy should be: avg_power (100W) * time (0.5h) / 1000 = 0.05 kWh
+    assert sensor._total_energy == pytest.approx(0.05, rel=0.01)
+
+
+def test_ups_energy_sensor_update_energy_negative_power() -> None:
+    """Test UPS energy sensor _update_energy with negative power (should be ignored)."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.data.ups = MagicMock()
+    mock_coordinator.data.ups.power_watts = -50.0
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
+    sensor._last_power = 100.0
+    sensor._last_update = datetime.now(UTC) - timedelta(minutes=30)
+    sensor._total_energy = 1.0
+
+    sensor._update_energy()
+
+    # Energy should not change when power is negative
+    assert sensor._total_energy == 1.0
+
+
+def test_ups_energy_sensor_update_energy_long_gap() -> None:
+    """Test UPS energy sensor _update_energy with long time gap (>1 hour)."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.data.ups = MagicMock()
+    mock_coordinator.data.ups.power_watts = 100.0
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
+
+    # Set up previous reading (2 hours ago - gap > 1 hour should be ignored)
+    sensor._last_power = 100.0
+    sensor._last_update = datetime.now(UTC) - timedelta(hours=2)
+
+    sensor._update_energy()
+
+    # Energy should not increment for gaps > 1 hour (prevents huge jumps after restarts)
+    assert sensor._total_energy == 0.0
+
+
+def test_ups_energy_sensor_available_true() -> None:
+    """Test UPS energy sensor available property when available."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.last_update_success = True
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.data.ups = MagicMock()
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
+
+    assert sensor.available is True
+
+
+def test_ups_energy_sensor_available_false_no_update_success() -> None:
+    """Test UPS energy sensor available property when update failed."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.last_update_success = False
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.data.ups = MagicMock()
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
+
+    assert sensor.available is False
+
+
+def test_ups_energy_sensor_available_false_no_data() -> None:
+    """Test UPS energy sensor available property when no data."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.last_update_success = True
+    mock_coordinator.data = None
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
+
+    assert sensor.available is False
+
+
+def test_ups_energy_sensor_available_false_no_ups() -> None:
+    """Test UPS energy sensor available property when no UPS."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.last_update_success = True
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.data.ups = None
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
+
+    assert sensor.available is False
+
+
+def test_ups_energy_sensor_extra_state_attributes() -> None:
+    """Test UPS energy sensor extra_state_attributes property."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
+    sensor._last_update = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+    sensor._last_power = 250.0
+
+    attrs = sensor.extra_state_attributes
+
+    assert "last_reset" in attrs
+    assert attrs["current_power_watts"] == 250.0
+
+
+def test_ups_energy_sensor_extra_state_attributes_empty() -> None:
+    """Test UPS energy sensor extra_state_attributes when no data."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
+
+    attrs = sensor.extra_state_attributes
+
+    assert "last_reset" not in attrs
+    assert "current_power_watts" not in attrs

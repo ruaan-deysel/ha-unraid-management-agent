@@ -93,6 +93,9 @@
       "ups_power": {
         "name": "UPS Power"
       },
+      "ups_energy": {
+        "name": "UPS Energy"
+      },
       "flash_usage": {
         "name": "Flash Usage"
       },
