@@ -1,6 +1,6 @@
 {
   "domain": "unraid_management_agent",
-  "name": "Unraid Management Agent",
+  "name": "Management Agent for Unraid",
   "codeowners": ["@ruaan-deysel"],
   "config_flow": true,
   "dependencies": [],

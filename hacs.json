@@ -1,5 +1,5 @@
 {
-  "name": "Unraid Management Agent",
+  "name": "Management Agent for Unraid",
   "render_readme": true,
   "country": [],
   "homeassistant": "2025.9.0",

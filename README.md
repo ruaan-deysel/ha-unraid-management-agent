@@ -1,4 +1,4 @@
-# Unraid Management Agent - Home Assistant Integration
+# Management Agent for Unraid® - Home Assistant Integration
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
 [![GitHub Release](https://img.shields.io/github/release/ruaan-deysel/ha-unraid-management-agent.svg)](https://github.com/ruaan-deysel/ha-unraid-management-agent/releases)
@@ -547,3 +547,7 @@ All pull requests must pass:
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](https://github.com/ruaan-deysel/ha-unraid-management-agent/blob/main/LICENSE) file for details.
+
+## Trademark Notice
+
+Unraid® is a registered trademark of Lime Technology, Inc. This application is not affiliated with, endorsed, or sponsored by Lime Technology, Inc.

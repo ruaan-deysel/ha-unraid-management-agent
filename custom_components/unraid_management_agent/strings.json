@@ -35,7 +35,7 @@
   "options": {
     "step": {
       "init": {
-        "title": "Unraid Management Agent Options",
+        "title": "Management Agent for Unraid Options",
         "description": "Configure integration features",
         "data": {
           "enable_websocket": "Enable WebSocket for real-time updates"
@@ -199,7 +199,7 @@
       "message": "Error communicating with Unraid API"
     },
     "no_config_entries": {
-      "message": "No Unraid Management Agent entries configured"
+      "message": "No Management Agent for Unraid entries configured"
     },
     "container_start_failed": {
       "message": "Failed to start container {container_id}"
