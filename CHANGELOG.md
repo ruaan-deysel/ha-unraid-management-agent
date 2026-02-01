@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2026.2.1] - 2026-02-01
+
+### Fixed
+
+- **Name Change**: Changed integration name from "Unraid Management Agent" to "Management Agent for Unraid" in manifest.json and HACS.json to comply with Unraid Third-Party App naming guidelines and policies.
+
 ## [2026.2.0] - 2026-01-30
 
 ### Added
