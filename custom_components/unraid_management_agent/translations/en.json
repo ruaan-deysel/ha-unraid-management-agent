@@ -35,7 +35,7 @@
   "options": {
     "step": {
       "init": {
-        "title": "Unraid Management Agent Options",
+        "title": "Management Agent for Unraid Options",
         "description": "Configure integration features",
         "data": {
           "enable_websocket": "Enable WebSocket for real-time updates"
