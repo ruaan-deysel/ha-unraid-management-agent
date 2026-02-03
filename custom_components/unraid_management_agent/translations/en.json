@@ -35,13 +35,13 @@
   "options": {
     "step": {
       "init": {
-        "title": "Management Agent for Unraid Options",
+        "title": "Unraid Management Agent Options",
         "description": "Configure integration features",
         "data": {
           "enable_websocket": "Enable WebSocket for real-time updates"
         },
         "data_description": {
-          "enable_websocket": "WebSocket provides instant updates instead of polling"
+          "enable_websocket": "WebSocket provides instant updates instead of polling. When disabled, data is polled every 30 seconds."
         }
       }
     }

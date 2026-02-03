@@ -12,8 +12,10 @@ CONF_ENABLE_WEBSOCKET: Final = "enable_websocket"
 DEFAULT_PORT: Final = 8043
 DEFAULT_ENABLE_WEBSOCKET: Final = True
 
-# Fixed update interval (HA Core prohibits user-configurable polling)
-# 30 seconds provides responsive updates for local network polling
+# Fixed update interval following Home Assistant best practices
+# https://developers.home-assistant.io/docs/core/integration-quality-scale/rules/appropriate-polling/
+# 30 seconds is appropriate for local network polling with WebSocket as primary update mechanism
+# Users who need custom intervals can use HA's built-in custom polling via automations
 UPDATE_INTERVAL: Final = 30
 
 # Device info

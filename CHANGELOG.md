@@ -7,11 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2026.2.1] - 2026-02-01
+## [2026.2.1] - 2026-02-03
+
+### Changed
+
+- **Integration Naming**: Renamed integration branding to "Unraid Management Agent"
+  - Updated name in manifest, HACS metadata, README, and UI strings
+- **Options UI**: Updated WebSocket option text to clarify fixed 30-second polling fallback
 
 ### Fixed
-- **Name Change**: Changed name to Management Agent for Unraid to comply with Unraid Third Party App policies and standards.
 
+- **Polling Guidance**: Aligned polling behavior messaging with Home Assistant appropriate polling best practices
 
 ## [2026.2.0] - 2026-01-30
 
