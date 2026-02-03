@@ -11,8 +11,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Integration Naming**: Renamed integration branding to "Unraid Management Agent"
-  - Updated name in manifest, HACS metadata, README, and UI strings
 - **Options UI**: Updated WebSocket option text to clarify fixed 30-second polling fallback
 
 ### Fixed
