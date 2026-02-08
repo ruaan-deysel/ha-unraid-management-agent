@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from homeassistant.const import STATE_OFF, STATE_ON
@@ -1194,3 +1194,57 @@ class TestContainerSwitchStateConfirmation:
         switch.coordinator.client.stop_container.assert_called_once_with("container_id")
         assert switch._optimistic_state is False
         switch.coordinator.async_request_refresh.assert_called_once()
+
+
+class TestContainerSwitchOptimisticClearing:
+    """Tests for container switch optimistic state clearing."""
+
+    def test_handle_coordinator_update_clears_optimistic_state(self) -> None:
+        """Test _handle_coordinator_update clears optimistic state when match."""
+        from custom_components.unraid_management_agent.switch import (
+            UnraidContainerSwitch,
+        )
+
+        mock_coordinator = MagicMock()
+        mock_coordinator.data = MagicMock()
+        mock_coordinator.config_entry = MagicMock()
+        mock_coordinator.config_entry.entry_id = "test_entry"
+
+        switch = UnraidContainerSwitch(mock_coordinator, "test_container")
+        switch._optimistic_state = True
+
+        # Container is running -> matches optimistic_state=True
+        mock_container = MagicMock()
+        mock_container.state = "running"
+        switch._find_container = MagicMock(return_value=mock_container)
+        switch.async_write_ha_state = MagicMock()
+
+        switch._handle_coordinator_update()
+        assert switch._optimistic_state is None
+
+
+class TestVMSwitchOptimisticClearing:
+    """Tests for VM switch optimistic state clearing."""
+
+    def test_handle_coordinator_update_clears_optimistic_state(self) -> None:
+        """Test _handle_coordinator_update clears optimistic state when match."""
+        from custom_components.unraid_management_agent.switch import (
+            UnraidVMSwitch,
+        )
+
+        mock_coordinator = MagicMock()
+        mock_coordinator.data = MagicMock()
+        mock_coordinator.config_entry = MagicMock()
+        mock_coordinator.config_entry.entry_id = "test_entry"
+
+        switch = UnraidVMSwitch(mock_coordinator, "test_vm")
+        switch._optimistic_state = False
+
+        # VM is stopped -> matches optimistic_state=False
+        mock_vm = MagicMock()
+        mock_vm.state = "stopped"
+        switch._find_vm = MagicMock(return_value=mock_vm)
+        switch.async_write_ha_state = MagicMock()
+
+        switch._handle_coordinator_update()
+        assert switch._optimistic_state is None

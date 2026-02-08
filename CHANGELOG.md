@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2026.2.2] - 2026-02-08
+
+### Added
+
+- **GPU Energy Sensor**: Added a GPU Energy sensor that tracks cumulative energy consumption (kWh) of the primary GPU
+  - Uses trapezoidal integration of the existing GPU power draw readings over time
+  - Persists state across Home Assistant restarts via `RestoreEntity`
+  - Includes a 1-hour sanity cap to prevent unrealistic energy jumps after gaps
+  - Reports `current_power_watts` and `last_reset` as extra state attributes
+
+### Fixed
+
+- **Entities Not Updating When WebSocket Enabled**: Fixed entities (except uptime) not updating when WebSocket is enabled (#31)
+  - WebSocket event handlers were calling `async_set_updated_data()` which cancels and reschedules the polling timer on every event
+  - If the WebSocket connection was unstable (repeatedly connecting/disconnecting), each reconnection would reset the 30-second poll timer, preventing full REST polls from ever firing
+  - Only data delivered via WebSocket (typically system info/uptime) would update, while all other entities remained stale
+  - Changed WebSocket event handlers to use `async_update_listeners()` instead, which notifies entities of new data without interfering with the polling schedule
+  - Polling now continues reliably at 30-second intervals regardless of WebSocket activity
+
+- **Fan Sensor Entity Shifting**: Fixed fan RPM sensors changing to different entities on each coordinator update
+  - Fan sensors now use the fan name (e.g., `hwmon5_fan1`) as their stable unique identifier instead of list index
+  - Previously, when the API returned fans in a different order, the same list index would map to different physical fans, causing sensor values to jump between entities
+  - Fan lookup now searches by name instead of indexing, ensuring each physical fan always maps to the same Home Assistant entity regardless of API response order
+  - This resolves issue #33 where users with multiple fans saw their RPM values constantly shifting between sensor entities
+
+- **Array Parity Invalid Error on Pools-Only Setups**: Fixed false "Array Parity Invalid" repair error appearing for users who only use ZFS pools without a traditional Unraid array
+  - Parity-related binary sensors (`parity_valid`, `parity_check_running`) now only created when parity disks are configured (`num_parity_disks > 0`)
+  - Fixed `_is_parity_invalid` to only report invalid when `parity_valid` is explicitly `False`, not when it is `None` (no parity disks)
+  - Repair issue creation now checks for parity disk presence before flagging parity as invalid
+  - Servers using only ZFS pools (no array/parity) will no longer see spurious parity repair issues in Home Assistant
+  - This resolves issue #32
+
+- **Disk Health Showing UNKNOWN During Standby**: Disk health sensors now retain their last known SMART status when drives spin down to standby mode
+  - Previously, disk health sensors would show "UNKNOWN" whenever a drive entered standby because SMART data is unavailable without spinning up the drive
+  - Now caches the last known health state (e.g., "PASSED") and returns it while the disk is in standby
+  - Health value updates automatically when the disk becomes active again
+  - Adds `spin_state` attribute to show current disk power state (active/standby)
+  - Adds `cached_value: true` attribute when displaying a cached value during standby
+  - Ideal for Unraid servers configured with disk spindown to reduce energy consumption
+
 ## [2026.2.1] - 2026-02-03
 
 ### Changed

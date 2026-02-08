@@ -1197,6 +1197,15 @@ GPU_SENSOR_DESCRIPTIONS: tuple[UnraidSensorEntityDescription, ...] = (
         suggested_display_precision=1,
         value_fn=_get_gpu_power,
     ),
+    UnraidSensorEntityDescription(
+        key="gpu_energy",
+        translation_key="gpu_energy",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=3,
+        value_fn=lambda _: None,  # Handled by specialized entity class
+    ),
 )
 
 
@@ -1488,19 +1497,20 @@ class UnraidFanSensor(UnraidBaseEntity, SensorEntity):
         coordinator: UnraidDataUpdateCoordinator,
         entry: UnraidConfigEntry,
         fan_name: str,
-        index: int,
     ) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator, f"fan_{index}")
+        # Use fan name as stable key so entities don't shift when list order changes
+        sanitized = fan_name.lower().replace(" ", "_")
+        super().__init__(coordinator, f"fan_{sanitized}")
         self._entry = entry
         self._fan_name = fan_name
-        self._fan_index = index
-        self._attr_name = f"Fan {fan_name}" if fan_name != "unknown" else f"Fan {index}"
+        self._attr_name = f"Fan {fan_name}"
 
     @property
     def unique_id(self) -> str:
         """Return unique ID."""
-        return f"{self._entry.entry_id}_fan_{self._fan_index}"
+        sanitized = self._fan_name.lower().replace(" ", "_")
+        return f"{self._entry.entry_id}_fan_{sanitized}"
 
     @property
     def native_value(self) -> int | None:
@@ -1510,11 +1520,12 @@ class UnraidFanSensor(UnraidBaseEntity, SensorEntity):
             return None
 
         fans = getattr(data.system, "fans", []) or []
-        if self._fan_index < len(fans):
-            fan = fans[self._fan_index]
+        for fan in fans:
             if isinstance(fan, dict):
-                return fan.get("rpm")
-            return getattr(fan, "rpm", None)
+                if fan.get("name") == self._fan_name:
+                    return fan.get("rpm")
+            elif getattr(fan, "name", None) == self._fan_name:
+                return getattr(fan, "rpm", None)
         return None
 
 
@@ -1788,19 +1799,37 @@ class UnraidDiskHealthSensor(UnraidDiskSensorBase):
         """Initialize the sensor."""
         super().__init__(coordinator, entry, disk_id, disk_name, "health")
         self._attr_name = f"Disk {disk_name} Health"
+        self._last_known_health: str | None = None
 
     @property
     def unique_id(self) -> str:
         """Return unique ID."""
         return f"{self._entry.entry_id}_disk_{self._disk_id}_health"
 
+    def _is_standby(self, disk: Any) -> bool:
+        """Return true if the disk is in standby mode."""
+        spin_state = getattr(disk, "spin_state", None)
+        return spin_state is not None and spin_state.lower() == "standby"
+
     @property
     def native_value(self) -> str | None:
         """Return the disk health status."""
         disk = self._get_disk()
         if not disk:
-            return None
-        return getattr(disk, "smart_status", None) or getattr(disk, "status", None)
+            return self._last_known_health
+
+        health = getattr(disk, "smart_status", None) or getattr(disk, "status", None)
+
+        if health is not None:
+            # Update cached value when we have fresh data
+            self._last_known_health = health
+            return health
+
+        # No health data available - return cached value if disk is in standby
+        if self._is_standby(disk) and self._last_known_health is not None:
+            return self._last_known_health
+
+        return None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -1815,6 +1844,14 @@ class UnraidDiskHealthSensor(UnraidDiskSensorBase):
         _add_attr_if_set(attrs, "device", getattr(disk, "device", None))
         _add_attr_if_set(attrs, "model", getattr(disk, "model", None))
         _add_attr_if_set(attrs, "serial", getattr(disk, "serial_number", None))
+
+        spin_state = getattr(disk, "spin_state", None)
+        if spin_state is not None:
+            attrs["spin_state"] = spin_state
+
+        health = getattr(disk, "smart_status", None) or getattr(disk, "status", None)
+        if health is None and self._is_standby(disk) and self._last_known_health:
+            attrs["cached_value"] = True
 
         temp = getattr(disk, "temperature_celsius", None)
         if temp is not None and temp > 0:
@@ -2225,6 +2262,126 @@ class UnraidUPSEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
 
 
 # =============================================================================
+# GPU Energy Sensor (Calculated from Power)
+# =============================================================================
+
+
+class UnraidGPUEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
+    """
+    GPU Energy sensor that calculates cumulative energy from power readings.
+
+    This sensor integrates power readings over time to calculate total energy
+    consumption in kWh. It persists its state across restarts using RestoreEntity.
+    """
+
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_has_entity_name = True
+    _attr_suggested_display_precision = 3
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        entry: UnraidConfigEntry,
+    ) -> None:
+        """Initialize the GPU energy sensor."""
+        super().__init__(coordinator, "gpu_energy")
+        self._entry = entry
+        self._attr_translation_key = "gpu_energy"
+        self._total_energy: float = 0.0
+        self._last_update: datetime | None = None
+        self._last_power: float | None = None
+
+    async def async_added_to_hass(self) -> None:
+        """Restore previous state when added to hass."""
+        await super().async_added_to_hass()
+
+        # Restore previous state
+        if (last_state := await self.async_get_last_state()) is not None:
+            if last_state.state not in (None, "unknown", "unavailable"):
+                try:
+                    self._total_energy = float(last_state.state)
+                except (ValueError, TypeError):
+                    self._total_energy = 0.0
+
+            # Restore last update time from attributes if available
+            if last_state.attributes.get("last_reset"):
+                try:
+                    self._last_update = datetime.fromisoformat(
+                        str(last_state.attributes["last_reset"])
+                    )
+                except (ValueError, TypeError):
+                    self._last_update = None
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        self._update_energy()
+        self.async_write_ha_state()
+
+    def _update_energy(self) -> None:
+        """Calculate and update energy based on current power reading."""
+        if not self.coordinator.data or not self.coordinator.data.gpu:
+            return
+
+        gpu_list = self.coordinator.data.gpu
+        if not gpu_list or len(gpu_list) == 0:
+            return
+
+        current_power = getattr(gpu_list[0], "power_draw_watts", None)
+
+        if current_power is None or current_power < 0:
+            return
+
+        now = datetime.now(UTC)
+
+        if self._last_update is not None and self._last_power is not None:
+            # Calculate time delta in hours
+            time_delta = (now - self._last_update).total_seconds() / 3600
+
+            # Sanity check: only calculate if time delta is reasonable (< 1 hour)
+            # This prevents huge jumps after restarts or long unavailability
+            if 0 < time_delta < 1:
+                # Use trapezoidal integration (average of last and current power)
+                avg_power = (self._last_power + current_power) / 2
+                # Energy (kWh) = Power (W) * Time (h) / 1000
+                energy_increment = (avg_power * time_delta) / 1000
+                self._total_energy += energy_increment
+
+        self._last_update = now
+        self._last_power = current_power
+
+    @property
+    def native_value(self) -> float:
+        """Return the total energy consumed in kWh."""
+        return round(self._total_energy, 3)
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        if not self.coordinator.last_update_success:
+            return False
+        if not self.coordinator.data:
+            return False
+        gpu = self.coordinator.data.gpu
+        return gpu is not None and len(gpu) > 0
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        attrs: dict[str, Any] = {}
+
+        if self._last_update:
+            attrs["last_reset"] = self._last_update.isoformat()
+
+        if self._last_power is not None:
+            attrs["current_power_watts"] = self._last_power
+
+        return attrs
+
+
+# =============================================================================
 # Helper Functions
 # =============================================================================
 
@@ -2285,20 +2442,31 @@ async def async_setup_entry(
     for description in ARRAY_SENSOR_DESCRIPTIONS:
         entities.append(UnraidSensorEntity(coordinator, description))
 
-    # Fan sensors (dynamic, one per fan)
+    # Fan sensors (dynamic, one per fan, keyed by name for stability)
     if data and data.system:
         fans = getattr(data.system, "fans", []) or []
+        seen_names: set[str] = set()
         for idx, fan in enumerate(fans):
             if isinstance(fan, dict):
-                fan_name = fan.get("name", "unknown")
+                fan_name = fan.get("name") or f"fan_{idx}"
             else:
-                fan_name = getattr(fan, "name", "unknown")
-            entities.append(UnraidFanSensor(coordinator, entry, fan_name, idx))
+                fan_name = getattr(fan, "name", None) or f"fan_{idx}"
+            # Ensure uniqueness in case of duplicate names
+            if fan_name in seen_names:
+                fan_name = f"{fan_name}_{idx}"
+            seen_names.add(fan_name)
+            entities.append(UnraidFanSensor(coordinator, entry, fan_name))
 
     # GPU sensors - only if gpu collector is enabled
     if coordinator.is_collector_enabled("gpu") and data and data.gpu:
         for description in GPU_SENSOR_DESCRIPTIONS:
+            # Skip gpu_energy - it uses a specialized entity class
+            if description.key == "gpu_energy":
+                continue
             entities.append(UnraidSensorEntity(coordinator, description))
+
+        # Add GPU Energy sensor (uses specialized class for state restoration)
+        entities.append(UnraidGPUEnergySensor(coordinator, entry))
 
     # UPS sensors - only if ups collector is enabled
     if (
