@@ -484,8 +484,11 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
         elif event.event_type == EventType.ZFS_ARC_UPDATE:
             self.data.zfs_arc = event.data
 
-        # Notify listeners of data update
-        self.async_set_updated_data(self.data)
+        # Notify listeners of data update without resetting the polling timer.
+        # Using async_set_updated_data would cancel and reschedule the poll
+        # interval, which prevents periodic full REST polls from firing if
+        # WebSocket events arrive frequently (e.g., during reconnect cycles).
+        self.async_update_listeners()
 
     def _handle_raw_message(self, data: dict) -> None:
         """Handle raw WebSocket message and parse to typed event."""
@@ -500,7 +503,7 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
                 # This is a NotificationsResponse format, store the full response
                 if self.data:
                     self.data.notifications = NotificationsResponse.model_validate(data)
-                    self.async_set_updated_data(self.data)
+                    self.async_update_listeners()
                 return
 
             event = parse_event(data)

@@ -23,6 +23,7 @@ from custom_components.unraid_management_agent.sensor import (
     UnraidDiskTemperatureSensor,
     UnraidDiskUsageSensor,
     UnraidFanSensor,
+    UnraidGPUEnergySensor,
     UnraidNetworkRXSensor,
     UnraidNetworkTXSensor,
     # Entity description pattern classes
@@ -1254,7 +1255,7 @@ def test_fan_sensor_no_data() -> None:
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidFanSensor(mock_coordinator, mock_entry, "cpu", 0)
+    sensor = UnraidFanSensor(mock_coordinator, mock_entry, "cpu")
 
     assert sensor.native_value is None
 
@@ -1265,12 +1266,13 @@ def test_fan_sensor_with_data() -> None:
     mock_coordinator.data = MagicMock()
     mock_coordinator.data.system = MagicMock()
     mock_fan = MagicMock()
+    mock_fan.name = "cpu"
     mock_fan.rpm = 1500
     mock_coordinator.data.system.fans = [mock_fan]
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidFanSensor(mock_coordinator, mock_entry, "cpu", 0)
+    sensor = UnraidFanSensor(mock_coordinator, mock_entry, "cpu")
 
     assert sensor.native_value == 1500
 
@@ -1284,13 +1286,13 @@ def test_fan_sensor_with_dict_data() -> None:
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidFanSensor(mock_coordinator, mock_entry, "cpu", 0)
+    sensor = UnraidFanSensor(mock_coordinator, mock_entry, "cpu")
 
     assert sensor.native_value == 1200
 
 
-def test_fan_sensor_index_out_of_range() -> None:
-    """Test fan sensor with index out of range."""
+def test_fan_sensor_name_not_found() -> None:
+    """Test fan sensor when fan name is not in the list."""
     mock_coordinator = MagicMock()
     mock_coordinator.data = MagicMock()
     mock_coordinator.data.system = MagicMock()
@@ -1298,7 +1300,7 @@ def test_fan_sensor_index_out_of_range() -> None:
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidFanSensor(mock_coordinator, mock_entry, "cpu", 5)
+    sensor = UnraidFanSensor(mock_coordinator, mock_entry, "cpu")
 
     assert sensor.native_value is None
 
@@ -1521,6 +1523,7 @@ def test_disk_health_sensor_with_data() -> None:
     mock_disk.model = "WD Red 4TB"
     mock_disk.serial_number = "ABC123"
     mock_disk.temperature_celsius = 35.0
+    mock_disk.spin_state = "active"
     mock_coordinator.data.disks = [mock_disk]
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
@@ -1534,6 +1537,96 @@ def test_disk_health_sensor_with_data() -> None:
     assert attrs["model"] == "WD Red 4TB"
     assert attrs["serial"] == "ABC123"
     assert attrs["temperature"] == "35.0 °C"
+    assert attrs["spin_state"] == "active"
+    assert "cached_value" not in attrs
+
+
+def test_disk_health_sensor_standby_returns_cached() -> None:
+    """Test disk health sensor returns last known value when disk is in standby."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    # First: disk is active with PASSED health
+    mock_disk_active = MagicMock()
+    mock_disk_active.id = "disk1"
+    mock_disk_active.name = "Disk 1"
+    mock_disk_active.smart_status = "PASSED"
+    mock_disk_active.spin_state = "active"
+    mock_disk_active.device = "/dev/sda"
+    mock_disk_active.model = "WD Red 4TB"
+    mock_disk_active.serial_number = "ABC123"
+    mock_disk_active.temperature_celsius = 35.0
+    mock_coordinator.data.disks = [mock_disk_active]
+
+    sensor = UnraidDiskHealthSensor(mock_coordinator, mock_entry, "disk1", "Disk 1")
+    assert sensor.native_value == "PASSED"
+
+    # Now: disk goes into standby, smart_status becomes None
+    mock_disk_standby = MagicMock()
+    mock_disk_standby.id = "disk1"
+    mock_disk_standby.name = "Disk 1"
+    mock_disk_standby.smart_status = None
+    mock_disk_standby.status = None
+    mock_disk_standby.spin_state = "standby"
+    mock_disk_standby.device = "/dev/sda"
+    mock_disk_standby.model = "WD Red 4TB"
+    mock_disk_standby.serial_number = "ABC123"
+    mock_disk_standby.temperature_celsius = None
+    mock_coordinator.data.disks = [mock_disk_standby]
+
+    # Should return cached "PASSED" instead of None
+    assert sensor.native_value == "PASSED"
+    attrs = sensor.extra_state_attributes
+    assert attrs["spin_state"] == "standby"
+    assert attrs["cached_value"] is True
+
+
+def test_disk_health_sensor_standby_no_cache() -> None:
+    """Test disk health sensor returns None in standby with no cached value."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    # Disk is in standby, no previous health data cached
+    mock_disk = MagicMock()
+    mock_disk.id = "disk1"
+    mock_disk.name = "Disk 1"
+    mock_disk.smart_status = None
+    mock_disk.status = None
+    mock_disk.spin_state = "standby"
+    mock_disk.device = "/dev/sda"
+    mock_disk.model = None
+    mock_disk.serial_number = None
+    mock_disk.temperature_celsius = None
+    mock_coordinator.data.disks = [mock_disk]
+
+    sensor = UnraidDiskHealthSensor(mock_coordinator, mock_entry, "disk1", "Disk 1")
+    assert sensor.native_value is None
+
+
+def test_disk_health_sensor_returns_cached_on_disk_not_found() -> None:
+    """Test disk health sensor returns cached value when disk disappears from data."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    mock_disk = MagicMock()
+    mock_disk.id = "disk1"
+    mock_disk.name = "Disk 1"
+    mock_disk.smart_status = "PASSED"
+    mock_disk.spin_state = "active"
+    mock_coordinator.data.disks = [mock_disk]
+
+    sensor = UnraidDiskHealthSensor(mock_coordinator, mock_entry, "disk1", "Disk 1")
+    assert sensor.native_value == "PASSED"
+
+    # Disk disappears from data
+    mock_coordinator.data.disks = []
+    assert sensor.native_value == "PASSED"
 
 
 # =============================================================================
@@ -2272,6 +2365,7 @@ def test_disk_health_sensor_extra_attributes() -> None:
     mock_disk.model = "WDC Red"
     mock_disk.device = "sda"
     mock_disk.temperature_celsius = 35
+    mock_disk.spin_state = "active"
     mock_coordinator.data.disks = [mock_disk]
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
@@ -2286,6 +2380,7 @@ def test_disk_health_sensor_extra_attributes() -> None:
     assert attrs["serial"] == "ABC123"
     assert attrs["model"] == "WDC Red"
     assert attrs["temperature"] == "35 °C"
+    assert attrs["spin_state"] == "active"
 
 
 def test_disk_health_sensor_disk_not_found() -> None:
@@ -2421,10 +2516,10 @@ def test_fan_sensor_integer_list() -> None:
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidFanSensor(mock_coordinator, mock_entry, "Fan 1", 0)
+    sensor = UnraidFanSensor(mock_coordinator, mock_entry, "Fan 1")
 
-    # Fan sensor expects objects with rpm attribute, not integers
-    # So this returns None as expected since integers don't have getattr("rpm")
+    # Fan sensor looks up by name, integers don't have a name attribute
+    # so no match is found and None is returned
     assert sensor.native_value is None
 
 
@@ -2434,12 +2529,13 @@ def test_fan_sensor_zero_rpm() -> None:
     mock_coordinator.data = MagicMock()
     mock_coordinator.data.system = MagicMock()
     mock_fan = MagicMock()
+    mock_fan.name = "Fan 1"
     mock_fan.rpm = 0
     mock_coordinator.data.system.fans = [mock_fan]
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidFanSensor(mock_coordinator, mock_entry, "Fan 1", 0)
+    sensor = UnraidFanSensor(mock_coordinator, mock_entry, "Fan 1")
 
     assert sensor.native_value == 0
 
@@ -4282,6 +4378,7 @@ def test_disk_health_sensor_no_disk() -> None:
     sensor = object.__new__(UnraidDiskHealthSensor)
     sensor._disk_id = "nonexistent"
     sensor._disk_name = "Unknown"
+    sensor._last_known_health = None
     sensor.coordinator = MagicMock()
     sensor.coordinator.data = MagicMock()
     sensor.coordinator.data.disks = []
@@ -4299,6 +4396,7 @@ def test_disk_health_sensor_extra_attrs_no_disk() -> None:
     sensor = object.__new__(UnraidDiskHealthSensor)
     sensor._disk_id = "nonexistent"
     sensor._disk_name = "Unknown"
+    sensor._last_known_health = None
     sensor.coordinator = MagicMock()
     sensor.coordinator.data = MagicMock()
     sensor.coordinator.data.disks = []
@@ -4786,6 +4884,607 @@ def test_ups_energy_sensor_extra_state_attributes_empty() -> None:
     mock_entry.entry_id = "test_entry"
 
     sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
+
+    attrs = sensor.extra_state_attributes
+
+    assert "last_reset" not in attrs
+    assert "current_power_watts" not in attrs
+
+
+# =============================================================================
+# Additional Coverage Tests
+# =============================================================================
+
+
+def test_get_latest_version_none_data() -> None:
+    """Test _get_latest_version with None data."""
+    assert _get_latest_version(None) is None
+
+
+def test_get_plugins_with_updates_attrs_none_data() -> None:
+    """Test _get_plugins_with_updates_attrs with None data."""
+    assert _get_plugins_with_updates_attrs(None) == {}
+
+
+def test_get_docker_vdisk_usage_total_bytes_zero() -> None:
+    """Test _get_docker_vdisk_usage when total_bytes is 0 but used+free available."""
+    data = UnraidData()
+    mock_disk = MagicMock()
+    mock_disk.role = "docker_vdisk"
+    mock_disk.total_bytes = 0
+    mock_disk.used_bytes = 4000000000
+    mock_disk.free_bytes = 6000000000
+    data.disks = [mock_disk]
+
+    result = _get_docker_vdisk_usage(data)
+    assert result is not None
+    assert result == 40.0
+
+
+def test_get_docker_vdisk_usage_no_vdisk_disk() -> None:
+    """Test _get_docker_vdisk_usage returns None when no docker_vdisk disk."""
+    data = UnraidData()
+    mock_disk = MagicMock()
+    mock_disk.role = "data"
+    data.disks = [mock_disk]
+
+    assert _get_docker_vdisk_usage(data) is None
+
+
+def test_get_docker_vdisk_attrs_total_bytes_zero() -> None:
+    """Test _get_docker_vdisk_attrs when total_bytes is 0 but used+free available."""
+    data = UnraidData()
+    mock_disk = MagicMock()
+    mock_disk.role = "docker_vdisk"
+    mock_disk.total_bytes = 0
+    mock_disk.used_bytes = 4000000000
+    mock_disk.free_bytes = 6000000000
+    data.disks = [mock_disk]
+
+    attrs = _get_docker_vdisk_attrs(data)
+    assert "total_size" in attrs
+    assert "used_size" in attrs
+    assert "free_size" in attrs
+
+
+def test_get_log_filesystem_usage_total_bytes_zero() -> None:
+    """Test _get_log_filesystem_usage when total_bytes is 0 but used+free available."""
+    data = UnraidData()
+    mock_disk = MagicMock()
+    mock_disk.role = "log"
+    mock_disk.total_bytes = 0
+    mock_disk.used_bytes = 500000000
+    mock_disk.free_bytes = 1500000000
+    data.disks = [mock_disk]
+
+    result = _get_log_filesystem_usage(data)
+    assert result is not None
+    assert result == 25.0
+
+
+def test_get_log_filesystem_attrs_total_bytes_zero() -> None:
+    """Test _get_log_filesystem_attrs when total_bytes is 0 but used+free available."""
+    data = UnraidData()
+    mock_disk = MagicMock()
+    mock_disk.role = "log"
+    mock_disk.total_bytes = 0
+    mock_disk.used_bytes = 500000000
+    mock_disk.free_bytes = 1500000000
+    data.disks = [mock_disk]
+
+    attrs = _get_log_filesystem_attrs(data)
+    assert "total_size" in attrs
+    assert "used_size" in attrs
+    assert "free_size" in attrs
+
+
+def test_get_notifications_attrs_importance_conditional() -> None:
+    """Test _get_notifications_attrs includes importance only when non-None."""
+    data = UnraidData()
+    mock_notif1 = MagicMock()
+    mock_notif1.subject = "Alert"
+    mock_notif1.importance = "alert"
+    mock_notif2 = MagicMock()
+    mock_notif2.subject = "Info"
+    mock_notif2.importance = None
+    mock_notifications = MagicMock()
+    mock_notifications.total_count = 2
+    mock_notifications.notifications = [mock_notif1, mock_notif2]
+    data.notifications = mock_notifications
+
+    attrs = _get_notifications_attrs(data)
+    assert "recent_notifications" in attrs
+    recent = attrs["recent_notifications"]
+    assert len(recent) == 2
+    assert recent[0] == {"subject": "Alert", "importance": "alert"}
+    assert recent[1] == {"subject": "Info"}
+
+
+def test_parse_timestamp_z_suffix() -> None:
+    """Test _parse_timestamp with Z suffix timestamp."""
+    from custom_components.unraid_management_agent.sensor import _parse_timestamp
+
+    result = _parse_timestamp("2024-06-15T10:30:00Z")
+    assert result is not None
+    assert result.year == 2024
+    assert result.month == 6
+    assert result.day == 15
+
+
+def test_parse_timestamp_datetime_passthrough() -> None:
+    """Test _parse_timestamp with datetime object."""
+    from custom_components.unraid_management_agent.sensor import _parse_timestamp
+
+    dt = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+    result = _parse_timestamp(dt)
+    assert result is dt
+
+
+def test_parse_timestamp_numeric() -> None:
+    """Test _parse_timestamp with numeric timestamp."""
+    from custom_components.unraid_management_agent.sensor import _parse_timestamp
+
+    result = _parse_timestamp(1700000000)
+    assert result is not None
+    assert result.year >= 2023
+
+
+def test_parse_timestamp_invalid_string() -> None:
+    """Test _parse_timestamp with invalid string returns None."""
+    from custom_components.unraid_management_agent.sensor import _parse_timestamp
+
+    assert _parse_timestamp("not-a-date") is None
+
+
+def test_parse_timestamp_non_string_type() -> None:
+    """Test _parse_timestamp with unsupported type returns None."""
+    from custom_components.unraid_management_agent.sensor import _parse_timestamp
+
+    assert _parse_timestamp([1, 2, 3]) is None
+
+
+def test_get_next_parity_check_fallback_to_compute() -> None:
+    """Test _get_next_parity_check falls back to _compute_next_parity_check."""
+    data = UnraidData()
+    mock_schedule = MagicMock()
+    mock_schedule.next_check = None
+    mock_schedule.scheduled = True
+    mock_schedule.mode = "daily"
+    mock_schedule.frequency = None
+    mock_schedule.hour = 3
+    mock_schedule.minute = 0
+    data.parity_schedule = mock_schedule
+
+    result = _get_next_parity_check(data)
+    assert result is not None
+    assert result.hour == 3
+
+
+def test_get_most_recent_parity_record_sort_failure() -> None:
+    """Test _get_most_recent_parity_record returns first record when sort fails."""
+    from custom_components.unraid_management_agent.sensor import (
+        _get_most_recent_parity_record,
+    )
+
+    data = UnraidData()
+    mock_history = MagicMock()
+
+    # Create records that will cause sorting to fail (no timestamp/date attrs)
+    record1 = MagicMock()
+    record1.timestamp = None
+    record1.date = None
+    record2 = MagicMock()
+    record2.timestamp = None
+    record2.date = None
+
+    # Override sorted to raise TypeError
+    mock_history.records = [record1, record2]
+    data.parity_history = mock_history
+
+    # The function should still return a record (first one as fallback)
+    result = _get_most_recent_parity_record(data)
+    assert result is not None
+
+
+def test_compute_next_parity_check_daily_past_time() -> None:
+    """Test _compute_next_parity_check daily when time is in the past."""
+    from custom_components.unraid_management_agent.sensor import (
+        _compute_next_parity_check,
+    )
+
+    mock_schedule = MagicMock()
+    mock_schedule.scheduled = True
+    mock_schedule.mode = "daily"
+    mock_schedule.frequency = None
+    # Use hour 0 minute 0 - this is almost always in the past during the day
+    mock_schedule.hour = 0
+    mock_schedule.minute = 0
+
+    with patch(
+        "custom_components.unraid_management_agent.sensor.datetime",
+        wraps=datetime,
+    ) as mock_dt:
+        # Set "now" to 23:59 so hour=0 minute=0 is in the past
+        mock_now = datetime(2025, 6, 15, 23, 59, 0).astimezone()
+        mock_dt.now.return_value = mock_now
+
+        result = _compute_next_parity_check(mock_schedule)
+        assert result is not None
+        # Should be the next day
+        assert result.day == 16
+        assert result.hour == 0
+
+
+def test_compute_next_parity_check_monthly_past_day() -> None:
+    """Test _compute_next_parity_check monthly when day is in the past."""
+    from custom_components.unraid_management_agent.sensor import (
+        _compute_next_parity_check,
+    )
+
+    mock_schedule = MagicMock()
+    mock_schedule.scheduled = True
+    mock_schedule.mode = "monthly"
+    mock_schedule.frequency = None
+    mock_schedule.hour = 3
+    mock_schedule.minute = 0
+    mock_schedule.day_of_month = 1
+    mock_schedule.day = 1
+
+    with patch(
+        "custom_components.unraid_management_agent.sensor.datetime",
+        wraps=datetime,
+    ) as mock_dt:
+        # Set "now" to day 15 -> day 1 is in the past
+        mock_now = datetime(2025, 6, 15, 12, 0, 0).astimezone()
+        mock_dt.now.return_value = mock_now
+
+        result = _compute_next_parity_check(mock_schedule)
+        assert result is not None
+        # Should roll to next month
+        assert result.month == 7
+        assert result.day == 1
+
+
+def test_compute_next_parity_check_yearly_past_date() -> None:
+    """Test _compute_next_parity_check yearly when date is in the past."""
+    from custom_components.unraid_management_agent.sensor import (
+        _compute_next_parity_check,
+    )
+
+    mock_schedule = MagicMock()
+    mock_schedule.scheduled = True
+    mock_schedule.mode = "yearly"
+    mock_schedule.frequency = None
+    mock_schedule.hour = 3
+    mock_schedule.minute = 0
+    # Use month=13 (outside 0-11 range, treated as 1-indexed = 13 -> invalid)
+    # Instead use a month that maps to a past date.
+    # The function does: if 0 <= month_value <= 11: month_value += 1
+    # So month=0 -> month_value=1 (January). On Feb 8 2026, Jan is past.
+    mock_schedule.month = 0
+    mock_schedule.day_of_month = 15
+    mock_schedule.day = 15
+
+    with patch(
+        "custom_components.unraid_management_agent.sensor.datetime",
+        wraps=datetime,
+    ) as mock_dt:
+        # Set "now" to June -> January is in the past
+        mock_now = datetime(2025, 6, 15, 12, 0, 0).astimezone()
+        mock_dt.now.return_value = mock_now
+
+        result = _compute_next_parity_check(mock_schedule)
+        assert result is not None
+        # month=0 -> month_value=1 (January), which is in the past for June
+        # Should roll to next year
+        assert result.year == 2026
+        assert result.month == 1
+
+
+def test_compute_next_parity_check_weekly_0_to_6_day_range() -> None:
+    """Test _compute_next_parity_check weekly with day_value in 0-6 range."""
+    from custom_components.unraid_management_agent.sensor import (
+        _compute_next_parity_check,
+    )
+
+    mock_schedule = MagicMock()
+    mock_schedule.scheduled = True
+    mock_schedule.mode = "weekly"
+    mock_schedule.frequency = None
+    mock_schedule.hour = 3
+    mock_schedule.minute = 0
+    # day=0 triggers the 0-6 range branch: target_weekday = (0 - 1) % 7 = 6 (Sunday)
+    mock_schedule.day_of_week = 0
+    mock_schedule.day = 0
+
+    result = _compute_next_parity_check(mock_schedule)
+    assert result is not None
+
+
+# =============================================================================
+# GPU Energy Sensor Tests
+# =============================================================================
+
+
+def test_gpu_energy_sensor_initialization() -> None:
+    """Test GPU energy sensor initialization."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+
+    assert sensor._total_energy == 0.0
+    assert sensor._last_update is None
+    assert sensor._last_power is None
+    assert sensor._attr_translation_key == "gpu_energy"
+
+
+def test_gpu_energy_sensor_native_value() -> None:
+    """Test GPU energy sensor native_value property."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+    sensor._total_energy = 1.2345
+
+    assert sensor.native_value == 1.234  # Rounded to 3 decimal places
+
+
+def test_gpu_energy_sensor_update_energy_no_data() -> None:
+    """Test GPU energy sensor _update_energy with no data."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = None
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+    sensor._update_energy()
+
+    assert sensor._total_energy == 0.0
+
+
+def test_gpu_energy_sensor_update_energy_no_gpu() -> None:
+    """Test GPU energy sensor _update_energy with no GPU data."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.data.gpu = None
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+    sensor._update_energy()
+
+    assert sensor._total_energy == 0.0
+
+
+def test_gpu_energy_sensor_update_energy_empty_gpu_list() -> None:
+    """Test GPU energy sensor _update_energy with empty GPU list."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.data.gpu = []
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+    sensor._update_energy()
+
+    assert sensor._total_energy == 0.0
+
+
+def test_gpu_energy_sensor_update_energy_first_reading() -> None:
+    """Test GPU energy sensor _update_energy with first reading."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_gpu = MagicMock()
+    mock_gpu.power_draw_watts = 220.5
+    mock_coordinator.data.gpu = [mock_gpu]
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+    sensor._update_energy()
+
+    # First reading should only set last_power and last_update, no energy increment
+    assert sensor._total_energy == 0.0
+    assert sensor._last_power == 220.5
+    assert sensor._last_update is not None
+
+
+def test_gpu_energy_sensor_update_energy_subsequent_reading() -> None:
+    """Test GPU energy sensor _update_energy with subsequent reading."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_gpu = MagicMock()
+    mock_gpu.power_draw_watts = 200.0
+    mock_coordinator.data.gpu = [mock_gpu]
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+
+    # Set up previous reading (30 minutes ago, 200W)
+    sensor._last_power = 200.0
+    sensor._last_update = datetime.now(UTC) - timedelta(minutes=30)
+
+    sensor._update_energy()
+
+    # Energy should be: avg_power (200W) * time (0.5h) / 1000 = 0.1 kWh
+    assert sensor._total_energy == pytest.approx(0.1, rel=0.01)
+
+
+def test_gpu_energy_sensor_update_energy_negative_power() -> None:
+    """Test GPU energy sensor _update_energy with negative power (should be ignored)."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_gpu = MagicMock()
+    mock_gpu.power_draw_watts = -50.0
+    mock_coordinator.data.gpu = [mock_gpu]
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+    sensor._last_power = 200.0
+    sensor._last_update = datetime.now(UTC) - timedelta(minutes=30)
+    sensor._total_energy = 1.0
+
+    sensor._update_energy()
+
+    # Energy should not change when power is negative
+    assert sensor._total_energy == 1.0
+
+
+def test_gpu_energy_sensor_update_energy_long_gap() -> None:
+    """Test GPU energy sensor _update_energy with long time gap (>1 hour)."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_gpu = MagicMock()
+    mock_gpu.power_draw_watts = 200.0
+    mock_coordinator.data.gpu = [mock_gpu]
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+
+    # Set up previous reading (2 hours ago - gap > 1 hour should be ignored)
+    sensor._last_power = 200.0
+    sensor._last_update = datetime.now(UTC) - timedelta(hours=2)
+
+    sensor._update_energy()
+
+    # Energy should not increment for gaps > 1 hour (prevents huge jumps)
+    assert sensor._total_energy == 0.0
+
+
+def test_gpu_energy_sensor_available_true() -> None:
+    """Test GPU energy sensor available property when available."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.last_update_success = True
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.data.gpu = [MagicMock()]
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+
+    assert sensor.available is True
+
+
+def test_gpu_energy_sensor_available_false_no_update_success() -> None:
+    """Test GPU energy sensor available property when update failed."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.last_update_success = False
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.data.gpu = [MagicMock()]
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+
+    assert sensor.available is False
+
+
+def test_gpu_energy_sensor_available_false_no_data() -> None:
+    """Test GPU energy sensor available property when no data."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.last_update_success = True
+    mock_coordinator.data = None
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+
+    assert sensor.available is False
+
+
+def test_gpu_energy_sensor_available_false_no_gpu() -> None:
+    """Test GPU energy sensor available property when no GPU."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.last_update_success = True
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.data.gpu = None
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+
+    assert sensor.available is False
+
+
+def test_gpu_energy_sensor_available_false_empty_gpu_list() -> None:
+    """Test GPU energy sensor available property when GPU list is empty."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.last_update_success = True
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.data.gpu = []
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+
+    assert sensor.available is False
+
+
+def test_gpu_energy_sensor_extra_state_attributes() -> None:
+    """Test GPU energy sensor extra_state_attributes property."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+    sensor._last_update = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+    sensor._last_power = 220.5
+
+    attrs = sensor.extra_state_attributes
+
+    assert "last_reset" in attrs
+    assert attrs["current_power_watts"] == 220.5
+
+
+def test_gpu_energy_sensor_extra_state_attributes_empty() -> None:
+    """Test GPU energy sensor extra_state_attributes when no data."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
 
     attrs = sensor.extra_state_attributes
 

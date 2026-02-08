@@ -379,7 +379,7 @@ async def test_check_and_create_issues_parity_invalid(
     coordinator.last_update_success = True
     coordinator.data = UnraidData(
         disks=[],
-        array=ArrayStatus(parity_valid=False, state="Started"),
+        array=ArrayStatus(parity_valid=False, state="Started", num_parity_disks=1),
     )
 
     with (
@@ -466,6 +466,7 @@ async def test_check_and_create_issues_parity_invalid_no_state(
             parity_valid=False,  # Invalid parity
             parity_check_status=None,
             parity_check_progress=None,
+            num_parity_disks=1,
         ),
     )
 
@@ -512,6 +513,36 @@ async def test_check_and_create_issues_parity_valid(
 
     # Check parity invalid issue was deleted
     assert any("parity_invalid" in str(call) for call in mock_delete.call_args_list)
+
+
+async def test_check_and_create_issues_no_parity_disks(
+    hass: HomeAssistant,
+) -> None:
+    """Test no parity issue created when server has no parity disks (pools only)."""
+    coordinator = MagicMock()
+    coordinator.config_entry.entry_id = "test_entry"
+    coordinator.config_entry.data = {"host": "192.168.1.100", "port": 8043}
+    coordinator.last_update_success = True
+    coordinator.data = UnraidData(
+        disks=[],
+        array=ArrayStatus(
+            parity_valid=False,  # False because no parity exists
+            num_parity_disks=0,  # No parity disks - pools only setup
+        ),
+    )
+
+    with (
+        patch(
+            "custom_components.unraid_management_agent.repairs.ir.async_create_issue"
+        ) as mock_create,
+        patch(
+            "custom_components.unraid_management_agent.repairs.ir.async_delete_issue"
+        ),
+    ):
+        await async_check_and_create_issues(hass, coordinator)
+
+    # Should NOT create parity invalid issue when there are no parity disks
+    assert not any("parity_invalid" in str(call) for call in mock_create.call_args_list)
 
 
 async def test_check_and_create_issues_temp_warning(

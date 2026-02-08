@@ -78,12 +78,22 @@ def _parity_check_attributes(
     }
 
 
+def _has_parity_disks(coordinator: UnraidDataUpdateCoordinator) -> bool:
+    """Return true if the array has parity disks configured."""
+    data = coordinator.data
+    if not data or not data.array:
+        return False
+    num_parity = getattr(data.array, "num_parity_disks", None)
+    return num_parity is not None and num_parity > 0
+
+
 def _is_parity_invalid(coordinator: UnraidDataUpdateCoordinator) -> bool:
     """Return true if parity is invalid (PROBLEM device class: ON=problem)."""
     data = coordinator.data
     if data and data.array:
-        parity_valid = getattr(data.array, "parity_valid", True)
-        return not parity_valid
+        parity_valid = getattr(data.array, "parity_valid", None)
+        # Only report invalid when explicitly False (not None/missing)
+        return parity_valid is False
     return False
 
 
@@ -284,6 +294,7 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[UnraidBinarySensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         is_on_fn=_is_parity_check_running,
         extra_state_attributes_fn=_parity_check_attributes,
+        supported_fn=_has_parity_disks,
     ),
     UnraidBinarySensorEntityDescription(
         key="parity_valid",
@@ -292,6 +303,7 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[UnraidBinarySensorEntityDescription, ...] = (
         icon="mdi:shield-check",
         entity_category=EntityCategory.DIAGNOSTIC,
         is_on_fn=_is_parity_invalid,
+        supported_fn=_has_parity_disks,
     ),
     UnraidBinarySensorEntityDescription(
         key="ups_connected",

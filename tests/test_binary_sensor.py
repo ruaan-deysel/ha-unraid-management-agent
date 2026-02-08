@@ -11,6 +11,7 @@ from custom_components.unraid_management_agent.binary_sensor import (
     _flash_attributes,
     _has_flash_info,
     _has_mover_settings,
+    _has_parity_disks,
     _has_parity_schedule,
     _has_update_status,
     _has_ups,
@@ -205,6 +206,57 @@ def test_is_parity_invalid_invalid():
     coordinator.data.array = MagicMock()
     coordinator.data.array.parity_valid = False
     assert _is_parity_invalid(coordinator) is True
+
+
+def test_is_parity_invalid_none():
+    """Test _is_parity_invalid when parity_valid is None (no parity disks)."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.array = MagicMock()
+    coordinator.data.array.parity_valid = None
+    assert _is_parity_invalid(coordinator) is False
+
+
+def test_has_parity_disks_no_data():
+    """Test _has_parity_disks when no data."""
+    coordinator = MagicMock()
+    coordinator.data = None
+    assert _has_parity_disks(coordinator) is False
+
+
+def test_has_parity_disks_no_array():
+    """Test _has_parity_disks when no array data."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.array = None
+    assert _has_parity_disks(coordinator) is False
+
+
+def test_has_parity_disks_zero_parity():
+    """Test _has_parity_disks when num_parity_disks is 0 (pools only)."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.array = MagicMock()
+    coordinator.data.array.num_parity_disks = 0
+    assert _has_parity_disks(coordinator) is False
+
+
+def test_has_parity_disks_none_parity():
+    """Test _has_parity_disks when num_parity_disks is None."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.array = MagicMock()
+    coordinator.data.array.num_parity_disks = None
+    assert _has_parity_disks(coordinator) is False
+
+
+def test_has_parity_disks_with_parity():
+    """Test _has_parity_disks when parity disks exist."""
+    coordinator = MagicMock()
+    coordinator.data = UnraidData()
+    coordinator.data.array = MagicMock()
+    coordinator.data.array.num_parity_disks = 1
+    assert _has_parity_disks(coordinator) is True
 
 
 def test_is_ups_connected_no_data():

@@ -344,14 +344,19 @@ async def async_check_and_create_issues(hass: HomeAssistant, coordinator) -> Non
             ir.async_delete_issue(hass, DOMAIN, temp_warning_issue_id)
             ir.async_delete_issue(hass, DOMAIN, temp_critical_issue_id)
 
-    # Check for array issues
+    # Check for array issues (only if parity disks are configured)
     array_data = coordinator.data.array
+    num_parity_disks = (
+        getattr(array_data, "num_parity_disks", None) if array_data else None
+    )
+    has_parity = num_parity_disks is not None and num_parity_disks > 0
     # Be strict about parity_valid - only consider it invalid if explicitly False
     # None, missing, or any other value should be treated as valid/unknown
+    # Also skip if there are no parity disks (pools-only setups)
     parity_valid = getattr(array_data, "parity_valid", None) if array_data else None
     parity_issue_id = f"array_parity_invalid_{entry_id}"
 
-    if parity_valid is False:
+    if has_parity and parity_valid is False:
         ir.async_create_issue(
             hass,
             DOMAIN,

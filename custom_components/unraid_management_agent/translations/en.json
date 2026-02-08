@@ -81,6 +81,9 @@
       "gpu_power": {
         "name": "GPU Power"
       },
+      "gpu_energy": {
+        "name": "GPU Energy"
+      },
       "ups_battery": {
         "name": "UPS Battery"
       },
