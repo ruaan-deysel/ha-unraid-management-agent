@@ -837,10 +837,12 @@ def _get_most_recent_parity_record(data: UnraidData) -> Any | None:
     try:
         sorted_records = sorted(
             records,
-            key=lambda r: _parse_timestamp(
-                getattr(r, "timestamp", None) or getattr(r, "date", None)
-            )
-            or datetime.min.replace(tzinfo=UTC),
+            key=lambda r: (
+                _parse_timestamp(
+                    getattr(r, "timestamp", None) or getattr(r, "date", None)
+                )
+                or datetime.min.replace(tzinfo=UTC)
+            ),
             reverse=True,
         )
         return sorted_records[0] if sorted_records else None
@@ -1308,8 +1310,10 @@ PLUGIN_SENSOR_DESCRIPTIONS: tuple[UnraidSensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=_get_latest_version,
         extra_state_attributes_fn=_get_latest_version_attrs,
-        supported_fn=lambda data: data is not None
-        and (data.update_status is not None or data.system is not None),
+        supported_fn=lambda data: (
+            data is not None
+            and (data.update_status is not None or data.system is not None)
+        ),
     ),
     UnraidSensorEntityDescription(
         key="plugins_with_updates",
@@ -1319,8 +1323,10 @@ PLUGIN_SENSOR_DESCRIPTIONS: tuple[UnraidSensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=_get_plugins_with_updates,
         extra_state_attributes_fn=_get_plugins_with_updates_attrs,
-        supported_fn=lambda data: data is not None
-        and (data.update_status is not None or data.plugins is not None),
+        supported_fn=lambda data: (
+            data is not None
+            and (data.update_status is not None or data.plugins is not None)
+        ),
     ),
 )
 
