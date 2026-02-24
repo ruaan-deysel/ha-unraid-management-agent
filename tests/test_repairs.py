@@ -13,7 +13,6 @@ from custom_components.unraid_management_agent.repairs import (
     ConnectionIssueRepairFlow,
     DiskHealthRepairFlow,
     ParityCheckRepairFlow,
-    _is_ssd,
     async_check_and_create_issues,
     async_create_fix_flow,
 )
@@ -168,36 +167,6 @@ async def test_parity_check_repair_flow_resolve(hass: HomeAssistant) -> None:
         result = await flow.async_step_init(user_input={})
 
     assert result["type"] == "create_entry"
-
-
-def test_is_ssd_nvme_device() -> None:
-    """Test SSD detection for NVMe devices."""
-    disk = DiskInfo(device="nvme0n1", role="data", name="disk1", id="Samsung_990")
-    assert _is_ssd(disk) is True
-
-
-def test_is_ssd_cache_role() -> None:
-    """Test SSD detection for cache role."""
-    disk = DiskInfo(device="sda", role="cache", name="cache", id="SamsungSSD")
-    assert _is_ssd(disk) is True
-
-
-def test_is_ssd_cache_name() -> None:
-    """Test SSD detection for cache in name."""
-    disk = DiskInfo(device="sda", role="data", name="cache1", id="Unknown")
-    assert _is_ssd(disk) is True
-
-
-def test_is_ssd_in_id() -> None:
-    """Test SSD detection from disk ID."""
-    disk = DiskInfo(device="sda", role="data", name="disk1", id="Samsung_SSD_860")
-    assert _is_ssd(disk) is True
-
-
-def test_is_not_ssd() -> None:
-    """Test HDD detection."""
-    disk = DiskInfo(device="sdb", role="data", name="disk2", id="WDC_WD80EFAX")
-    assert _is_ssd(disk) is False
 
 
 async def test_check_and_create_issues_connection_failed(
@@ -722,100 +691,3 @@ async def test_check_and_create_issues_no_temp_clears(
     # Should delete both warning and critical temp issues when no temp reading
     assert any("high_temp" in str(call) for call in delete_calls)
     assert any("critical_temp" in str(call) for call in delete_calls)
-
-
-def test_get_disk_temp_thresholds_per_disk_override() -> None:
-    """Test _get_disk_temp_thresholds with per-disk override values."""
-    from custom_components.unraid_management_agent.repairs import (
-        _get_disk_temp_thresholds,
-    )
-
-    disk = DiskInfo(
-        device="sda",
-        role="data",
-        name="disk1",
-        id="WDC_WD80EFAX",
-        temp_warning=55,
-        temp_critical=65,
-    )
-
-    result = _get_disk_temp_thresholds(disk, None)
-    assert result == (55, 65)
-
-
-def test_get_disk_temp_thresholds_global_hdd_settings() -> None:
-    """Test _get_disk_temp_thresholds with global HDD settings."""
-    from custom_components.unraid_management_agent.repairs import (
-        _get_disk_temp_thresholds,
-    )
-
-    disk = DiskInfo(
-        device="sda",
-        role="data",
-        name="disk1",
-        id="WDC_WD80EFAX",
-    )
-
-    mock_settings = MagicMock()
-    mock_settings.hdd_temp_warning_celsius = 48
-    mock_settings.hdd_temp_critical_celsius = 58
-
-    result = _get_disk_temp_thresholds(disk, mock_settings)
-    assert result == (48, 58)
-
-
-def test_get_disk_temp_thresholds_global_ssd_settings() -> None:
-    """Test _get_disk_temp_thresholds with global SSD settings."""
-    from custom_components.unraid_management_agent.repairs import (
-        _get_disk_temp_thresholds,
-    )
-
-    disk = DiskInfo(
-        device="nvme0n1",
-        role="cache",
-        name="cache",
-        id="Samsung_SSD_980",
-    )
-
-    mock_settings = MagicMock()
-    mock_settings.ssd_temp_warning_celsius = 60
-    mock_settings.ssd_temp_critical_celsius = 70
-
-    result = _get_disk_temp_thresholds(disk, mock_settings)
-    assert result == (60, 70)
-
-
-def test_get_disk_temp_thresholds_no_thresholds_hdd() -> None:
-    """Test _get_disk_temp_thresholds returns None when no thresholds available for HDD."""
-    from custom_components.unraid_management_agent.repairs import (
-        _get_disk_temp_thresholds,
-    )
-
-    disk = DiskInfo(
-        device="sda",
-        role="data",
-        name="disk1",
-        id="WDC_WD80EFAX",
-    )
-
-    result = _get_disk_temp_thresholds(disk, None)
-    # No thresholds available - should return None
-    assert result is None
-
-
-def test_get_disk_temp_thresholds_no_thresholds_ssd() -> None:
-    """Test _get_disk_temp_thresholds returns None when no thresholds available for SSD."""
-    from custom_components.unraid_management_agent.repairs import (
-        _get_disk_temp_thresholds,
-    )
-
-    disk = DiskInfo(
-        device="nvme0n1",
-        role="cache",
-        name="cache",
-        id="Samsung_SSD_980",
-    )
-
-    result = _get_disk_temp_thresholds(disk, None)
-    # No thresholds available - should return None
-    assert result is None

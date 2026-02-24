@@ -1,0 +1,20 @@
+# Prettier configuration
+# https://prettier.io/docs/en/options.html
+
+# Markdown
+proseWrap: preserve
+endOfLine: lf
+tabWidth: 2
+useTabs: false
+
+overrides:
+  - files: "*.md"
+    options:
+      proseWrap: preserve
+  - files: "*.{yaml,yml}"
+    options:
+      singleQuote: false
+  - files: "*.json"
+    options:
+      trailingComma: none
+      tabWidth: 2

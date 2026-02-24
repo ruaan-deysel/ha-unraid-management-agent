@@ -170,62 +170,6 @@ class ParityCheckRepairFlow(RepairsFlow):
         )
 
 
-def _is_ssd(disk) -> bool:
-    """Determine if a disk is an SSD/NVMe based on device name or role."""
-    device = (getattr(disk, "device", None) or "").lower()
-    role = (getattr(disk, "role", None) or "").lower()
-    name = (getattr(disk, "name", None) or "").lower()
-
-    # NVMe drives are always SSDs
-    if "nvme" in device:
-        return True
-
-    # Cache drives in Unraid are typically SSDs
-    if role == "cache" or "cache" in name:
-        return True
-
-    # Check for SSD in the disk ID/model
-    disk_id = (getattr(disk, "id", None) or "").lower()
-    return "ssd" in disk_id or "nvme" in disk_id
-
-
-def _get_disk_temp_thresholds(disk, disk_settings) -> tuple[int, int] | None:
-    """
-    Get temperature thresholds for a disk.
-
-    Priority:
-    1. Per-disk overrides (temp_warning, temp_critical on the disk object)
-    2. Global settings from disk_settings (hdd/ssd variants)
-
-    Returns:
-        Tuple of (warning_threshold, critical_threshold) or None if not available.
-
-    """
-    is_ssd = _is_ssd(disk)
-
-    # 1. Check for per-disk temperature overrides from the API
-    disk_temp_warning = getattr(disk, "temp_warning", None)
-    disk_temp_critical = getattr(disk, "temp_critical", None)
-
-    if disk_temp_warning is not None and disk_temp_critical is not None:
-        return (int(disk_temp_warning), int(disk_temp_critical))
-
-    # 2. Use global settings from disk_settings if available
-    if disk_settings:
-        if is_ssd:
-            warning = getattr(disk_settings, "ssd_temp_warning_celsius", None)
-            critical = getattr(disk_settings, "ssd_temp_critical_celsius", None)
-        else:
-            warning = getattr(disk_settings, "hdd_temp_warning_celsius", None)
-            critical = getattr(disk_settings, "hdd_temp_critical_celsius", None)
-
-        if warning is not None and critical is not None:
-            return (int(warning), int(critical))
-
-    # No thresholds available - don't create temperature issues
-    return None
-
-
 async def async_check_and_create_issues(hass: HomeAssistant, coordinator) -> None:
     """Check for issues and create repair flows if needed."""
     entry_id = coordinator.config_entry.entry_id
@@ -264,13 +208,12 @@ async def async_check_and_create_issues(hass: HomeAssistant, coordinator) -> Non
     disks = coordinator.data.disks or []
     for disk in disks:
         disk_id = getattr(disk, "id", None) or getattr(disk, "name", None) or "unknown"
-        smart_errors = getattr(disk, "smart_errors", None) or 0
-        smart_status = getattr(disk, "smart_status", None) or "UNKNOWN"
-        temperature = getattr(disk, "temperature_celsius", None) or 0
 
-        # Check for SMART errors (only if explicitly reported as having errors)
+        # Check for SMART errors using library property
         smart_issue_id = f"disk_health_{disk_id}_smart_errors"
-        if isinstance(smart_errors, (int, float)) and smart_errors > 0:
+        if getattr(disk, "has_smart_errors", False):
+            smart_errors = getattr(disk, "smart_errors", 0) or 0
+            smart_status = getattr(disk, "smart_status", None) or "UNKNOWN"
             ir.async_create_issue(
                 hass,
                 DOMAIN,
@@ -288,59 +231,53 @@ async def async_check_and_create_issues(hass: HomeAssistant, coordinator) -> Non
             # No SMART errors, remove any existing issue
             ir.async_delete_issue(hass, DOMAIN, smart_issue_id)
 
-        # Get temperature thresholds using priority: per-disk > global settings
-        thresholds = _get_disk_temp_thresholds(disk, disk_settings)
-
+        # Get temperature status using library method
         temp_warning_issue_id = f"disk_health_{disk_id}_high_temp"
         temp_critical_issue_id = f"disk_health_{disk_id}_critical_temp"
 
-        # Only check temperatures if thresholds are available from the API
-        if (
-            thresholds is not None
-            and isinstance(temperature, (int, float))
-            and temperature > 0
-        ):
-            temp_warning, temp_critical = thresholds
-            # Check for critical temperature first
-            if temperature >= temp_critical:
-                ir.async_create_issue(
-                    hass,
-                    DOMAIN,
-                    temp_critical_issue_id,
-                    is_fixable=True,
-                    severity=ir.IssueSeverity.ERROR,
-                    translation_key="disk_critical_temperature",
-                    translation_placeholders={
-                        "disk_name": getattr(disk, "name", None) or disk_id,
-                        "temperature": str(int(temperature)),
-                        "threshold": str(temp_critical),
-                    },
-                )
-                # Remove warning issue if critical is active
-                ir.async_delete_issue(hass, DOMAIN, temp_warning_issue_id)
-            elif temperature >= temp_warning:
-                # Warning level temperature
-                ir.async_create_issue(
-                    hass,
-                    DOMAIN,
-                    temp_warning_issue_id,
-                    is_fixable=True,
-                    severity=ir.IssueSeverity.WARNING,
-                    translation_key="disk_high_temperature",
-                    translation_placeholders={
-                        "disk_name": getattr(disk, "name", None) or disk_id,
-                        "temperature": str(int(temperature)),
-                        "threshold": str(temp_warning),
-                    },
-                )
-                # Remove critical issue if only warning
-                ir.async_delete_issue(hass, DOMAIN, temp_critical_issue_id)
-            else:
-                # Temperature is normal, remove any existing issues
-                ir.async_delete_issue(hass, DOMAIN, temp_warning_issue_id)
-                ir.async_delete_issue(hass, DOMAIN, temp_critical_issue_id)
+        temp_status = disk.temperature_status(disk_settings)
+        temperature = getattr(disk, "temperature_celsius", None) or 0
+
+        if temp_status == "critical":
+            warning_threshold, critical_threshold = disk.get_temp_thresholds(
+                disk_settings
+            )
+            ir.async_create_issue(
+                hass,
+                DOMAIN,
+                temp_critical_issue_id,
+                is_fixable=True,
+                severity=ir.IssueSeverity.ERROR,
+                translation_key="disk_critical_temperature",
+                translation_placeholders={
+                    "disk_name": getattr(disk, "name", None) or disk_id,
+                    "temperature": str(int(temperature)),
+                    "threshold": str(critical_threshold) if critical_threshold else "?",
+                },
+            )
+            # Remove warning issue if critical is active
+            ir.async_delete_issue(hass, DOMAIN, temp_warning_issue_id)
+        elif temp_status == "warning":
+            warning_threshold, _critical_threshold = disk.get_temp_thresholds(
+                disk_settings
+            )
+            ir.async_create_issue(
+                hass,
+                DOMAIN,
+                temp_warning_issue_id,
+                is_fixable=True,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="disk_high_temperature",
+                translation_placeholders={
+                    "disk_name": getattr(disk, "name", None) or disk_id,
+                    "temperature": str(int(temperature)),
+                    "threshold": str(warning_threshold) if warning_threshold else "?",
+                },
+            )
+            # Remove critical issue if only warning
+            ir.async_delete_issue(hass, DOMAIN, temp_critical_issue_id)
         else:
-            # No valid temperature reading, remove any existing issues
+            # Temperature is normal, remove any existing issues
             ir.async_delete_issue(hass, DOMAIN, temp_warning_issue_id)
             ir.async_delete_issue(hass, DOMAIN, temp_critical_issue_id)
 
@@ -373,14 +310,9 @@ async def async_check_and_create_issues(hass: HomeAssistant, coordinator) -> Non
         ir.async_delete_issue(hass, DOMAIN, parity_issue_id)
 
     # Check for parity check issues
-    parity_check_running = (
-        array_data.parity_check_status == "running" if array_data else False
-    )
-    sync_percent = (array_data.parity_check_progress or 0) if array_data else 0
     stuck_issue_id = f"parity_check_stuck_{entry_id}"
 
-    # If parity check has been running for a very long time (>95% but not complete)
-    if parity_check_running is True and 95 < sync_percent < 100:
+    if array_data and getattr(array_data, "is_parity_check_stuck", False):
         ir.async_create_issue(
             hass,
             DOMAIN,
@@ -389,7 +321,9 @@ async def async_check_and_create_issues(hass: HomeAssistant, coordinator) -> Non
             severity=ir.IssueSeverity.WARNING,
             translation_key="parity_check_stuck",
             translation_placeholders={
-                "sync_percent": str(sync_percent),
+                "sync_percent": str(
+                    getattr(array_data, "parity_check_progress", 0) or 0
+                ),
             },
         )
     else:

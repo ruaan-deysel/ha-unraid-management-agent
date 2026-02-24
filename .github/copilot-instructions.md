@@ -1,132 +1,161 @@
-# GitHub Copilot Instructions - Unraid Management Agent
+# GitHub Copilot Instructions
 
-## Project Context
+> **Comprehensive docs:** See [`AGENTS.md`](../AGENTS.md) at the repository root for full AI agent documentation.
+>
+> **Why two files?** This file is loaded automatically by GitHub Copilot. `AGENTS.md` serves non-Copilot agents (Claude Code, Cursor, Gemini, etc.) who don't read this file. Some overlap is intentional. Guided workflow prompts in `.github/prompts/*.prompt.md` provide step-by-step instructions for common tasks.
 
-This is a Home Assistant custom integration for monitoring and controlling Unraid servers. The integration provides system monitoring, array management, container control, and VM management through Home Assistant.
+## Project Identity
 
-## Critical Rules
+- **Domain:** `unraid_management_agent`
+- **Title:** Unraid Management Agent
+- **Class prefix:** `Unraid`
+- **Main code:** `custom_components/unraid_management_agent/`
+- **Lint:** `scripts/lint` (ruff format + ruff check --fix)
+- **Test:** `pytest tests/ -v --timeout=30`
+- **Start HA:** `./scripts/develop`
 
-### 📋 Documentation Policy
+Use these exact identifiers throughout the codebase. Never hardcode different values.
 
-- **NEVER** generate validation documents, summary documents, or reference documents unless explicitly requested
-- **NEVER** create unsolicited README files or markdown documentation
-- Only create documentation when specifically asked
-- Do not summarize actions in files unless explicitly requested
+## Code Quality Baseline
 
-## Home Assistant Integration Standards
+- **Python:** 4 spaces, 88 char lines, double quotes, full type hints, async for all I/O
+- **YAML:** 2 spaces, modern Home Assistant syntax
+- **JSON:** 2 spaces, no trailing commas, no comments
 
-### Required Components
+Before considering any coding task complete, the following **must** pass:
 
-- **Config Flow** (`config_flow.py`): UI-based configuration
-- **Data Coordinator** (`__init__.py`): Centralized data management
-- **Entity Platforms**: sensor, binary_sensor, switch, button
-- **API Client** (`api_client.py`): REST API communication
-- **WebSocket Client** (`websocket_client.py`): Real-time updates
-
-### Entity Best Practices
-
-- Use proper device classes (temperature, power, battery, duration)
-- Use proper state classes (measurement, total, total_increasing)
-- Use Material Design Icons (MDI)
-- Include extra attributes with context
-- Group all entities under a single device
-- Follow Home Assistant naming conventions
-
-### Configuration Files
-
-- Maintain correct `manifest.json` structure
-- Keep `strings.json` organized with translations
-- Format `services.yaml` properly
-- Update version numbers in manifest.json
-
-## Python Code Standards
-
-### Code Quality
-
-- Follow PEP 8 and Python best practices
-- Use type hints throughout
-- Implement proper async/await patterns
-- Handle errors specifically (no bare except)
-- Use logging module for debug/error messages
-
-### Async/Await
-
-- Use async functions for all I/O operations
-- Handle asyncio tasks and coroutines properly
-- Implement timeout handling for network requests
-- Use aiohttp for HTTP requests
-
-## Code Quality Validation
-
-### ✅ MANDATORY: After Every Change
-
-1. Run `scripts/lint` to validate code quality
-2. Fix all linting errors and warnings
-3. Check Home Assistant logs for errors
-4. Verify entity creation and updates work
-5. Test control operations (switches, buttons)
-
-### Linting Script
-
-The `scripts/lint` script runs:
-
-- `ruff format .` - Code formatting
-- `ruff check . --fix` - Linting with automatic fixes
-
-## Development Workflow
-
-### Setup and Development
-
-- Initial setup: `scripts/setup` (install dependencies)
-- Development mode: `scripts/develop` (start Home Assistant in debug)
-- Code quality: `scripts/lint` (check and fix code)
-
-### After Making Changes
-
-- **ALWAYS** run `scripts/lint`
-- **ALWAYS** check logs at `config/home-assistant.log`
-- Monitor Home Assistant instance for runtime errors
-- Verify all entity types are created correctly
-- Test WebSocket reconnection if modified
-
-### Testing
-
-- Verify changes don't break existing functionality
-- Test entity creation and updates
-- Check all entity types are created
-- Verify control operations work
-- Monitor logs for integration errors
-- Test WebSocket behavior if modified
-
-## Project Structure
-
-```
-custom_components/unraid_management_agent/
-├── __init__.py              # Integration setup & coordinator
-├── api_client.py            # REST API client
-├── binary_sensor.py         # Binary sensor platform
-├── button.py                # Button platform
-├── config_flow.py           # Configuration flow
-├── const.py                 # Constants
-├── manifest.json            # Integration metadata
-├── repairs.py               # Repair flows
-├── sensor.py                # Sensor platform
-├── services.yaml            # Service definitions
-├── strings.json             # Translations
-├── switch.py                # Switch platform
-├── websocket_client.py      # WebSocket client
-└── translations/            # Translation files
+```bash
+scripts/lint      # Runs ruff format + ruff check --fix
 ```
 
-## Key Implementation Details
+Generate code that passes these checks on first run. As an AI agent, you should produce higher quality code than manual development. Aim for zero validation errors.
 
-- Uses data coordinator pattern for centralized data management
-- WebSocket provides real-time updates with REST polling fallback
-- All entities grouped under single device
-- Dynamic entity creation based on available resources
-- UI-based configuration (no YAML required)
+## Architecture (Quick Reference)
 
-## References
+**Data Flow:** Entities -> Coordinator -> API Client (never skip layers)
 
-- Home Assistant Integration Development: https://developers.home-assistant.io/docs/creating_integration_manifest/
-- Home Assistant Developer Docs: https://developers.home-assistant.io/
+**Current Structure:**
+
+- `coordinator.py` -- `UnraidDataUpdateCoordinator` (polling + WebSocket)
+- `entity.py` -- Base entity class (`UnraidBaseEntity`)
+- `config_flow.py` -- Config flow with reconfigure and options flow
+- `sensor.py`, `binary_sensor.py`, `switch.py`, `button.py` -- Entity platforms
+- `__init__.py` -- Integration setup, service registration
+- `diagnostics.py` -- Diagnostic data collection
+- `repairs.py` -- Repair issue flows
+- `const.py` -- Constants and defaults
+
+**Key patterns:**
+
+- Entity MRO: `(PlatformEntity, UnraidBaseEntity)` -- order matters
+- Unique ID: `{entry_id}_{description.key}` (set in base entity)
+- Services: register in `async_setup()`, NOT `async_setup_entry()` (Quality Scale requirement)
+- Config entry data: `entry.runtime_data.client` / `entry.runtime_data.coordinator`
+- API library: `uma-api` (async, Pydantic models, WebSocket)
+
+## Workflow Rules
+
+1. **Small, focused changes** -- avoid large refactorings unless explicitly requested
+2. **Implement features completely** -- even if spanning 5-8 files
+   - Example: New sensor needs entity description + platform setup -> implement all together
+   - Example: Bug fix touching coordinator + entity + error handling -> do all at once
+3. **Multiple independent features:** implement one at a time, suggest commit between each
+4. **Large refactoring (>10 files or architectural changes):** propose plan first, get explicit confirmation
+5. **Validation:** run `scripts/lint` before considering task complete
+6. **File size:** keep files at ~200-400 lines. Split large modules into smaller ones when needed.
+
+**Important: Do NOT write tests unless explicitly requested.** Focus on implementing functionality. The developer decides when and if tests are needed.
+
+**Translation strategy:**
+
+- Business logic first, translations later
+- Update `en.json` only when asked or at major feature completion
+- NEVER update other language files automatically
+- Ask before updating multiple translation files
+- Use placeholders in code -- functionality works without translations
+
+## Research First
+
+**Don't guess -- look it up:**
+
+1. Search [Home Assistant Developer Docs](https://developers.home-assistant.io/) for current patterns
+2. Check the [developer blog](https://developers.home-assistant.io/blog/) for recent changes
+3. Look at existing patterns in similar files in the integration
+4. Run `scripts/lint` early and often -- catch issues before they compound
+5. Consult [Ruff rules](https://docs.astral.sh/ruff/rules/) when validation fails
+6. Ask for clarification rather than implementing based on assumptions
+
+**Home Assistant evolves rapidly** -- verify current best practices rather than relying on outdated knowledge.
+
+## Local Development
+
+**Always use the project's scripts** -- do NOT craft your own `hass`, `pip`, `pytest`, or similar commands.
+
+**Start Home Assistant:**
+
+```bash
+./scripts/develop
+```
+
+**When to restart HA:** After modifying Python files, `manifest.json`, `services.yaml`, translations, or config flow changes
+
+**Validate changes:**
+
+```bash
+scripts/lint      # Always run before considering task complete
+```
+
+**Logs:**
+
+- Live: terminal where `./scripts/develop` runs
+- File: `config/home-assistant.log` (most recent)
+- Debug level: `custom_components.unraid_management_agent: debug` in `config/configuration.yaml`
+
+## Working With the Developer
+
+**When requests conflict with these instructions:**
+
+1. Clarify if deviation is intentional
+2. Confirm you understood correctly
+3. Suggest updating instructions if this is a permanent change
+4. Proceed after confirmation
+
+**Maintaining instructions:**
+
+- This project is evolving -- instructions should too
+- Suggest updates when patterns change
+- Remove outdated rules, don't just add new ones
+
+**Documentation rules:**
+
+- **NEVER** create markdown files without explicit permission
+- **NEVER** create "helpful" READMEs, GUIDE.md, NOTES.md, etc.
+- **ALWAYS ask first** before creating permanent documentation
+- **Prefer module/class/function docstrings** over separate markdown files
+- **Use `.ai-scratch/`** for temporary planning and notes (never committed)
+
+**Session management:**
+
+- When task completes and developer moves on: suggest commit with message
+- Monitor context size -- warn if getting large and a new topic starts
+- Offer to create summary for fresh session if context is strained
+- Suggest once, don't nag if declined
+
+**Commit format:** [Conventional Commits](https://www.conventionalcommits.org/)
+
+```text
+type(scope): short summary (max 72 chars)
+
+- Optional detailed points
+- Reference issues if applicable
+```
+
+**Always check `git diff` first** -- don't rely on session memory. Include all changes in your message.
+
+**Common types:**
+
+- `feat:` -- User-facing functionality (new sensor, service, config option)
+- `fix:` -- Bug fixes (user-facing issues)
+- `chore:` -- Dev tools, dependencies (NOT user-facing)
+- `refactor:` -- Code restructuring (no functional change)
+- `docs:` -- Documentation changes

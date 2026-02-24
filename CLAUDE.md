@@ -1,6 +1,6 @@
-# Claude AI Instructions - Unraid Management Agent
+# Claude Code Instructions
 
-This repository uses a shared AI agent instruction system. **All instructions are in [`AGENTS.md`](../AGENTS.md).**
+This repository uses a shared AI agent instruction system. **All instructions are in [`AGENTS.md`](AGENTS.md).**
 
 Read `AGENTS.md` completely before starting any work. It contains:
 
@@ -22,10 +22,15 @@ Read `AGENTS.md` completely before starting any work. It contains:
 - **Test:** `pytest tests/ -v --timeout=30`
 - **Run HA:** `./scripts/develop`
 
-## Critical Policies
+## Copilot Prompts
 
-- **NEVER** generate unsolicited documentation, validation, or summary files
-- **ALWAYS** run `scripts/lint` after making code changes
-- **ALWAYS** validate code meets quality standards before considering work complete
-- Fix all linting errors and warnings before finishing
-- Do NOT create or modify tests unless explicitly requested
+Guided workflow prompts are available in `.github/prompts/*.prompt.md` for common tasks:
+
+- `Add New Sensor.prompt.md` -- Add sensor entities with descriptions
+- `Add Entity Platform.prompt.md` -- Add new entity platforms
+- `Debug Coordinator Issue.prompt.md` -- Diagnose coordinator problems
+- `Review Integration.prompt.md` -- Comprehensive quality review
+- `Add Action.prompt.md` -- Add service actions
+- `Add Config Option.prompt.md` -- Add config flow options
+- `Create Implementation Plan.prompt.md` -- Plan multi-phase features
+- `Update Translations.prompt.md` -- Update translation strings

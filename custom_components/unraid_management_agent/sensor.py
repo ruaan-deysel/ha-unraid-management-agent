@@ -8,12 +8,11 @@ callbacks, enabling a declarative approach to sensor definition.
 
 from __future__ import annotations
 
-import calendar
 import logging
-import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -35,6 +34,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
+from uma_api import EnergyIntegrator, RateCalculator, parse_timestamp
 from uma_api.formatting import format_bytes, format_duration
 
 from . import UnraidConfigEntry, UnraidDataUpdateCoordinator
@@ -108,10 +108,6 @@ def _get_cpu_attrs(data: UnraidData) -> dict[str, Any]:
     system = data.system
     cpu_cores = getattr(system, "cpu_cores", 0) or 0
     cpu_threads = getattr(system, "cpu_threads", 0) or 0
-
-    # Fix incorrect core count
-    if cpu_cores == 1 and cpu_threads > 2:
-        cpu_cores = cpu_threads // 2
 
     attrs: dict[str, Any] = {
         ATTR_CPU_CORES: cpu_cores,
@@ -208,12 +204,13 @@ def _get_uptime_attrs(data: UnraidData) -> dict[str, Any]:
     _add_attr_if_set(attrs, "version", getattr(system, "version", None))
 
     if uptime_seconds is not None:
-        days = uptime_seconds // 86400
-        hours = (uptime_seconds % 86400) // 3600
-        minutes = (uptime_seconds % 3600) // 60
-        attrs["uptime_days"] = days
-        attrs["uptime_hours"] = hours
-        attrs["uptime_minutes"] = minutes
+        attrs["uptime_days"] = getattr(system, "uptime_days", uptime_seconds // 86400)
+        attrs["uptime_hours"] = getattr(
+            system, "uptime_hours", (uptime_seconds % 86400) // 3600
+        )
+        attrs["uptime_minutes"] = getattr(
+            system, "uptime_minutes", (uptime_seconds % 3600) // 60
+        )
         attrs["uptime_total_seconds"] = uptime_seconds
 
     return attrs
@@ -227,13 +224,9 @@ def _get_uptime_attrs(data: UnraidData) -> dict[str, Any]:
 def _get_array_usage(data: UnraidData) -> float | None:
     """Get array usage from coordinator data."""
     if data and data.array:
-        used_percent = getattr(data.array, "used_percent", None)
-        if used_percent is not None:
-            return round(used_percent, 1)
-        total = getattr(data.array, "total_bytes", 0) or 0
-        used = getattr(data.array, "used_bytes", 0) or 0
-        if total > 0:
-            return round((used / total) * 100, 1)
+        computed = getattr(data.array, "computed_used_percent", None)
+        if computed is not None:
+            return round(computed, 1)
     return None
 
 
@@ -266,10 +259,8 @@ def _get_array_attrs(data: UnraidData) -> dict[str, Any]:
 
 def _get_parity_progress(data: UnraidData) -> float | None:
     """Get parity check progress from coordinator data."""
-    if data and data.array:
-        sync_percent = getattr(data.array, "sync_percent", None)
-        if sync_percent is not None:
-            return round(sync_percent, 1)
+    if data and data.array and data.array.sync_percent is not None:
+        return round(data.array.sync_percent, 1)
     return 0.0
 
 
@@ -281,21 +272,14 @@ def _get_parity_attrs(data: UnraidData) -> dict[str, Any]:
     array = data.array
     attrs = {}
 
-    sync_action = getattr(array, "sync_action", None)
-    if sync_action:
-        attrs["sync_action"] = sync_action
-
-    sync_errors = getattr(array, "sync_errors", None)
-    if sync_errors is not None:
-        attrs["sync_errors"] = sync_errors
-
-    sync_speed = getattr(array, "sync_speed", None)
-    if sync_speed:
-        attrs["sync_speed"] = sync_speed
-
-    sync_eta = getattr(array, "sync_eta", None)
-    if sync_eta:
-        attrs["estimated_completion"] = sync_eta
+    if array.sync_action:
+        attrs["sync_action"] = array.sync_action
+    if array.sync_errors is not None:
+        attrs["sync_errors"] = array.sync_errors
+    if array.sync_speed:
+        attrs["sync_speed"] = array.sync_speed
+    if array.sync_eta:
+        attrs["estimated_completion"] = array.sync_eta
 
     return attrs
 
@@ -329,11 +313,7 @@ def _get_gpu_attrs(data: UnraidData) -> dict[str, Any]:
 def _get_gpu_temperature(data: UnraidData) -> float | None:
     """Get GPU temperature from coordinator data."""
     if data and data.gpu and len(data.gpu) > 0:
-        gpu = data.gpu[0]
-        temp = getattr(gpu, "temperature_celsius", None)
-        if temp is not None and temp > 0:
-            return temp
-        return getattr(gpu, "cpu_temperature_celsius", None)
+        return getattr(data.gpu[0], "gpu_temperature", None)
     return None
 
 
@@ -378,20 +358,9 @@ def _get_ups_load(data: UnraidData) -> float | None:
 def _get_ups_runtime(data: UnraidData) -> int | None:
     """Get UPS runtime in minutes from coordinator data."""
     if data and data.ups:
-        ups = data.ups
-        # Try to get runtime in seconds first
-        runtime_seconds = getattr(ups, "runtime_left_seconds", None)
-        if runtime_seconds is None:
-            runtime_seconds = getattr(ups, "battery_runtime_seconds", None)
-        if runtime_seconds is None:
-            runtime_seconds = getattr(ups, "runtime_seconds", None)
-        if runtime_seconds is not None:
-            # Convert seconds to minutes
-            return int(_coerce_number(runtime_seconds) / 60)
-        # Fallback to runtime_minutes if available
-        minutes = getattr(ups, "runtime_minutes", None)
+        minutes = getattr(data.ups, "runtime_minutes", None)
         if minutes is not None:
-            return int(_coerce_number(minutes))
+            return int(minutes)
     return None
 
 
@@ -407,38 +376,12 @@ def _get_ups_power(data: UnraidData) -> float | None:
 # =============================================================================
 
 
-def _coerce_number(value: Any) -> float:
-    """Coerce value to float for calculations; return 0.0 when invalid."""
-    if isinstance(value, (int, float)):
-        return float(value)
-    if isinstance(value, str):
-        try:
-            return float(value)
-        except ValueError:
-            return 0.0
-    return 0.0
-
-
 def _get_flash_usage(data: UnraidData) -> float | None:
     """Get flash drive usage from coordinator data."""
     if data and data.flash_info:
-        usage_percent = getattr(data.flash_info, "usage_percent", None)
-        if isinstance(usage_percent, (int, float)):
-            return round(float(usage_percent), 1)
-        if isinstance(usage_percent, str):
-            try:
-                return round(float(usage_percent), 1)
-            except ValueError:
-                pass
-
-        used = getattr(data.flash_info, "used_bytes", 0) or 0
-        total = getattr(data.flash_info, "total_bytes", 0) or 0
-        if not total:
-            total = getattr(data.flash_info, "size_bytes", 0) or 0
-        total_value = _coerce_number(total)
-        used_value = _coerce_number(used)
-        if total_value and total_value > 0:
-            return round((used_value / total_value) * 100, 1)
+        computed = getattr(data.flash_info, "computed_used_percent", None)
+        if computed is not None:
+            return round(computed, 1)
     return None
 
 
@@ -533,12 +476,10 @@ def _get_latest_version(data: UnraidData) -> str | None:
         return None
 
     if data.update_status:
-        latest = getattr(data.update_status, "latest_version", None)
-        if latest:
-            return latest
-        current = getattr(data.update_status, "current_version", None)
-        if current:
-            return current
+        if data.update_status.latest_version:
+            return data.update_status.latest_version
+        if data.update_status.current_version:
+            return data.update_status.current_version
 
     if data.system:
         return getattr(data.system, "version", None)
@@ -551,10 +492,10 @@ def _get_latest_version_attrs(data: UnraidData) -> dict[str, Any]:
         return {}
 
     update = data.update_status
-    current = getattr(update, "current_version", None) if update else None
+    current = update.current_version if update else None
     if not current and data.system:
         current = getattr(data.system, "version", None)
-    latest = getattr(update, "latest_version", None) if update else None
+    latest = update.latest_version if update else None
 
     attrs = {}
     if current:
@@ -615,180 +556,17 @@ def _get_plugins_with_updates_attrs(data: UnraidData) -> dict[str, Any]:
 # =============================================================================
 
 
-def _compute_next_parity_check(schedule: Any) -> datetime | None:
-    """Compute next parity check time from schedule fields."""
-    if schedule is None:
-        return None
-
-    scheduled = getattr(schedule, "scheduled", None)
-    if scheduled is False:
-        return None
-
-    mode = getattr(schedule, "mode", None)
-    frequency = getattr(schedule, "frequency", None)
-    frequency_value = str(mode or frequency).lower() if (mode or frequency) else None
-    if not frequency_value:
-        return None
-
-    hour = getattr(schedule, "hour", None)
-    if hour is None:
-        return None
-
-    minute = getattr(schedule, "minute", None)
-    if minute is None:
-        minute = 0
-
-    hour_value = int(_coerce_number(hour))
-    minute_value = int(_coerce_number(minute))
-    now = datetime.now().astimezone()
-
-    def _next_daily() -> datetime:
-        candidate = now.replace(
-            hour=hour_value, minute=minute_value, second=0, microsecond=0
-        )
-        if candidate <= now:
-            candidate += timedelta(days=1)
-        return candidate
-
-    def _next_weekly(day_value: int) -> datetime | None:
-        if 0 <= day_value <= 6:
-            target_weekday = (day_value - 1) % 7
-        elif 1 <= day_value <= 7:
-            target_weekday = (day_value - 2) % 7
-        else:
-            return None
-
-        current_weekday = now.weekday()
-        days_ahead = (target_weekday - current_weekday) % 7
-        candidate = now.replace(
-            hour=hour_value, minute=minute_value, second=0, microsecond=0
-        ) + timedelta(days=days_ahead)
-        if candidate <= now:
-            candidate += timedelta(days=7)
-        return candidate
-
-    def _next_monthly(day_value: int) -> datetime | None:
-        if day_value <= 0:
-            return None
-
-        last_day = calendar.monthrange(now.year, now.month)[1]
-        candidate_day = min(day_value, last_day)
-        candidate = now.replace(
-            day=candidate_day,
-            hour=hour_value,
-            minute=minute_value,
-            second=0,
-            microsecond=0,
-        )
-        if candidate <= now:
-            year = now.year + (1 if now.month == 12 else 0)
-            month = 1 if now.month == 12 else now.month + 1
-            last_day = calendar.monthrange(year, month)[1]
-            candidate_day = min(day_value, last_day)
-            candidate = now.replace(
-                year=year,
-                month=month,
-                day=candidate_day,
-                hour=hour_value,
-                minute=minute_value,
-                second=0,
-                microsecond=0,
-            )
-        return candidate
-
-    if frequency_value in {"daily", "day"}:
-        return _next_daily()
-    if frequency_value in {"weekly", "week"}:
-        day = getattr(schedule, "day_of_week", None)
-        if day is None:
-            day = getattr(schedule, "day", None)
-        if day is None:
-            return None
-        return _next_weekly(int(_coerce_number(day)))
-    if frequency_value in {"monthly", "month"}:
-        day = getattr(schedule, "day_of_month", None)
-        if day is None:
-            day = getattr(schedule, "day", None)
-        if day is None:
-            return None
-        return _next_monthly(int(_coerce_number(day)))
-    if frequency_value in {"yearly", "year"}:
-        month = getattr(schedule, "month", None)
-        if month is None:
-            month = getattr(schedule, "day", None)
-        if month is None:
-            return None
-
-        month_value = int(_coerce_number(month))
-        if 0 <= month_value <= 11:
-            month_value += 1
-        if month_value <= 0 or month_value > 12:
-            return None
-
-        day = getattr(schedule, "day_of_month", None)
-        if day is None:
-            day = getattr(schedule, "day", None)
-        if day is None:
-            return None
-
-        day_value = int(_coerce_number(day))
-        if day_value <= 0:
-            return None
-
-        last_day = calendar.monthrange(now.year, month_value)[1]
-        candidate_day = min(day_value, last_day)
-        candidate = now.replace(
-            month=month_value,
-            day=candidate_day,
-            hour=hour_value,
-            minute=minute_value,
-            second=0,
-            microsecond=0,
-        )
-        if candidate <= now:
-            last_day = calendar.monthrange(now.year + 1, month_value)[1]
-            candidate_day = min(day_value, last_day)
-            candidate = now.replace(
-                year=now.year + 1,
-                month=month_value,
-                day=candidate_day,
-                hour=hour_value,
-                minute=minute_value,
-                second=0,
-                microsecond=0,
-            )
-        return candidate
-
-    return None
-
-
-def _parse_timestamp(value: Any) -> datetime | None:
-    """Parse timestamp values into timezone-aware datetimes."""
-    if isinstance(value, datetime):
-        return value
-    if isinstance(value, (int, float)):
-        return datetime.fromtimestamp(value).astimezone()
-    if isinstance(value, str):
-        try:
-            value_str = value
-            if value_str.endswith("Z"):
-                value_str = f"{value_str[:-1]}+00:00"
-            return datetime.fromisoformat(value_str).astimezone()
-        except ValueError:
-            return None
-    return None
-
-
 def _get_next_parity_check(data: UnraidData) -> datetime | None:
     """Get next parity check timestamp from coordinator data."""
-    if data and data.parity_schedule:
-        next_check = getattr(data.parity_schedule, "next_check", None)
-        if next_check:
-            parsed = _parse_timestamp(next_check)
-            if parsed:
-                return parsed
-        return _compute_next_parity_check(data.parity_schedule)
-    return None
+    if not data or not data.parity_schedule:
+        return None
+
+    schedule = data.parity_schedule
+
+    if not schedule.is_enabled:
+        return None
+
+    return schedule.next_check_datetime
 
 
 def _get_next_parity_check_attrs(data: UnraidData) -> dict[str, Any]:
@@ -797,67 +575,40 @@ def _get_next_parity_check_attrs(data: UnraidData) -> dict[str, Any]:
         return {}
 
     schedule = data.parity_schedule
-    attrs = {}
+    attrs: dict[str, Any] = {}
 
-    scheduled = getattr(schedule, "scheduled", None)
-    if scheduled is not None:
-        attrs["scheduled"] = scheduled
-
-    frequency = getattr(schedule, "frequency", None)
-    if frequency:
-        attrs["frequency"] = frequency
-
-    day = getattr(schedule, "day", None)
-    if day:
-        attrs["day"] = day
-
-    hour = getattr(schedule, "hour", None)
-    if hour is not None:
-        attrs["hour"] = hour
+    if schedule.enabled is not None:
+        attrs["enabled"] = schedule.enabled
+    if schedule.mode is not None:
+        attrs["mode"] = schedule.mode
+    if schedule.frequency is not None:
+        attrs["frequency"] = schedule.frequency
+    if schedule.day is not None:
+        attrs["day"] = schedule.day
+    if schedule.month is not None:
+        attrs["month"] = schedule.month
+    if schedule.hour is not None:
+        attrs["hour"] = schedule.hour
+    if schedule.correcting is not None:
+        attrs["correcting"] = schedule.correcting
 
     return attrs
 
 
 def _get_most_recent_parity_record(data: UnraidData) -> Any | None:
-    """
-    Get the most recent parity check record by date.
-
-    The UMA API may return records in an arbitrary order (not sorted by date),
-    so we need to sort them to find the most recent one.
-    """
-    records = (
-        getattr(data.parity_history, "records", None)
-        if data and data.parity_history
-        else None
-    )
-    if not records or len(records) == 0:
+    """Get the most recent parity check record by date."""
+    if not data or not data.parity_history:
         return None
-
-    # Sort records by date descending to get most recent first
-    try:
-        sorted_records = sorted(
-            records,
-            key=lambda r: (
-                _parse_timestamp(
-                    getattr(r, "timestamp", None) or getattr(r, "date", None)
-                )
-                or datetime.min.replace(tzinfo=UTC)
-            ),
-            reverse=True,
-        )
-        return sorted_records[0] if sorted_records else None
-    except (TypeError, ValueError):
-        # If sorting fails, fall back to first record
-        return records[0]
+    return getattr(data.parity_history, "most_recent", None)
 
 
 def _get_last_parity_check(data: UnraidData) -> datetime | None:
     """Get last parity check timestamp from coordinator data."""
     last = _get_most_recent_parity_record(data)
     if last:
-        timestamp = getattr(last, "timestamp", None) or getattr(last, "date", None)
-        if timestamp:
-            return _parse_timestamp(timestamp)
+        raw = getattr(last, "timestamp", None) or getattr(last, "date", None)
+        if raw:
+            return parse_timestamp(raw)
     return None
 
 
@@ -902,11 +653,7 @@ def _get_last_parity_errors(data: UnraidData) -> int | None:
 def _get_notifications_count(data: UnraidData) -> int | None:
     """Get unread notifications count from coordinator data."""
     if data and data.notifications is not None:
-        unread = getattr(data.notifications, "unread_count", None)
-        if unread is not None:
-            return unread
-        notif_list = getattr(data.notifications, "notifications", []) or []
-        return len(notif_list)
+        return getattr(data.notifications, "unread_count", None)
     return None
 
 
@@ -954,14 +701,9 @@ def _get_docker_vdisk_usage(data: UnraidData) -> float | None:
         (d for d in data.disks if getattr(d, "role", "") == "docker_vdisk"), None
     )
     if vdisk:
-        used = getattr(vdisk, "used_bytes", 0) or 0
-        total = getattr(vdisk, "total_bytes", 0) or 0
-        free = getattr(vdisk, "free_bytes", 0) or 0
-        # Calculate total from used + free if total_bytes is not available
-        if total == 0 and (used > 0 or free > 0):
-            total = used + free
-        if total > 0:
-            return round((used / total) * 100, 1)
+        computed = getattr(vdisk, "computed_used_percent", None)
+        if computed is not None:
+            return round(computed, 1)
     return None
 
 
@@ -1001,14 +743,9 @@ def _get_log_filesystem_usage(data: UnraidData) -> float | None:
 
     log_fs = next((d for d in data.disks if getattr(d, "role", "") == "log"), None)
     if log_fs:
-        used = getattr(log_fs, "used_bytes", 0) or 0
-        total = getattr(log_fs, "total_bytes", 0) or 0
-        free = getattr(log_fs, "free_bytes", 0) or 0
-        # Calculate total from used + free if total_bytes is not available
-        if total == 0 and (used > 0 or free > 0):
-            total = used + free
-        if total > 0:
-            return round((used / total) * 100, 1)
+        computed = getattr(log_fs, "computed_used_percent", None)
+        if computed is not None:
+            return round(computed, 1)
     return None
 
 
@@ -1503,19 +1240,21 @@ class UnraidFanSensor(UnraidBaseEntity, SensorEntity):
         coordinator: UnraidDataUpdateCoordinator,
         entry: UnraidConfigEntry,
         fan_name: str,
+        normalized_name: str,
     ) -> None:
         """Initialize the sensor."""
-        # Use fan name as stable key so entities don't shift when list order changes
-        sanitized = fan_name.lower().replace(" ", "_")
+        self._original_fan_name = fan_name
+        sanitized = normalized_name.lower().replace(" ", "_")
         super().__init__(coordinator, f"fan_{sanitized}")
         self._entry = entry
         self._fan_name = fan_name
-        self._attr_name = f"Fan {fan_name}"
+        self._normalized_name = normalized_name
+        self._attr_name = f"Fan {normalized_name}"
 
     @property
     def unique_id(self) -> str:
         """Return unique ID."""
-        sanitized = self._fan_name.lower().replace(" ", "_")
+        sanitized = self._normalized_name.lower().replace(" ", "_")
         return f"{self._entry.entry_id}_fan_{sanitized}"
 
     @property
@@ -1533,6 +1272,14 @@ class UnraidFanSensor(UnraidBaseEntity, SensorEntity):
             elif getattr(fan, "name", None) == self._fan_name:
                 return getattr(fan, "rpm", None)
         return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes for diagnostics."""
+        attrs: dict[str, Any] = {}
+        if self._original_fan_name != self._normalized_name:
+            attrs["original_name"] = self._original_fan_name
+        return attrs
 
 
 class UnraidNetworkSensorBase(UnraidBaseEntity, SensorEntity):
@@ -1559,10 +1306,8 @@ class UnraidNetworkSensorBase(UnraidBaseEntity, SensorEntity):
             "mdi:download-network" if direction == "rx" else "mdi:upload-network"
         )
 
-        # PR #12 fix: Rate calculation with caching
-        self._last_bytes: int | None = None
-        self._last_update: datetime | None = None
-        self._last_value: float = 0.0
+        # Use uma-api RateCalculator for rate computation (replaces PR #12 fix)
+        self._rate_calculator = RateCalculator()
 
     @property
     def unique_id(self) -> str:
@@ -1598,30 +1343,15 @@ class UnraidNetworkSensorBase(UnraidBaseEntity, SensorEntity):
             return
 
         current_bytes = self._get_bytes(interface)
-        now = datetime.now()
-
-        if current_bytes is not None and self._last_bytes is not None:
-            time_diff = (
-                (now - self._last_update).total_seconds() if self._last_update else 0
-            )
-
-            # PR #12 fix: Only recalculate if time >= 5 seconds and bytes changed
-            if time_diff >= 5 and current_bytes != self._last_bytes:
-                byte_diff = current_bytes - self._last_bytes
-                if byte_diff >= 0:
-                    self._last_value = (byte_diff / time_diff) * 8 / 1000
-                self._last_bytes = current_bytes
-                self._last_update = now
-        elif current_bytes is not None:
-            self._last_bytes = current_bytes
-            self._last_update = now
+        if current_bytes is not None:
+            self._rate_calculator.add_sample(current_bytes, time.monotonic())
 
         super()._handle_coordinator_update()
 
     @property
     def native_value(self) -> float:
         """Return the calculated rate."""
-        return self._last_value
+        return self._rate_calculator.rate_kbps
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -1739,25 +1469,9 @@ class UnraidDiskUsageSensor(UnraidDiskSensorBase):
         if not disk:
             return None
 
-        used_percent = getattr(disk, "used_percent", None)
-        if used_percent is None:
-            used_percent = getattr(disk, "usage_percent", None)
-        if isinstance(used_percent, (int, float)):
-            return round(float(used_percent), 1)
-        if isinstance(used_percent, str):
-            try:
-                return round(float(used_percent), 1)
-            except ValueError:
-                pass
-
-        total = getattr(disk, "total_bytes", 0) or 0
-        if not total:
-            total = getattr(disk, "size_bytes", 0) or 0
-        used = getattr(disk, "used_bytes", 0) or 0
-        total_value = _coerce_number(total)
-        used_value = _coerce_number(used)
-        if total_value and total_value > 0:
-            return round((used_value / total_value) * 100, 1)
+        computed = getattr(disk, "computed_used_percent", None)
+        if computed is not None:
+            return round(computed, 1)
         return None
 
     @property
@@ -1814,8 +1528,7 @@ class UnraidDiskHealthSensor(UnraidDiskSensorBase):
 
     def _is_standby(self, disk: Any) -> bool:
         """Return true if the disk is in standby mode."""
-        spin_state = getattr(disk, "spin_state", None)
-        return spin_state is not None and spin_state.lower() == "standby"
+        return getattr(disk, "is_standby", False)
 
     @property
     def native_value(self) -> str | None:
@@ -1924,6 +1637,172 @@ class UnraidDiskTemperatureSensor(UnraidDiskSensorBase):
         return attrs
 
 
+class UnraidDiskSmartErrorsSensor(UnraidDiskSensorBase):
+    """
+    Disk SMART errors sensor.
+
+    Reports the number of SMART errors detected on the disk.
+    Disabled by default. Uses TOTAL state class since errors only increase.
+    """
+
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_icon = "mdi:harddisk-alert"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        entry: UnraidConfigEntry,
+        disk_id: str,
+        disk_name: str,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry, disk_id, disk_name, "smart_errors")
+        self._attr_name = f"Disk {disk_name} SMART Errors"
+
+    @property
+    def unique_id(self) -> str:
+        """Return unique ID."""
+        return f"{self._entry.entry_id}_disk_{self._disk_id}_smart_errors"
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the number of SMART errors."""
+        disk = self._get_disk()
+        if not disk:
+            return None
+        return getattr(disk, "smart_errors", None)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra attributes."""
+        disk = self._get_disk()
+        if not disk:
+            return {}
+
+        attrs: dict[str, Any] = {
+            "disk_name": self._disk_name,
+        }
+        _add_attr_if_set(attrs, "device", getattr(disk, "device", None))
+        _add_attr_if_set(attrs, "smart_status", getattr(disk, "smart_status", None))
+        _add_attr_if_set(attrs, "power_on_hours", getattr(disk, "power_on_hours", None))
+
+        return attrs
+
+
+class UnraidDiskReadBytesSensor(UnraidDiskSensorBase):
+    """
+    Disk read bytes sensor.
+
+    Reports total bytes read from the disk. Uses TOTAL_INCREASING state class
+    for monotonically increasing counters. Disabled by default.
+    """
+
+    _attr_native_unit_of_measurement = UnitOfInformation.BYTES
+    _attr_device_class = SensorDeviceClass.DATA_SIZE
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_suggested_unit_of_measurement = UnitOfInformation.GIBIBYTES
+    _attr_icon = "mdi:harddisk-plus"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        entry: UnraidConfigEntry,
+        disk_id: str,
+        disk_name: str,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry, disk_id, disk_name, "read_bytes")
+        self._attr_name = f"Disk {disk_name} Read"
+
+    @property
+    def unique_id(self) -> str:
+        """Return unique ID."""
+        return f"{self._entry.entry_id}_disk_{self._disk_id}_read_bytes"
+
+    @property
+    def native_value(self) -> int | None:
+        """Return total bytes read from the disk."""
+        disk = self._get_disk()
+        if not disk:
+            return None
+        return getattr(disk, "read_bytes", None)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra attributes."""
+        disk = self._get_disk()
+        if not disk:
+            return {}
+
+        attrs: dict[str, Any] = {
+            "disk_name": self._disk_name,
+        }
+        _add_attr_if_set(attrs, "device", getattr(disk, "device", None))
+        _add_attr_if_set(attrs, "read_ops", getattr(disk, "read_ops", None))
+
+        return attrs
+
+
+class UnraidDiskWriteBytesSensor(UnraidDiskSensorBase):
+    """
+    Disk write bytes sensor.
+
+    Reports total bytes written to the disk. Uses TOTAL_INCREASING state class
+    for monotonically increasing counters. Disabled by default.
+    """
+
+    _attr_native_unit_of_measurement = UnitOfInformation.BYTES
+    _attr_device_class = SensorDeviceClass.DATA_SIZE
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_suggested_unit_of_measurement = UnitOfInformation.GIBIBYTES
+    _attr_icon = "mdi:harddisk-plus"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        entry: UnraidConfigEntry,
+        disk_id: str,
+        disk_name: str,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry, disk_id, disk_name, "write_bytes")
+        self._attr_name = f"Disk {disk_name} Write"
+
+    @property
+    def unique_id(self) -> str:
+        """Return unique ID."""
+        return f"{self._entry.entry_id}_disk_{self._disk_id}_write_bytes"
+
+    @property
+    def native_value(self) -> int | None:
+        """Return total bytes written to the disk."""
+        disk = self._get_disk()
+        if not disk:
+            return None
+        return getattr(disk, "write_bytes", None)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra attributes."""
+        disk = self._get_disk()
+        if not disk:
+            return {}
+
+        attrs: dict[str, Any] = {
+            "disk_name": self._disk_name,
+        }
+        _add_attr_if_set(attrs, "device", getattr(disk, "device", None))
+        _add_attr_if_set(attrs, "write_ops", getattr(disk, "write_ops", None))
+
+        return attrs
+
+
 class UnraidShareUsageSensor(UnraidBaseEntity, SensorEntity):
     """Share usage sensor."""
 
@@ -1966,14 +1845,9 @@ class UnraidShareUsageSensor(UnraidBaseEntity, SensorEntity):
         if not share:
             return None
 
-        used_percent = getattr(share, "used_percent", None)
-        if used_percent is not None:
-            return round(used_percent, 1)
-
-        total = getattr(share, "total_bytes", 0) or 0
-        used = getattr(share, "used_bytes", 0) or 0
-        if total > 0:
-            return round((used / total) * 100, 1)
+        computed = getattr(share, "computed_used_percent", None)
+        if computed is not None:
+            return round(computed, 1)
         return None
 
     @property
@@ -2074,14 +1948,9 @@ class UnraidZFSPoolUsageSensor(UnraidZFSPoolSensorBase):
         if not pool:
             return None
 
-        used_percent = getattr(pool, "used_percent", None)
-        if used_percent is not None:
-            return round(used_percent, 1)
-
-        total = getattr(pool, "size_bytes", 0) or 0
-        used = getattr(pool, "used_bytes", 0) or 0
-        if total > 0:
-            return round((used / total) * 100, 1)
+        computed = getattr(pool, "computed_used_percent", None)
+        if computed is not None:
+            return round(computed, 1)
         return None
 
     @property
@@ -2179,8 +2048,8 @@ class UnraidUPSEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
         super().__init__(coordinator, "ups_energy")
         self._entry = entry
         self._attr_translation_key = "ups_energy"
+        self._energy_integrator = EnergyIntegrator()
         self._total_energy: float = 0.0
-        self._last_update: datetime | None = None
         self._last_power: float | None = None
 
     async def async_added_to_hass(self) -> None:
@@ -2188,21 +2057,13 @@ class UnraidUPSEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
         await super().async_added_to_hass()
 
         # Restore previous state
-        if (last_state := await self.async_get_last_state()) is not None:
-            if last_state.state not in (None, "unknown", "unavailable"):
-                try:
-                    self._total_energy = float(last_state.state)
-                except (ValueError, TypeError):
-                    self._total_energy = 0.0
-
-            # Restore last update time from attributes if available
-            if last_state.attributes.get("last_reset"):
-                try:
-                    self._last_update = datetime.fromisoformat(
-                        str(last_state.attributes["last_reset"])
-                    )
-                except (ValueError, TypeError):
-                    self._last_update = None
+        if (
+            last_state := await self.async_get_last_state()
+        ) is not None and last_state.state not in (None, "unknown", "unavailable"):
+            try:
+                self._total_energy = float(last_state.state)
+            except (ValueError, TypeError):
+                self._total_energy = 0.0
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -2215,34 +2076,18 @@ class UnraidUPSEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
         if not self.coordinator.data or not self.coordinator.data.ups:
             return
 
-        ups = self.coordinator.data.ups
-        current_power = getattr(ups, "power_watts", None)
+        current_power = getattr(self.coordinator.data.ups, "power_watts", None)
 
         if current_power is None or current_power < 0:
             return
 
-        now = datetime.now(UTC)
-
-        if self._last_update is not None and self._last_power is not None:
-            # Calculate time delta in hours
-            time_delta = (now - self._last_update).total_seconds() / 3600
-
-            # Sanity check: only calculate if time delta is reasonable (< 1 hour)
-            # This prevents huge jumps after restarts or long unavailability
-            if 0 < time_delta < 1:
-                # Use trapezoidal integration (average of last and current power)
-                avg_power = (self._last_power + current_power) / 2
-                # Energy (kWh) = Power (W) * Time (h) / 1000
-                energy_increment = (avg_power * time_delta) / 1000
-                self._total_energy += energy_increment
-
-        self._last_update = now
+        self._energy_integrator.add_sample(current_power, time.monotonic())
         self._last_power = current_power
 
     @property
     def native_value(self) -> float:
         """Return the total energy consumed in kWh."""
-        return round(self._total_energy, 3)
+        return round(self._total_energy + self._energy_integrator.total_wh / 1000, 3)
 
     @property
     def available(self) -> bool:
@@ -2257,9 +2102,6 @@ class UnraidUPSEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
         attrs: dict[str, Any] = {}
-
-        if self._last_update:
-            attrs["last_reset"] = self._last_update.isoformat()
 
         if self._last_power is not None:
             attrs["current_power_watts"] = self._last_power
@@ -2295,8 +2137,8 @@ class UnraidGPUEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
         super().__init__(coordinator, "gpu_energy")
         self._entry = entry
         self._attr_translation_key = "gpu_energy"
+        self._energy_integrator = EnergyIntegrator()
         self._total_energy: float = 0.0
-        self._last_update: datetime | None = None
         self._last_power: float | None = None
 
     async def async_added_to_hass(self) -> None:
@@ -2304,21 +2146,13 @@ class UnraidGPUEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
         await super().async_added_to_hass()
 
         # Restore previous state
-        if (last_state := await self.async_get_last_state()) is not None:
-            if last_state.state not in (None, "unknown", "unavailable"):
-                try:
-                    self._total_energy = float(last_state.state)
-                except (ValueError, TypeError):
-                    self._total_energy = 0.0
-
-            # Restore last update time from attributes if available
-            if last_state.attributes.get("last_reset"):
-                try:
-                    self._last_update = datetime.fromisoformat(
-                        str(last_state.attributes["last_reset"])
-                    )
-                except (ValueError, TypeError):
-                    self._last_update = None
+        if (
+            last_state := await self.async_get_last_state()
+        ) is not None and last_state.state not in (None, "unknown", "unavailable"):
+            try:
+                self._total_energy = float(last_state.state)
+            except (ValueError, TypeError):
+                self._total_energy = 0.0
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -2340,28 +2174,13 @@ class UnraidGPUEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
         if current_power is None or current_power < 0:
             return
 
-        now = datetime.now(UTC)
-
-        if self._last_update is not None and self._last_power is not None:
-            # Calculate time delta in hours
-            time_delta = (now - self._last_update).total_seconds() / 3600
-
-            # Sanity check: only calculate if time delta is reasonable (< 1 hour)
-            # This prevents huge jumps after restarts or long unavailability
-            if 0 < time_delta < 1:
-                # Use trapezoidal integration (average of last and current power)
-                avg_power = (self._last_power + current_power) / 2
-                # Energy (kWh) = Power (W) * Time (h) / 1000
-                energy_increment = (avg_power * time_delta) / 1000
-                self._total_energy += energy_increment
-
-        self._last_update = now
+        self._energy_integrator.add_sample(current_power, time.monotonic())
         self._last_power = current_power
 
     @property
     def native_value(self) -> float:
         """Return the total energy consumed in kWh."""
-        return round(self._total_energy, 3)
+        return round(self._total_energy + self._energy_integrator.total_wh / 1000, 3)
 
     @property
     def available(self) -> bool:
@@ -2378,47 +2197,10 @@ class UnraidGPUEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
         """Return extra state attributes."""
         attrs: dict[str, Any] = {}
 
-        if self._last_update:
-            attrs["last_reset"] = self._last_update.isoformat()
-
         if self._last_power is not None:
             attrs["current_power_watts"] = self._last_power
 
         return attrs
-
-
-# =============================================================================
-# Helper Functions
-# =============================================================================
-
-
-def _is_physical_network_interface(interface_name: str) -> bool:
-    """Check if the network interface is a physical interface or main bridge."""
-    physical_patterns = [
-        r"^eth\d+$",
-        r"^wlan\d+$",
-        r"^bond\d+$",
-        r"^eno\d+$",
-        r"^enp\d+s\d+$",
-        r"^br0$",  # Main network bridge on Unraid
-    ]
-    for pattern in physical_patterns:
-        if re.match(pattern, interface_name):
-            return True
-    return False
-
-
-def _is_physical_disk(disk) -> bool:
-    """Check if disk is a physical, installed disk."""
-    role = getattr(disk, "role", "")
-    status = getattr(disk, "status", "")
-    device = getattr(disk, "device", "")
-
-    if role in ("docker_vdisk", "log"):
-        return False
-    if status == "DISK_NP_DSBL":
-        return False
-    return bool(device)
 
 
 # =============================================================================
@@ -2448,20 +2230,32 @@ async def async_setup_entry(
     for description in ARRAY_SENSOR_DESCRIPTIONS:
         entities.append(UnraidSensorEntity(coordinator, description))
 
-    # Fan sensors (dynamic, one per fan, keyed by name for stability)
+    # Fan sensors (dynamic, one per fan, keyed by normalized name for stability)
     if data and data.system:
         fans = getattr(data.system, "fans", []) or []
         seen_names: set[str] = set()
         for idx, fan in enumerate(fans):
             if isinstance(fan, dict):
                 fan_name = fan.get("name") or f"fan_{idx}"
+                normalized = fan_name
             else:
                 fan_name = getattr(fan, "name", None) or f"fan_{idx}"
-            # Ensure uniqueness in case of duplicate names
-            if fan_name in seen_names:
+                normalized = getattr(fan, "normalized_name", fan_name)
+            # Ensure uniqueness in case of duplicate normalized names
+            if normalized in seen_names:
+                normalized_key = f"{normalized}_{idx}"
+                _LOGGER.debug(
+                    "Duplicate fan name '%s' (normalized from '%s'), using '%s'",
+                    normalized,
+                    fan_name,
+                    normalized_key,
+                )
                 fan_name = f"{fan_name}_{idx}"
-            seen_names.add(fan_name)
-            entities.append(UnraidFanSensor(coordinator, entry, fan_name))
+                normalized = normalized_key
+            else:
+                normalized_key = normalized
+            seen_names.add(normalized_key)
+            entities.append(UnraidFanSensor(coordinator, entry, fan_name, normalized))
 
     # GPU sensors - only if gpu collector is enabled
     if coordinator.is_collector_enabled("gpu") and data and data.gpu:
@@ -2493,7 +2287,7 @@ async def async_setup_entry(
     # Disk sensors - only if disk collector is enabled
     if coordinator.is_collector_enabled("disk"):
         disks = data.disks if data else []
-        physical_disks = [d for d in (disks or []) if _is_physical_disk(d)]
+        physical_disks = [d for d in (disks or []) if getattr(d, "is_physical", False)]
 
         for disk in physical_disks:
             disk_id = getattr(disk, "id", None) or getattr(disk, "name", "unknown")
@@ -2507,6 +2301,19 @@ async def async_setup_entry(
             # Temperature sensor (disabled by default)
             entities.append(
                 UnraidDiskTemperatureSensor(coordinator, entry, disk_id, disk_name)
+            )
+
+            # SMART errors sensor (disabled by default)
+            entities.append(
+                UnraidDiskSmartErrorsSensor(coordinator, entry, disk_id, disk_name)
+            )
+
+            # Disk I/O sensors (disabled by default)
+            entities.append(
+                UnraidDiskReadBytesSensor(coordinator, entry, disk_id, disk_name)
+            )
+            entities.append(
+                UnraidDiskWriteBytesSensor(coordinator, entry, disk_id, disk_name)
             )
 
             if disk_role not in ("parity", "parity2"):
@@ -2524,10 +2331,7 @@ async def async_setup_entry(
         for interface in (data.network if data else []) or []:
             interface_name = getattr(interface, "name", "unknown")
             interface_state = getattr(interface, "state", "down")
-            if (
-                _is_physical_network_interface(interface_name)
-                and interface_state == "up"
-            ):
+            if getattr(interface, "is_physical", False) and interface_state == "up":
                 entities.extend(
                     [
                         UnraidNetworkRXSensor(coordinator, entry, interface_name),

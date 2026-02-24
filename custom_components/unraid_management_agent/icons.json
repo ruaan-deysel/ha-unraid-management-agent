@@ -97,6 +97,15 @@
       },
       "notifications": {
         "default": "mdi:bell-alert"
+      },
+      "disk_smart_errors": {
+        "default": "mdi:harddisk-alert"
+      },
+      "disk_read_bytes": {
+        "default": "mdi:harddisk-plus"
+      },
+      "disk_write_bytes": {
+        "default": "mdi:harddisk-plus"
       }
     },
     "binary_sensor": {

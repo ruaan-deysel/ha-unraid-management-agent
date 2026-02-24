@@ -152,10 +152,9 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
             # If we can't determine collector status, default to enabled
             return True
 
-        collectors = self.data.collectors.collectors or []
-        for collector in collectors:
-            if getattr(collector, "name", "") == collector_name:
-                return getattr(collector, "enabled", True)
+        collector = self.data.collectors.get_collector_by_name(collector_name)
+        if collector is not None:
+            return getattr(collector, "enabled", True)
 
         # Collector not found in list, default to enabled
         return True
@@ -469,6 +468,9 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
         elif event.event_type == EventType.NOTIFICATION_UPDATE:
             # WebSocket notification updates come as NotificationsResponse
             self.data.notifications = event.data
+        elif event.event_type == EventType.NOTIFICATIONS_RESPONSE:
+            # Full notifications response with overview and counts
+            self.data.notifications = event.data
         elif event.event_type == EventType.ZFS_POOL_UPDATE:
             self.data.zfs_pools = (
                 event.data if isinstance(event.data, list) else [event.data]
@@ -483,6 +485,15 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
             )
         elif event.event_type == EventType.ZFS_ARC_UPDATE:
             self.data.zfs_arc = event.data
+        elif event.event_type == EventType.NUT_STATUS_UPDATE:
+            # NUT (Network UPS Tools) status is stored as UPS data
+            self.data.ups = event.data
+        elif event.event_type == EventType.HARDWARE_UPDATE:
+            # Hardware updates contain system info (fans, temps, power)
+            self.data.system = event.data
+        elif event.event_type == EventType.COLLECTOR_STATE_CHANGE:
+            # Collector state changes update the collectors status
+            self.data.collectors = event.data
 
         # Notify listeners of data update without resetting the polling timer.
         # Using async_set_updated_data would cancel and reschedule the poll
@@ -493,19 +504,6 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
     def _handle_raw_message(self, data: dict) -> None:
         """Handle raw WebSocket message and parse to typed event."""
         try:
-            # Handle special case where notifications come as NotificationsResponse
-            # instead of a list of Notification objects
-            if (
-                isinstance(data, dict)
-                and "notifications" in data
-                and "overview" in data
-            ):
-                # This is a NotificationsResponse format, store the full response
-                if self.data:
-                    self.data.notifications = NotificationsResponse.model_validate(data)
-                    self.async_update_listeners()
-                return
-
             event = parse_event(data)
             self._handle_websocket_event(event)
         except Exception as err:

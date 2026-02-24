@@ -20,7 +20,7 @@ classifiers = [
 keywords = ["home-assistant", "unraid", "hacs", "integration"]
 
 dependencies = [
-    "uma-api[async]>=1.3.0",
+    "uma-api[async]>=1.5.0",
 ]
 
 [project.optional-dependencies]
@@ -35,6 +35,7 @@ dev = [
     "mypy>=1.0.0",
     "pre-commit>=3.0.0",
     "codespell>=2.4.0",
+    "bandit[toml]>=1.8.0",
 ]
 
 [project.urls]
@@ -127,10 +128,28 @@ ignore = [
     "F841",    # Allow unused variables in tests (for context)
 ]
 
+[tool.ruff.lint.flake8-import-conventions.extend-aliases]
+# Commonly used Home Assistant imports
+voluptuous = "vol"
+"homeassistant.helpers.config_validation" = "cv"
+"homeassistant.helpers.device_registry" = "dr"
+"homeassistant.helpers.entity_registry" = "er"
+"homeassistant.util.dt" = "dt_util"
+
+[tool.ruff.lint.flake8-pytest-style]
+fixture-parentheses = false
+mark-parentheses = false
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"async_timeout".msg = "use asyncio.timeout instead"
+"pytz".msg = "use zoneinfo instead"
+"tests".msg = "You should not import tests"
+
 [tool.ruff.lint.isort]
-known-first-party = ["custom_components.unraid_management_agent"]
+known-first-party = ["custom_components", "homeassistant"]
 force-sort-within-sections = true
 combine-as-imports = true
+split-on-trailing-comma = false
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -187,3 +206,11 @@ exclude_lines = [
 ]
 fail_under = 60
 show_missing = true
+
+# Bandit security scanning configuration
+[tool.bandit]
+targets = ["custom_components/unraid_management_agent"]
+skips = [
+    "B101",  # assert used (acceptable in HA integrations for internal checks)
+]
+exclude_dirs = ["tests", ".venv", "venv"]

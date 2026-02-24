@@ -1515,6 +1515,7 @@ class TestCoordinatorIsCollectorEnabled:
         coordinator.data = UnraidData()
         mock_collectors = MagicMock()
         mock_collectors.collectors = []
+        mock_collectors.get_collector_by_name = MagicMock(return_value=None)
         coordinator.data.collectors = mock_collectors
         # Collector not in list should default to True
         assert coordinator.is_collector_enabled("docker") is True
@@ -1527,6 +1528,7 @@ class TestCoordinatorIsCollectorEnabled:
         mock_collector.enabled = True
         mock_collectors = MagicMock()
         mock_collectors.collectors = [mock_collector]
+        mock_collectors.get_collector_by_name = MagicMock(return_value=mock_collector)
         coordinator.data.collectors = mock_collectors
 
         assert coordinator.is_collector_enabled("docker") is True
@@ -1539,6 +1541,7 @@ class TestCoordinatorIsCollectorEnabled:
         mock_collector.enabled = False
         mock_collectors = MagicMock()
         mock_collectors.collectors = [mock_collector]
+        mock_collectors.get_collector_by_name = MagicMock(return_value=mock_collector)
         coordinator.data.collectors = mock_collectors
 
         assert coordinator.is_collector_enabled("zfs") is False
@@ -1551,6 +1554,7 @@ class TestCoordinatorIsCollectorEnabled:
         mock_collector.enabled = True
         mock_collectors = MagicMock()
         mock_collectors.collectors = [mock_collector]
+        mock_collectors.get_collector_by_name = MagicMock(return_value=None)
         coordinator.data.collectors = mock_collectors
 
         # Unknown collector should default to True

@@ -1,135 +1,202 @@
 # AI Agent Instructions
 
-This repository contains `ha-unraid-management-agent`, a Home Assistant custom integration for monitoring and controlling Unraid servers via the Unraid Management Agent (UMA) API. It is installed via HACS and runs as a custom component under `custom_components/unraid_management_agent/`.
+This document provides guidance for AI coding agents working on this Home Assistant custom integration project.
 
-## Project overview
+## Project Overview
 
-- **Type:** Home Assistant custom integration (HACS-compatible)
+This is a Home Assistant custom integration for monitoring and controlling Unraid servers via the Unraid Management Agent (UMA) API. It is installed via HACS and runs as a custom component.
+
+**Integration details:**
+
 - **Domain:** `unraid_management_agent`
-- **Language:** Python 3.13+
-- **API library:** [`uma-api`](https://pypi.org/project/uma-api/) (async Pydantic-based client)
-- **Quality target:** Platinum on the [HA Integration Quality Scale](https://developers.home-assistant.io/docs/core/integration-quality-scale/)
+- **Title:** Unraid Management Agent
+- **Class prefix:** `Unraid`
+- **Repository:** ruaan-deysel/ha-unraid-management-agent
 - **IoT class:** `local_push` (polling + WebSocket real-time updates)
-- **License:** MIT
-- **Owner:** @ruaan-deysel
+- **Integration type:** `device`
+- **Quality target:** Platinum on the [HA Integration Quality Scale](https://developers.home-assistant.io/docs/core/integration-quality-scale/)
 
-## Repository structure
+**Key directories:**
 
-```
-ha-unraid-management-agent/
-├── custom_components/unraid_management_agent/   # Integration source
-│   ├── __init__.py           # Entry point: async_setup, async_setup_entry, services
-│   ├── config_flow.py        # UI config flow, options flow, reconfigure flow
-│   ├── const.py              # Domain constant, config keys, defaults
-│   ├── coordinator.py        # DataUpdateCoordinator, UnraidData, UnraidRuntimeData
-│   ├── entity.py             # Base entity classes (UnraidBaseEntity, UnraidEntity)
-│   ├── sensor.py             # Sensor platform (system, array, disk, GPU, UPS, network, ZFS)
-│   ├── binary_sensor.py      # Binary sensor platform (parity, UPS, flash, mover, updates)
-│   ├── switch.py             # Switch platform (Docker containers, VMs)
-│   ├── button.py             # Button platform (array start/stop, parity check)
-│   ├── diagnostics.py        # Diagnostic data collection
-│   ├── repairs.py            # Repair issue flows (disk health, temperatures)
-│   ├── services.yaml         # Service action definitions
-│   ├── strings.json          # User-facing strings and translations
-│   ├── icons.json            # Entity and service icons
-│   ├── manifest.json         # Integration metadata and dependencies
-│   ├── quality_scale.yaml    # Quality scale rule tracking
-│   ├── py.typed              # PEP-561 type marker
-│   └── translations/en.json  # English translations
-├── tests/                    # Test suite
-│   ├── conftest.py           # Shared fixtures (mock client, coordinator, config entry)
-│   ├── const.py              # Mock data factories (Pydantic model builders)
-│   ├── test_init.py          # Integration setup/unload tests
-│   ├── test_config_flow.py   # Config flow tests (user, reconfigure, options)
-│   ├── test_coordinator.py   # Coordinator data fetching and WebSocket tests
-│   ├── test_sensor.py        # Sensor entity and value function tests
-│   ├── test_binary_sensor.py # Binary sensor helper and entity tests
-│   ├── test_switch.py        # Switch entity and control tests
-│   ├── test_button.py        # Button entity and press tests
-│   ├── test_repairs.py       # Repair flow tests
-│   └── test_diagnostics.py   # Diagnostic data tests
-├── scripts/
-│   ├── setup                 # Install development dependencies
-│   ├── develop               # Start HA dev environment
-│   └── lint                  # Run ruff format + ruff check --fix
-├── docs/                     # Development documentation
-├── pyproject.toml            # Build config, ruff, mypy, pytest settings
-├── hacs.json                 # HACS repository metadata
-└── .github/workflows/ci.yml  # CI pipeline (lint, test, validate)
-```
+- `custom_components/unraid_management_agent/` - Main integration code
+- `tests/` - Unit and integration tests
+- `scripts/` - Development and validation scripts
 
-## Build, lint, and test commands
+**Local development:**
 
-### Initial setup
+**Always use the project's scripts** -- do NOT craft your own `hass`, `pip`, `pytest`, or similar commands. The scripts handle environment setup, virtual environments, and cleanup that raw commands miss. Agents that bypass scripts frequently break.
+
+**Start Home Assistant:**
 
 ```bash
-scripts/setup                # Install all dev dependencies
-pip install -e ".[dev]"      # Alternative: install from pyproject.toml
+./scripts/develop
 ```
 
-### Linting and formatting
+**Reading logs:**
 
-```bash
-scripts/lint                          # Run ruff format + ruff check --fix
-ruff format .                         # Format only
-ruff check . --fix                    # Lint with auto-fix only
-pre-commit run --all-files            # Run all pre-commit hooks
-```
+- Live: Terminal where `./scripts/develop` runs
+- File: `config/home-assistant.log` (most recent)
 
-Pre-commit hooks include: ruff (format + check), codespell, mypy, yamllint, prettier, and general file checks. Direct commits to `main`/`master` are blocked by pre-commit.
+**Adjusting log levels:**
 
-### Running tests
+- Integration logs: `custom_components.unraid_management_agent: debug` in `config/configuration.yaml`
+- You can modify log levels when debugging -- just restart HA after changes
 
-```bash
-# Run all tests
-pytest tests/ -v --timeout=30
+**Context-specific instructions:**
 
-# Run tests with coverage
-pytest tests/ \
-  --cov=custom_components.unraid_management_agent \
-  --cov-report=term-missing \
-  --cov-branch
+If you're using GitHub Copilot, path-specific instructions in `.github/prompts/*.prompt.md` provide guided workflows for common tasks. This document serves as the primary reference for all agents.
 
-# Run a specific test file
-pytest tests/test_sensor.py -v
+**Other agent entry points:**
 
-# Run a specific test
-pytest tests/test_sensor.py::test_sensor_setup -v
-```
+- **Claude Code:** See [`CLAUDE.md`](CLAUDE.md) (pointer to this file)
+- **Gemini:** See [`GEMINI.md`](GEMINI.md) (pointer to this file)
+- **GitHub Copilot:** See [`.github/copilot-instructions.md`](.github/copilot-instructions.md) (compact version of this file)
 
-Coverage target: **95%+** (current: ~94-95%). Config flow coverage target: **100%**.
+## Working With Developers
 
-### Type checking
+**For workflow basics (small changes, translations, tests, session management):** See `.github/copilot-instructions.md` for quick-reference guidance.
 
-```bash
-mypy custom_components/unraid_management_agent/
-```
+### When Instructions Conflict With Requests
 
-Mypy is configured strictly in `pyproject.toml` (disallow_untyped_defs, strict_equality, etc.) with relaxed settings for `tests/`.
+If a developer requests something that contradicts these instructions:
 
-## Code style and conventions
+1. **Clarify the intent** - Ask if they want you to deviate from the documented guidelines
+2. **Confirm understanding** - Restate what you understood to avoid misinterpretation
+3. **Suggest instruction updates** - If this represents a permanent change in approach, offer to update these instructions
+4. **Proceed once confirmed** - Follow the developer's explicit direction after clarification
 
-### Python standards
+### Maintaining These Instructions
 
-- **Python 3.13+** required. Use modern features: type hints, f-strings, walrus operator, pattern matching, dataclasses.
-- **Formatter:** Ruff (line-length 88)
-- **Linter:** Ruff with extensive rule set (see `pyproject.toml [tool.ruff.lint]`)
-- **Docstrings:** Google convention. Required for all public functions/methods. File headers are short and descriptive.
-- **Imports:** Sorted by isort via ruff. `from __future__ import annotations` in every file.
-- **Language:** American English, sentence case.
+- Refine guidelines based on actual project needs
+- Remove outdated rules that no longer apply
+- Consolidate redundant sections to prevent bloat
 
-### Naming conventions
+**Propose updates when:**
+
+- You notice repeated deviations from documented patterns
+- Instructions become outdated or contradict actual code
+- New patterns emerge that should be standardized
+
+### Documentation vs. Instructions
+
+**Three types of content with clear separation:**
+
+1. **Agent Instructions** - How AI should write code (`.github/prompts/`, `AGENTS.md`)
+2. **Developer Documentation** - Architecture and design decisions (`docs/`)
+3. **User Documentation** - End-user guides (`README.md`)
+
+**AI Planning:** Use `.ai-scratch/` for temporary notes (never committed)
+
+**Rules:**
+
+- **NEVER** create random markdown files in code directories
+- **NEVER** create documentation in `.github/` unless it's a GitHub-specified file
+- **ALWAYS ask first** before creating permanent documentation
+- **Prefer module docstrings** over separate markdown files
+
+### Session and Context Management
+
+**Commit suggestions:**
+
+When a task completes and the developer moves to a new topic, suggest committing changes. Offer a commit message based on the work done.
+
+**Commit message format:** Follow [Conventional Commits](https://www.conventionalcommits.org/) specification
+
+**Common types:** `feat:`, `fix:`, `chore:`, `refactor:`, `docs:`
+
+## Custom Integration Flexibility
+
+**This is a CUSTOM integration, not a Home Assistant Core integration.** While we follow Core patterns for quality and maintainability, we have more flexibility in implementation decisions:
+
+**Third-party libraries (PyPI):**
+
+- Prefer existing PyPI libraries when maintained and fit the use case
+- The integration uses `uma-api` as its primary API client library
+- Uses aiohttp for HTTP and WebSocket communication
+
+**Quality Scale expectations:**
+
+As an AI agent, **aim for Platinum Quality Scale** when generating code:
+
+- **Always implement:** Type hints, async patterns, proper error handling, service registration in `async_setup()`, diagnostics with `async_redact_data()`, device info
+- **When applicable:** Config flow with validation, reconfigure flow, repair flows
+- **Can defer:** Advanced discovery, extensive documentation
+
+**Developer expectation:** Generate production-ready code. Implement HA standards with reasonable effort.
+
+## Code Style and Quality
+
+**Python:** 4 spaces, 88 char lines (ruff), double quotes, full type hints, async for all I/O
+
+**YAML:** 2 spaces, modern HA syntax
+
+**JSON:** 2 spaces, no trailing commas, no comments
+
+**Validation:** Run `scripts/lint` before committing (runs ruff format + ruff check --fix)
+
+**For comprehensive standards, see `pyproject.toml`** which configures ruff, mypy, and pytest.
+
+**Naming conventions:**
 
 - Constants: `UPPER_SNAKE_CASE` with `Final` type annotation
 - Classes: `PascalCase`, prefixed with `Unraid` (e.g., `UnraidBaseEntity`, `UnraidDataUpdateCoordinator`)
 - Fixtures: `snake_case` prefixed with `mock_` (e.g., `mock_async_unraid_client`)
 - Test functions: `test_<what_is_tested>` (plain functions, no test classes)
 
-### Key architectural patterns
+**Docstrings:** Google convention. Required for all public functions/methods.
 
-This integration follows Home Assistant Core patterns targeting Platinum quality:
+**Imports:** Sorted by isort via ruff. `from __future__ import annotations` in every file.
 
-#### Runtime data
+## Project-Specific Rules
+
+### Integration Identifiers
+
+This integration uses the following identifiers consistently:
+
+- **Domain:** `unraid_management_agent`
+- **Title:** Unraid Management Agent
+- **Class prefix:** `Unraid`
+
+**When creating new files:**
+
+- Use the domain `unraid_management_agent` for all DOMAIN references
+- Prefix all integration-specific classes with `Unraid`
+- Use "Unraid Management Agent" as the display title
+- Never hardcode different values
+
+### Integration Structure
+
+**Current flat structure:**
+
+```
+custom_components/unraid_management_agent/
+├── __init__.py           # Entry point: async_setup, async_setup_entry, services
+├── config_flow.py        # UI config flow, options flow, reconfigure flow
+├── const.py              # Domain constant, config keys, defaults
+├── coordinator.py        # UnraidDataUpdateCoordinator, UnraidData, UnraidRuntimeData
+├── entity.py             # Base entity classes (UnraidBaseEntity, UnraidEntity)
+├── sensor.py             # Sensor platform (system, array, disk, GPU, UPS, network, ZFS)
+├── binary_sensor.py      # Binary sensor platform
+├── switch.py             # Switch platform (Docker containers, VMs)
+├── button.py             # Button platform (array start/stop, parity check)
+├── diagnostics.py        # Diagnostic data collection
+├── repairs.py            # Repair issue flows
+├── services.yaml         # Service action definitions
+├── strings.json          # User-facing strings and translations
+├── icons.json            # Entity and service icons
+├── manifest.json         # Integration metadata and dependencies
+├── quality_scale.yaml    # Quality scale rule tracking
+├── py.typed              # PEP-561 type marker
+└── translations/en.json  # English translations
+```
+
+**Key patterns:**
+
+- Entities -> Coordinator -> API Client (never skip layers)
+- Each platform in its own file
+- Use `EntityDescription` dataclasses for static entity metadata
+
+### Runtime Data
 
 ```python
 type UnraidConfigEntry = ConfigEntry[UnraidRuntimeData]
@@ -140,7 +207,7 @@ class UnraidRuntimeData:
     client: UnraidClient
 ```
 
-#### Coordinator
+### Coordinator
 
 `UnraidDataUpdateCoordinator` extends `DataUpdateCoordinator[UnraidData]`. It:
 
@@ -149,7 +216,7 @@ class UnraidRuntimeData:
 - Manages WebSocket lifecycle for real-time updates
 - Logs unavailability once and recovery once (no log spam)
 
-#### Base entity
+### Base Entity
 
 All entities inherit from `UnraidBaseEntity` (in `entity.py`), which:
 
@@ -158,11 +225,11 @@ All entities inherit from `UnraidBaseEntity` (in `entity.py`), which:
 - Generates `unique_id` from `entry_id + key`
 - Implements availability based on `last_update_success` and data presence
 
-#### Entity descriptions
+### Entity Descriptions
 
 Sensor entities use `UnraidSensorEntityDescription` with `value_fn` and `extra_state_attributes_fn` callables. Binary sensors, switches, and buttons use similar description patterns.
 
-#### Config flow
+### Config Flow
 
 - `UnraidConfigFlow` with `async_step_user` and `async_step_reconfigure`
 - `UnraidOptionsFlowHandler` extends `OptionsFlowWithReload`
@@ -170,7 +237,7 @@ Sensor entities use `UnraidSensorEntityDescription` with `value_fn` and `extra_s
 - Port validation via `vol.All(vol.Coerce(int), vol.Range(min=1, max=65535))`
 - Duplicate prevention via `async_set_unique_id` + `_abort_if_unique_id_configured`
 
-#### Services
+### Services
 
 Registered in `async_setup` (not `async_setup_entry`). Each service handler:
 
@@ -178,44 +245,167 @@ Registered in `async_setup` (not `async_setup_entry`). Each service handler:
 - Calls the API method, then `coordinator.async_request_refresh()`
 - Raises `HomeAssistantError` with `translation_domain`/`translation_key` on failure
 
-#### Resource cleanup
+### Resource Cleanup
 
 - Config flow uses `async with UnraidClient(...)` context manager
 - `async_unload_entry` stops WebSocket, then closes client (only if unload succeeded)
 - WebSocket tasks are cancelled and awaited on cleanup
 
-### Error handling
+### Device Info
+
+All entities provide consistent device info via the base entity class (manufacturer, model, serial number, configuration URL, firmware version).
+
+### Integration Manifest
+
+**Key fields in `manifest.json`:**
+
+- **integration_type:** `device` - Single device per config entry
+- **iot_class:** `local_push` - Local communication with push updates
+- **requirements:** `["uma-api>=1.3.0"]`
+- **config_flow:** `true`
+- **No authentication** - local API without auth (exempt from reauth flow)
+
+## Home Assistant Patterns
+
+**Config flow:**
+
+- Implement in `config_flow.py`
+- Support user setup, reconfigure, options flow
+- Always set unique_id for discovered entries
+
+**Service actions:**
+
+- Define in `services.yaml` with full descriptions
+- Implement handlers in `__init__.py`
+- **Register in `async_setup()`** -- NOT in `async_setup_entry()` (Quality Scale!)
+- Format: `unraid_management_agent.<action_name>`
+
+**Coordinator:**
+
+- Entities -> Coordinator -> API Client (never skip layers)
+- Raise `UpdateFailed` for failures (auto-retry)
+- Use `async_config_entry_first_refresh()` for first update
+
+**Entities:**
+
+- Inherit from platform base + `UnraidBaseEntity`
+- Read from `coordinator.data`, never call API directly
+- Use `EntityDescription` for static metadata
+
+**Repairs:**
+
+- Use `async_create_issue()` with severity levels
+- Implement `RepairsFlow` for guided user fixes
+- Delete issues after successful repair
+
+**Entity availability:**
+
+- Set `_attr_available = False` when device is unreachable
+- Update availability based on coordinator success/failure
+- Don't raise exceptions from `@property` methods
+
+**State updates:**
+
+- Use `self.async_write_ha_state()` for immediate updates
+- Let coordinator handle periodic updates
+
+**Setup failure handling:**
+
+- `ConfigEntryNotReady` - Device offline/timeout, auto-retry
+- No `ConfigEntryAuthFailed` (no auth required)
+
+**Diagnostics:**
+
+- **CRITICAL:** Use `async_redact_data()` to remove sensitive data
+
+**Error handling:**
 
 - Config flow: catches `TimeoutError`, `UnraidConnectionError`, generic `Exception`
-- Coordinator `_async_update_data`: individual API calls wrapped in try/except (debug-level logging for individual failures), outer try/except raises `UpdateFailed` for total failure
+- Coordinator: individual API calls wrapped in try/except, outer try/except raises `UpdateFailed`
 - Services: catch `Exception`, raise `HomeAssistantError` with translation keys
 - Setup: `ConfigEntryNotReady` for connection failures
-- No authentication required (exempt from reauth flow)
 
-## Testing patterns
+## Validation Scripts
 
-### Fixture architecture
+**Before committing, run:**
 
-The test suite uses a layered fixture pattern:
+```bash
+scripts/lint                          # Auto-format and fix linting issues
+pytest tests/ -v --timeout=30         # Run tests
+mypy custom_components/unraid_management_agent/  # Type checking
+pre-commit run --all-files            # All pre-commit hooks
+```
 
-1. **`mock_async_unraid_client`** - Creates a fully mocked `UnraidClient` instance with all API methods as `AsyncMock`
-2. **`mock_websocket_client`** - Creates a mocked `UnraidWebSocketClient`
-3. **`mock_unraid_client_class`** - Patches `UnraidClient` in the integration module with `new=mock_class` pattern
-4. **`mock_unraid_websocket_client_class`** - Patches `UnraidWebSocketClient` similarly
-5. **`mock_config_entry`** - Creates and registers a `MockConfigEntry`
-6. **`mock_unraid_data`** - Creates a populated `UnraidData` instance
-7. **`mock_coordinator`** - Creates a mocked coordinator with data
+**Configured tools:**
 
-### Test conventions
+- **Ruff** - Fast Python linter and formatter ([Rules Reference](https://docs.astral.sh/ruff/rules/))
+- **Mypy** - Type checker configured strictly ([Docs](https://mypy.readthedocs.io/))
+- **pytest** - Test runner with async support ([Docs](https://docs.pytest.org/))
+
+**Generate code that passes these checks on first run.** As an AI agent, you should produce higher quality code than manual development:
+
+- Type hints are trivial for you to generate
+- Async patterns are well-known to you
+- Import management is automatic for you
+- Naming conventions can be applied consistently
+
+Aim for zero validation errors in generated code.
+
+- You may use `# noqa: CODE` or `# type: ignore` when genuinely necessary
+- Use sparingly and only with good reason (e.g., false positives, external library issues)
+
+### Error Recovery Strategy
+
+**When validation fails:**
+
+1. **First attempt** - Fix the specific error reported by the tool
+2. **Second attempt** - If it fails again, reconsider your approach
+3. **Third attempt** - If still failing, ask for clarification rather than looping indefinitely
+4. **After 3 failed attempts** - Stop and explain what you tried and why it's not working
+
+**When tool operations fail:**
+
+- **File read/write errors** - Verify path exists, check for typos, try once more
+- **Terminal timeouts** - Don't retry automatically; inform the user
+- **Git operations fail** - Report the error immediately; don't attempt to work around it
+
+**When gathering context:**
+
+- Start with targeted file/symbol search (1-2 queries maximum)
+- Read 3-5 most relevant files based on search results
+- If still unclear, read 2-3 more specific files
+- **After ~10 file reads, you should have enough context** - make a decision or ask for clarification
+- Don't fall into infinite research loops
+
+## Testing
+
+**Test structure:**
+
+- `tests/` mirrors `custom_components/unraid_management_agent/` structure
+- Use fixtures for common setup (HA mock, coordinator, etc.)
+- Mock external API calls
+
+**Running tests:**
+
+```bash
+pytest tests/ -v --timeout=30                    # All tests
+pytest tests/ --cov=custom_components.unraid_management_agent --cov-report=term-missing  # With coverage
+pytest tests/test_sensor.py -v                   # Single file
+pytest tests/test_sensor.py::test_sensor_setup -v  # Single test
+```
+
+Coverage target: **95%+** (current: ~94-95%). Config flow coverage target: **100%**.
+
+**Test conventions:**
 
 - **No test classes.** All tests are plain `async def test_*` functions.
-- **No inline patches in test files.** Use `@pytest.mark.usefixtures("mock_unraid_client_class", "mock_unraid_websocket_client_class")` for integration tests.
-- **Use `mock_async_unraid_client: MagicMock`** as a parameter when you need to modify mock behavior or assert calls.
+- **No inline patches.** Use `@pytest.mark.usefixtures("mock_unraid_client_class", "mock_unraid_websocket_client_class")` for integration tests.
+- **Use `mock_async_unraid_client: MagicMock`** as a parameter when you need to modify mock behavior.
 - **Use `is` for enum comparisons:** `assert result["type"] is FlowResultType.FORM`
 - **Mock data factories** are in `tests/const.py` and return Pydantic model instances.
 - **`asyncio_mode = "auto"`** in pytest config, so no `@pytest.mark.asyncio` needed.
 
-### Example test patterns
+**Example test patterns:**
 
 ```python
 # Integration test using fixtures
@@ -230,48 +420,82 @@ def test_is_array_started_no_data():
     coordinator = MagicMock()
     coordinator.data = None
     assert _is_array_started(coordinator) is False
-
-# Test needing to inspect API calls
-@pytest.mark.usefixtures("mock_unraid_client_class", "mock_unraid_websocket_client_class")
-async def test_button_press(hass, mock_config_entry, mock_async_unraid_client) -> None:
-    await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-    await hass.services.async_call("button", "press", {"entity_id": "button.unraid_test_start_array"}, blocking=True)
-    mock_async_unraid_client.start_array.assert_called()
 ```
 
-## Git workflow
+## Breaking Changes
 
-### Branching
+**Always warn the developer before making changes that:**
 
-- **Main branch:** `main`
-- **Feature branches:** `feature/*`, `enhancement/*`, `fix/*`
-- Direct commits to `main` are blocked by pre-commit hook
-- PRs target `main`
+- Change entity IDs or unique IDs (users' automations will break)
+- Modify config entry data structure (existing installations will fail)
+- Change state values or attributes format (dashboards and automations affected)
+- Alter service call signatures (user scripts will break)
+- Remove or rename config options (users must reconfigure)
 
-### CI pipeline
+**Never do without explicit approval:**
 
-The GitHub Actions CI pipeline (`.github/workflows/ci.yml`) runs on pushes to `main`, `enhancement/*`, `feature/*`, `fix/*` and PRs to `main`. Jobs:
+- Removing config options (even if "unused")
+- Changing service parameters or return values
+- Modifying how data is stored in config entries
+- Renaming entities or changing their device classes
+- Changing unique_id generation logic
 
-1. **Lint** - `ruff format --check` and `ruff check`
-2. **Test** - `pytest` with coverage (uploaded to Codecov)
-3. **Validate** - Checks `manifest.json` structure, `strings.json` validity, required files
+**How to warn:**
 
-### Commit conventions
+> "This change will modify the entity ID format from `sensor.device_name` to `sensor.device_name_sensor`. Existing users' automations and dashboards will break. Should I proceed, or would you prefer a migration path?"
 
-- Use descriptive commit messages explaining the "why"
-- Do not amend or squash commits after review has started
-- Pre-commit hooks must pass before committing
+**When breaking changes are necessary:**
 
-## Security considerations
+- Document the breaking change in commit message (`BREAKING CHANGE:` footer)
+- Consider providing migration instructions
+- Suggest version bump
+- Update documentation if it exists
 
-- No authentication credentials stored (local API without auth)
-- Diagnostics data is redacted via `async_redact_data`
-- Uses Home Assistant's shared `aiohttp` session (no custom session management)
-- No sensitive data in logs (lazy logging with `%s` format)
-- WebSocket connection is local-only (no external exposure)
+## File Changes
 
-## API library reference
+**Scope Management:**
+
+**Single logical feature or fix:**
+
+- Implement completely even if it spans 5-8 files
+- Example: New sensor needs entity description + platform setup -> implement all together
+- Example: Bug fix requires changes in coordinator + entity + error handling -> do all at once
+
+**Multiple independent features:**
+
+- Implement one at a time
+- After completing each feature, suggest committing before proceeding to the next
+
+**Large refactoring (>10 files or architectural changes):**
+
+- Propose a plan first before starting implementation
+- Get explicit confirmation from developer
+
+**Important: Do NOT create or modify tests unless explicitly requested.** Focus on implementing functionality. The developer decides when and if tests are needed.
+
+**Translation strategy:**
+
+- Use placeholders in code - functionality works without translations
+- Update `en.json` only when asked or at major feature completion
+- NEVER update other language files automatically
+- Ask before updating multiple translation files
+- Priority: Business logic first, translations later
+
+## Research and Validation
+
+**When uncertain, consult official documentation:**
+
+- **Always check current patterns** in [Home Assistant Developer Docs](https://developers.home-assistant.io/)
+- **Read the blog** at [Home Assistant Developer Blog](https://developers.home-assistant.io/blog/) for recent changes
+- **Verify with tools** before assuming -- run `scripts/lint` to catch issues early
+
+**Don't rely on assumptions:**
+
+- Home Assistant APIs and patterns evolve frequently
+- What worked in older versions may be deprecated
+- Use official docs and working examples over guesswork
+
+## API Library Reference
 
 The integration depends on `uma-api>=1.3.0` which provides:
 
@@ -281,12 +505,39 @@ The integration depends on `uma-api>=1.3.0` which provides:
 - **Error types** - `UnraidConnectionError`
 - **Event types** - `EventType` enum, `WebSocketEvent`, `parse_event()`
 
-## Quality scale status
+## Security Considerations
 
-See `quality_scale.yaml` for current rule-by-rule status. Key completions:
+- No authentication credentials stored (local API without auth)
+- Diagnostics data is redacted via `async_redact_data`
+- Uses Home Assistant's shared `aiohttp` session (no custom session management)
+- No sensitive data in logs (lazy logging with `%s` format)
+- WebSocket connection is local-only (no external exposure)
 
-- **Bronze:** All done (config-flow, entity-unique-id, runtime-data, etc.)
-- **Silver:** All done except test-coverage verification (action-exceptions, config-entry-unloading, parallel-updates, etc.)
-- **Gold:** All done (devices, diagnostics, reconfiguration-flow, repair-issues, entity-translations, exception-translations, icon-translations)
-- **Platinum:** All done (async-dependency, inject-websession, strict-typing)
-- **Remaining todos:** Documentation items (docs-actions, docs-installation-instructions, docs-removal-instructions, etc.) and brand asset submission
+## Git Workflow
+
+### Branching
+
+- **Main branch:** `main`
+- **Feature branches:** `feature/*`, `enhancement/*`, `fix/*`
+- PRs target `main`
+
+### CI Pipeline
+
+The GitHub Actions CI pipeline runs on pushes to `main`, `enhancement/*`, `feature/*`, `fix/*` and PRs to `main`. Jobs:
+
+1. **Lint** - `ruff format --check` and `ruff check`
+2. **Test** - `pytest` with coverage (uploaded to Codecov)
+3. **Validate** - Checks `manifest.json` structure, `strings.json` validity
+
+### Commit Conventions
+
+- Use [Conventional Commits](https://www.conventionalcommits.org/) format
+- Pre-commit hooks must pass before committing
+
+## Additional Resources
+
+- [Home Assistant Developer Docs](https://developers.home-assistant.io/) - Primary reference
+- [Integration Quality Scale](https://developers.home-assistant.io/docs/integration_quality_scale_index)
+- [Ruff Rules](https://docs.astral.sh/ruff/rules/) - Linter documentation
+- [pytest Documentation](https://docs.pytest.org/) - Testing framework
+- See `CONTRIBUTING.md` for contribution guidelines (if it exists)

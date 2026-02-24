@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -54,11 +53,7 @@ def _is_parity_check_running(coordinator: UnraidDataUpdateCoordinator) -> bool:
     data = coordinator.data
     if not data or not data.array:
         return False
-    parity_status = getattr(data.array, "parity_check_status", None)
-    if parity_status:
-        status = getattr(parity_status, "status", "").lower()
-        return status in ("running", "paused", "checking")
-    return False
+    return getattr(data.array, "is_parity_check_running", False)
 
 
 def _parity_check_attributes(
@@ -174,17 +169,7 @@ def _is_flash_healthy(coordinator: UnraidDataUpdateCoordinator) -> bool:
     data = coordinator.data
     if not data or not data.flash_info:
         return True  # Assume healthy if no data
-
-    flash = data.flash_info
-    # Check if SMART is available and healthy
-    smart_available = getattr(flash, "smart_available", None)
-    if smart_available is False:
-        # No SMART support, can't determine health
-        return True
-
-    # Check usage - warn if > 90%
-    usage = getattr(flash, "usage_percent", 0) or 0
-    return usage <= 90
+    return getattr(data.flash_info, "is_healthy", True)
 
 
 def _has_flash_info(coordinator: UnraidDataUpdateCoordinator) -> bool:
@@ -249,8 +234,7 @@ def _is_parity_check_scheduled(coordinator: UnraidDataUpdateCoordinator) -> bool
     """Return true if parity check is scheduled."""
     data = coordinator.data
     if data and data.parity_schedule:
-        mode = getattr(data.parity_schedule, "mode", None)
-        return mode is not None and mode != "disabled"
+        return getattr(data.parity_schedule, "is_enabled", False)
     return False
 
 
@@ -273,7 +257,7 @@ def _parity_schedule_attributes(
         "mode": getattr(schedule, "mode", None),
         "day": getattr(schedule, "day", None),
         "hour": getattr(schedule, "hour", None),
-        "correcting": getattr(schedule, "correcting", False),
+        "correcting": getattr(schedule, "correcting", None),
     }
 
 
@@ -372,21 +356,6 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[UnraidBinarySensorEntityDescription, ...] = (
 )
 
 
-def _is_physical_network_interface(interface_name: str) -> bool:
-    """Check if the network interface is a physical interface."""
-    physical_patterns = [
-        r"^eth\d+$",
-        r"^wlan\d+$",
-        r"^bond\d+$",
-        r"^eno\d+$",
-        r"^enp\d+s\d+$",
-    ]
-    for pattern in physical_patterns:
-        if re.match(pattern, interface_name):
-            return True
-    return False
-
-
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: UnraidConfigEntry,
@@ -420,7 +389,7 @@ async def async_setup_entry(
     if coordinator.is_collector_enabled("network"):
         for interface in (data.network if data else []) or []:
             interface_name = getattr(interface, "name", "unknown")
-            if _is_physical_network_interface(interface_name):
+            if getattr(interface, "is_physical", False):
                 entities.append(
                     UnraidNetworkInterfaceBinarySensor(coordinator, interface_name)
                 )
