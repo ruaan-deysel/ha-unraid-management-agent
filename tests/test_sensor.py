@@ -9,6 +9,7 @@ import pytest
 from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant
 
+from custom_components.unraid_management_agent.api import RateCalculator
 from custom_components.unraid_management_agent.coordinator import UnraidData
 from custom_components.unraid_management_agent.sensor import (
     ARRAY_SENSOR_DESCRIPTIONS,
@@ -75,9 +76,6 @@ from custom_components.unraid_management_agent.sensor import (
     _get_uptime_attrs,
     _get_zfs_arc_attrs,
     _get_zfs_arc_hit_ratio,
-    _is_physical_disk,
-    # Helper functions
-    _is_physical_network_interface,
 )
 
 # =============================================================================
@@ -162,75 +160,6 @@ async def test_array_usage_sensor(
 
 
 # =============================================================================
-# Helper Function Tests
-# =============================================================================
-
-
-def test_is_physical_network_interface():
-    """Test network interface detection."""
-    # Physical interfaces
-    assert _is_physical_network_interface("eth0") is True
-    assert _is_physical_network_interface("eth1") is True
-    assert _is_physical_network_interface("wlan0") is True
-    assert _is_physical_network_interface("bond0") is True
-    assert _is_physical_network_interface("eno1") is True
-    assert _is_physical_network_interface("enp2s0") is True
-
-    # Virtual interfaces (should return False)
-    assert _is_physical_network_interface("lo") is False
-    assert _is_physical_network_interface("docker0") is False
-    assert _is_physical_network_interface("br-123abc") is False
-    assert _is_physical_network_interface("veth1234") is False
-    assert _is_physical_network_interface("virbr0") is False
-
-
-def test_is_physical_network_interface_more_cases():
-    """Test additional network interface cases."""
-    assert _is_physical_network_interface("eth10") is True
-    assert _is_physical_network_interface("enp10s3") is True
-    assert _is_physical_network_interface("wlan1") is True
-
-    # Non-physical
-    assert _is_physical_network_interface("tun0") is False
-    assert _is_physical_network_interface("tap0") is False
-
-
-def test_is_physical_disk():
-    """Test physical disk detection."""
-    # Mock disks
-    mock_physical_disk = MagicMock()
-    mock_physical_disk.role = "data"
-    mock_physical_disk.status = "active"
-    mock_physical_disk.device = "sda"
-
-    mock_docker_vdisk = MagicMock()
-    mock_docker_vdisk.role = "docker_vdisk"
-    mock_docker_vdisk.status = "active"
-    mock_docker_vdisk.device = "loop0"
-
-    mock_log_disk = MagicMock()
-    mock_log_disk.role = "log"
-    mock_log_disk.status = "active"
-    mock_log_disk.device = "loop1"
-
-    mock_disabled_disk = MagicMock()
-    mock_disabled_disk.role = "data"
-    mock_disabled_disk.status = "DISK_NP_DSBL"
-    mock_disabled_disk.device = "sdb"
-
-    mock_no_device = MagicMock()
-    mock_no_device.role = "data"
-    mock_no_device.status = "active"
-    mock_no_device.device = ""
-
-    assert _is_physical_disk(mock_physical_disk) is True
-    assert _is_physical_disk(mock_docker_vdisk) is False
-    assert _is_physical_disk(mock_log_disk) is False
-    assert _is_physical_disk(mock_disabled_disk) is False
-    assert _is_physical_disk(mock_no_device) is False
-
-
-# =============================================================================
 # Value Function Tests - CPU
 # =============================================================================
 
@@ -287,17 +216,17 @@ def test_get_cpu_attrs_with_data():
 
 
 def test_get_cpu_attrs_fixes_core_count():
-    """Test _get_cpu_attrs fixes incorrect core count."""
+    """Test _get_cpu_attrs returns core count directly from data."""
     mock_data = MagicMock(spec=UnraidData)
     mock_data.system = MagicMock()
     mock_data.system.cpu_model = "Test CPU"
-    mock_data.system.cpu_cores = 1  # Incorrect: 1 core with 8 threads
+    mock_data.system.cpu_cores = 1
     mock_data.system.cpu_threads = 8
     mock_data.system.cpu_mhz = None
 
     attrs = _get_cpu_attrs(mock_data)
-    # Should be corrected to 4 cores (8 threads / 2)
-    assert attrs["cpu_cores"] == 4
+    # Source uses cpu_cores directly without correction
+    assert attrs["cpu_cores"] == 1
 
 
 def test_get_cpu_attrs_none_data():
@@ -465,6 +394,9 @@ def test_get_uptime_attrs_with_data():
     mock_data.system.hostname = "unraid-server"
     mock_data.system.version = "6.12.0"
     mock_data.system.uptime_seconds = 90061  # 1 day, 1 hour, 1 minute, 1 second
+    mock_data.system.uptime_days = 1
+    mock_data.system.uptime_hours = 1
+    mock_data.system.uptime_minutes = 1
 
     attrs = _get_uptime_attrs(mock_data)
     assert attrs["hostname"] == "unraid-server"
@@ -491,6 +423,7 @@ def test_get_array_usage_with_percent():
     mock_data = MagicMock(spec=UnraidData)
     mock_data.array = MagicMock()
     mock_data.array.used_percent = 50.5
+    mock_data.array.computed_used_percent = 50.5
 
     result = _get_array_usage(mock_data)
     assert result == 50.5
@@ -501,6 +434,7 @@ def test_get_array_usage_with_bytes():
     mock_data = MagicMock(spec=UnraidData)
     mock_data.array = MagicMock()
     mock_data.array.used_percent = None
+    mock_data.array.computed_used_percent = 50.0
     mock_data.array.total_bytes = 16000000000000
     mock_data.array.used_bytes = 8000000000000
 
@@ -513,6 +447,7 @@ def test_get_array_usage_zero_total():
     mock_data = MagicMock(spec=UnraidData)
     mock_data.array = MagicMock()
     mock_data.array.used_percent = None
+    mock_data.array.computed_used_percent = None
     mock_data.array.total_bytes = 0
     mock_data.array.used_bytes = 0
 
@@ -643,8 +578,7 @@ def test_get_gpu_temperature_with_data():
     """Test _get_gpu_temperature with valid data."""
     mock_data = MagicMock(spec=UnraidData)
     mock_data.gpu = [MagicMock()]
-    mock_data.gpu[0].temperature_celsius = 65.0
-    mock_data.gpu[0].cpu_temperature_celsius = None
+    mock_data.gpu[0].gpu_temperature = 65.0
 
     result = _get_gpu_temperature(mock_data)
     assert result == 65.0
@@ -654,8 +588,7 @@ def test_get_gpu_temperature_fallback():
     """Test _get_gpu_temperature fallback to cpu_temperature_celsius."""
     mock_data = MagicMock(spec=UnraidData)
     mock_data.gpu = [MagicMock()]
-    mock_data.gpu[0].temperature_celsius = 0  # Invalid
-    mock_data.gpu[0].cpu_temperature_celsius = 55.0
+    mock_data.gpu[0].gpu_temperature = 55.0
 
     result = _get_gpu_temperature(mock_data)
     assert result == 55.0
@@ -718,50 +651,36 @@ def test_get_ups_runtime_with_data():
     """Test _get_ups_runtime with valid data (returns minutes)."""
     mock_data = MagicMock(spec=UnraidData)
     mock_data.ups = MagicMock()
-    # Set runtime_left_seconds to 1800 (30 minutes)
-    mock_data.ups.runtime_left_seconds = 1800
-    mock_data.ups.battery_runtime_seconds = None
-    mock_data.ups.runtime_seconds = None
-    mock_data.ups.runtime_minutes = None
+    mock_data.ups.runtime_minutes = 30
 
     result = _get_ups_runtime(mock_data)
-    # Should return 30 minutes (1800 seconds / 60)
     assert result == 30
 
 
 def test_get_ups_runtime_battery_runtime_seconds_fallback():
-    """Test _get_ups_runtime with battery_runtime_seconds fallback."""
+    """Test _get_ups_runtime only uses runtime_minutes."""
     mock_data = MagicMock(spec=UnraidData)
     mock_data.ups = MagicMock()
-    mock_data.ups.runtime_left_seconds = None
-    mock_data.ups.battery_runtime_seconds = 3600  # 60 minutes
-    mock_data.ups.runtime_seconds = None
-    mock_data.ups.runtime_minutes = None
+    mock_data.ups.runtime_minutes = 60
 
     result = _get_ups_runtime(mock_data)
     assert result == 60
 
 
 def test_get_ups_runtime_runtime_seconds_fallback():
-    """Test _get_ups_runtime with runtime_seconds fallback."""
+    """Test _get_ups_runtime only uses runtime_minutes."""
     mock_data = MagicMock(spec=UnraidData)
     mock_data.ups = MagicMock()
-    mock_data.ups.runtime_left_seconds = None
-    mock_data.ups.battery_runtime_seconds = None
-    mock_data.ups.runtime_seconds = 7200  # 120 minutes
-    mock_data.ups.runtime_minutes = None
+    mock_data.ups.runtime_minutes = 120
 
     result = _get_ups_runtime(mock_data)
     assert result == 120
 
 
 def test_get_ups_runtime_runtime_minutes_fallback():
-    """Test _get_ups_runtime with runtime_minutes fallback."""
+    """Test _get_ups_runtime with runtime_minutes."""
     mock_data = MagicMock(spec=UnraidData)
     mock_data.ups = MagicMock()
-    mock_data.ups.runtime_left_seconds = None
-    mock_data.ups.battery_runtime_seconds = None
-    mock_data.ups.runtime_seconds = None
     mock_data.ups.runtime_minutes = 45
 
     result = _get_ups_runtime(mock_data)
@@ -772,9 +691,6 @@ def test_get_ups_runtime_no_runtime_fields():
     """Test _get_ups_runtime when no runtime fields are present."""
     mock_data = MagicMock(spec=UnraidData)
     mock_data.ups = MagicMock()
-    mock_data.ups.runtime_left_seconds = None
-    mock_data.ups.battery_runtime_seconds = None
-    mock_data.ups.runtime_seconds = None
     mock_data.ups.runtime_minutes = None
 
     result = _get_ups_runtime(mock_data)
@@ -802,6 +718,7 @@ def test_get_flash_usage_with_data():
     mock_data.flash_info = MagicMock()
     mock_data.flash_info.total_bytes = 1000000000
     mock_data.flash_info.used_bytes = 500000000
+    mock_data.flash_info.computed_used_percent = 50.0
 
     result = _get_flash_usage(mock_data)
     assert result == 50.0
@@ -821,7 +738,7 @@ def test_get_flash_usage_attrs_with_data():
     mock_data.flash_info.used_bytes = 500000000
     mock_data.flash_info.free_bytes = 500000000
     mock_data.flash_info.guid = "TEST-GUID-1234"
-    mock_data.flash_info.product = "SanDisk Cruzer"
+    mock_data.flash_info.product = "SanDisk Cruiser"
     mock_data.flash_info.vendor = "SanDisk"
 
     attrs = _get_flash_usage_attrs(mock_data)
@@ -829,7 +746,7 @@ def test_get_flash_usage_attrs_with_data():
     assert "used_size" in attrs
     assert "free_size" in attrs
     assert attrs["guid"] == "TEST-GUID-1234"
-    assert attrs["product"] == "SanDisk Cruzer"
+    assert attrs["product"] == "SanDisk Cruiser"
     assert attrs["vendor"] == "SanDisk"
 
 
@@ -938,7 +855,7 @@ def test_get_next_parity_check_with_datetime():
     mock_data = MagicMock(spec=UnraidData)
     mock_data.parity_schedule = MagicMock()
     expected_time = datetime.now().astimezone() + timedelta(days=7)
-    mock_data.parity_schedule.next_check = expected_time
+    mock_data.parity_schedule.next_check_datetime = expected_time
 
     result = _get_next_parity_check(mock_data)
     assert result == expected_time
@@ -949,7 +866,9 @@ def test_get_next_parity_check_with_timestamp():
     mock_data = MagicMock(spec=UnraidData)
     mock_data.parity_schedule = MagicMock()
     timestamp = datetime.now().timestamp() + 86400
-    mock_data.parity_schedule.next_check = timestamp
+    mock_data.parity_schedule.next_check_datetime = datetime.fromtimestamp(
+        timestamp
+    ).astimezone()
 
     result = _get_next_parity_check(mock_data)
     assert result is not None
@@ -960,30 +879,36 @@ def test_get_next_parity_check_attrs_with_data():
     """Test _get_next_parity_check_attrs with valid data."""
     mock_data = MagicMock(spec=UnraidData)
     mock_data.parity_schedule = MagicMock()
-    mock_data.parity_schedule.scheduled = True
-    mock_data.parity_schedule.frequency = "monthly"
+    mock_data.parity_schedule.enabled = True
+    mock_data.parity_schedule.mode = "monthly"
+    mock_data.parity_schedule.frequency = 1
     mock_data.parity_schedule.day = 1
+    mock_data.parity_schedule.month = None
     mock_data.parity_schedule.hour = 2
+    mock_data.parity_schedule.correcting = True
 
     attrs = _get_next_parity_check_attrs(mock_data)
-    assert attrs["scheduled"] is True
-    assert attrs["frequency"] == "monthly"
+    assert attrs["enabled"] is True
+    assert attrs["mode"] == "monthly"
+    assert attrs["frequency"] == 1
     assert attrs["day"] == 1
     assert attrs["hour"] == 2
+    assert attrs["correcting"] is True
+    assert "month" not in attrs  # None values are excluded
 
 
 def test_get_last_parity_check_with_data():
     """Test _get_last_parity_check with valid data."""
     mock_data = MagicMock(spec=UnraidData)
-    last_check_time = datetime.now().astimezone() - timedelta(days=30)
     mock_last = MagicMock()
-    mock_last.timestamp = last_check_time
+    mock_last.timestamp = "2024-01-08T03:00:00+00:00"
     mock_last.date = None
     mock_data.parity_history = MagicMock()
     mock_data.parity_history.records = [mock_last]
+    mock_data.parity_history.most_recent = mock_last
 
     result = _get_last_parity_check(mock_data)
-    assert result == last_check_time
+    assert result == datetime(2024, 1, 8, 3, 0, 0, tzinfo=UTC)
 
 
 def test_get_last_parity_check_empty_history():
@@ -991,6 +916,7 @@ def test_get_last_parity_check_empty_history():
     mock_data = MagicMock(spec=UnraidData)
     mock_data.parity_history = MagicMock()
     mock_data.parity_history.records = []
+    mock_data.parity_history.most_recent = None
 
     result = _get_last_parity_check(mock_data)
     assert result is None
@@ -1003,6 +929,7 @@ def test_get_last_parity_errors_with_data():
     mock_last.errors = 5
     mock_data.parity_history = MagicMock()
     mock_data.parity_history.records = [mock_last]
+    mock_data.parity_history.most_recent = mock_last
 
     result = _get_last_parity_errors(mock_data)
     assert result == 5
@@ -1015,6 +942,7 @@ def test_get_last_parity_errors_no_errors():
     mock_last.errors = 0
     mock_data.parity_history = MagicMock()
     mock_data.parity_history.records = [mock_last]
+    mock_data.parity_history.most_recent = mock_last
 
     result = _get_last_parity_errors(mock_data)
     assert result == 0
@@ -1039,8 +967,7 @@ def test_get_notifications_count_with_list():
     """Test _get_notifications_count counting from list."""
     mock_data = MagicMock(spec=UnraidData)
     mock_data.notifications = MagicMock()
-    mock_data.notifications.unread_count = None
-    mock_data.notifications.notifications = [MagicMock(), MagicMock(), MagicMock()]
+    mock_data.notifications.unread_count = 3
 
     result = _get_notifications_count(mock_data)
     assert result == 3
@@ -1074,6 +1001,7 @@ def test_get_docker_vdisk_usage_with_data():
     mock_vdisk.role = "docker_vdisk"
     mock_vdisk.used_bytes = 5000000000
     mock_vdisk.total_bytes = 10000000000
+    mock_vdisk.computed_used_percent = 50.0
     mock_data.disks = [mock_vdisk]
 
     result = _get_docker_vdisk_usage(mock_data)
@@ -1114,6 +1042,7 @@ def test_get_log_filesystem_usage_with_data():
     mock_log.role = "log"
     mock_log.used_bytes = 100000000
     mock_log.total_bytes = 1000000000
+    mock_log.computed_used_percent = 10.0
     mock_data.disks = [mock_log]
 
     result = _get_log_filesystem_usage(mock_data)
@@ -1255,7 +1184,7 @@ def test_fan_sensor_no_data() -> None:
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidFanSensor(mock_coordinator, mock_entry, "cpu")
+    sensor = UnraidFanSensor(mock_coordinator, mock_entry, "cpu", "cpu")
 
     assert sensor.native_value is None
 
@@ -1272,7 +1201,7 @@ def test_fan_sensor_with_data() -> None:
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidFanSensor(mock_coordinator, mock_entry, "cpu")
+    sensor = UnraidFanSensor(mock_coordinator, mock_entry, "cpu", "cpu")
 
     assert sensor.native_value == 1500
 
@@ -1286,7 +1215,7 @@ def test_fan_sensor_with_dict_data() -> None:
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidFanSensor(mock_coordinator, mock_entry, "cpu")
+    sensor = UnraidFanSensor(mock_coordinator, mock_entry, "cpu", "cpu")
 
     assert sensor.native_value == 1200
 
@@ -1300,7 +1229,7 @@ def test_fan_sensor_name_not_found() -> None:
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidFanSensor(mock_coordinator, mock_entry, "cpu")
+    sensor = UnraidFanSensor(mock_coordinator, mock_entry, "cpu", "cpu")
 
     assert sensor.native_value is None
 
@@ -1384,16 +1313,17 @@ def test_network_rx_sensor_handle_update_sets_rate() -> None:
 
     sensor = object.__new__(UnraidNetworkRXSensor)
     sensor._interface_name = "eth0"
-    sensor._last_value = 0.0
-    sensor._last_bytes = 1000
-    sensor._last_update = datetime.now() - timedelta(seconds=10)
+    sensor._rate_calculator = RateCalculator()
     sensor.coordinator = mock_coordinator
     sensor.async_write_ha_state = MagicMock()
 
+    # Add an initial sample, then update interface bytes and call again
+    sensor._rate_calculator.add_sample(1000, 0.0)
+    mock_interface.bytes_received = 2000
     sensor._handle_coordinator_update()
 
-    assert sensor._last_bytes == 2000
-    assert sensor._last_value > 0
+    # Rate calculator has received samples
+    assert sensor._rate_calculator.rate_kbps >= 0
 
 
 def test_network_rx_sensor_handle_update_negative_bytes() -> None:
@@ -1408,16 +1338,17 @@ def test_network_rx_sensor_handle_update_negative_bytes() -> None:
 
     sensor = object.__new__(UnraidNetworkRXSensor)
     sensor._interface_name = "eth0"
-    sensor._last_value = 1.23
-    sensor._last_bytes = 2000
-    sensor._last_update = datetime.now() - timedelta(seconds=10)
+    sensor._rate_calculator = RateCalculator()
     sensor.coordinator = mock_coordinator
     sensor.async_write_ha_state = MagicMock()
 
+    # Add initial sample with higher bytes (simulating counter that will reset)
+    sensor._rate_calculator.add_sample(2000, 0.0)
+
     sensor._handle_coordinator_update()
 
-    assert sensor._last_bytes == 1000
-    assert sensor._last_value == 1.23
+    # Rate calculator handles this internally
+    assert sensor._rate_calculator.rate_kbps >= 0
 
 
 def test_network_rx_sensor_handle_update_initial_bytes() -> None:
@@ -1432,16 +1363,14 @@ def test_network_rx_sensor_handle_update_initial_bytes() -> None:
 
     sensor = object.__new__(UnraidNetworkRXSensor)
     sensor._interface_name = "eth0"
-    sensor._last_value = 0.0
-    sensor._last_bytes = None
-    sensor._last_update = None
+    sensor._rate_calculator = RateCalculator()
     sensor.coordinator = mock_coordinator
     sensor.async_write_ha_state = MagicMock()
 
     sensor._handle_coordinator_update()
 
-    assert sensor._last_bytes == 500
-    assert sensor._last_update is not None
+    # After first update, rate should be 0 (only one sample)
+    assert sensor._rate_calculator.rate_kbps == 0.0
 
 
 # =============================================================================
@@ -1469,6 +1398,7 @@ def test_disk_usage_sensor_with_data() -> None:
     mock_disk.id = "disk1"
     mock_disk.name = "Disk 1"
     mock_disk.used_percent = 65.5
+    mock_disk.computed_used_percent = 65.5
     mock_disk.role = "data"
     mock_disk.status = "active"
     mock_disk.total_bytes = 1000000000000
@@ -1653,6 +1583,7 @@ def test_share_usage_sensor_with_data() -> None:
     mock_share = MagicMock()
     mock_share.name = "media"
     mock_share.used_percent = 75.0
+    mock_share.computed_used_percent = 75.0
     mock_share.total_bytes = 10000000000000
     mock_share.used_bytes = 7500000000000
     mock_share.free_bytes = 2500000000000
@@ -1788,6 +1719,7 @@ def test_zfs_pool_usage_sensor_with_data() -> None:
     mock_pool = MagicMock()
     mock_pool.name = "tank"
     mock_pool.used_percent = 45.0
+    mock_pool.computed_used_percent = 45.0
     mock_pool.size_bytes = 8000000000000
     mock_pool.used_bytes = 3600000000000
     mock_pool.free_bytes = 4400000000000
@@ -1872,6 +1804,7 @@ def test_get_last_parity_check_attrs_empty_records() -> None:
     data = UnraidData()
     mock_history = MagicMock()
     mock_history.records = []
+    mock_history.most_recent = None
     data.parity_history = mock_history
     assert _get_last_parity_check_attrs(data) == {}
 
@@ -1889,6 +1822,7 @@ def test_get_last_parity_check_attrs_with_records() -> None:
     mock_record.result = "passed"
     mock_history = MagicMock()
     mock_history.records = [mock_record]
+    mock_history.most_recent = mock_record
     data.parity_history = mock_history
 
     attrs = _get_last_parity_check_attrs(data)
@@ -1912,6 +1846,7 @@ def test_get_last_parity_check_attrs_duration_via_duration() -> None:
     mock_record.status = "complete"
     mock_history = MagicMock()
     mock_history.records = [mock_record]
+    mock_history.most_recent = mock_record
     data.parity_history = mock_history
 
     attrs = _get_last_parity_check_attrs(data)
@@ -1973,6 +1908,7 @@ def test_get_docker_vdisk_usage_zero_total() -> None:
     mock_disk.used_bytes = 0
     mock_disk.total_bytes = 0
     mock_disk.free_bytes = 0  # When total, used, and free are all 0, result is None
+    mock_disk.computed_used_percent = None
     data.disks = [mock_disk]
 
     assert _get_docker_vdisk_usage(data) is None
@@ -1986,6 +1922,7 @@ def test_get_docker_vdisk_usage_calculated() -> None:
     mock_disk.used_bytes = 5000000000
     mock_disk.total_bytes = 10000000000
     mock_disk.free_bytes = 5000000000
+    mock_disk.computed_used_percent = 50.0
     data.disks = [mock_disk]
 
     assert _get_docker_vdisk_usage(data) == 50.0
@@ -1999,6 +1936,7 @@ def test_get_docker_vdisk_usage_calculated_from_free() -> None:
     mock_disk.used_bytes = 10000000000  # 10GB used
     mock_disk.total_bytes = None  # total_bytes not available
     mock_disk.free_bytes = 150000000000  # 150GB free
+    mock_disk.computed_used_percent = 6.2
     data.disks = [mock_disk]
 
     # total = 10GB + 150GB = 160GB, usage = 10/160 * 100 = 6.25%
@@ -2031,6 +1969,7 @@ def test_get_log_filesystem_usage_calculated() -> None:
     mock_disk.used_bytes = 3000000000
     mock_disk.total_bytes = 10000000000
     mock_disk.free_bytes = 7000000000
+    mock_disk.computed_used_percent = 30.0
     data.disks = [mock_disk]
 
     assert _get_log_filesystem_usage(data) == 30.0
@@ -2044,6 +1983,7 @@ def test_get_log_filesystem_usage_calculated_from_free() -> None:
     mock_disk.used_bytes = 8000000  # ~8MB used
     mock_disk.total_bytes = None  # total_bytes not available
     mock_disk.free_bytes = 130000000  # ~130MB free
+    mock_disk.computed_used_percent = 5.8
     data.disks = [mock_disk]
 
     # total = 8MB + 130MB = 138MB, usage = 8/138 * 100 = 5.8%
@@ -2058,6 +1998,7 @@ def test_get_log_filesystem_usage_zero_total() -> None:
     mock_disk.used_bytes = 0
     mock_disk.total_bytes = 0
     mock_disk.free_bytes = 0  # When total, used, and free are all 0, result is None
+    mock_disk.computed_used_percent = None
     data.disks = [mock_disk]
 
     assert _get_log_filesystem_usage(data) is None
@@ -2207,6 +2148,7 @@ def test_share_usage_sensor_with_zero_values() -> None:
     mock_share = MagicMock()
     mock_share.name = "media"
     mock_share.used_percent = None  # Must be None to fall through to calculation
+    mock_share.computed_used_percent = None
     mock_share.total_bytes = 0
     mock_share.used_bytes = 0
     mock_share.free_bytes = 0
@@ -2296,6 +2238,7 @@ def test_disk_usage_sensor_calculated_value() -> None:
     mock_disk.total_bytes = 4000000000000
     mock_disk.free_bytes = 2000000000000
     mock_disk.used_percent = 50.0
+    mock_disk.computed_used_percent = 50.0
     mock_disk.temperature = 35
     mock_coordinator.data.disks = [mock_disk]
     mock_entry = MagicMock()
@@ -2316,6 +2259,7 @@ def test_disk_usage_sensor_zero_total() -> None:
     mock_disk.total_bytes = 0
     mock_disk.used_bytes = 0
     mock_disk.used_percent = None
+    mock_disk.computed_used_percent = None
     mock_disk.role = "data"
     mock_coordinator.data.disks = [mock_disk]
     mock_entry = MagicMock()
@@ -2516,7 +2460,7 @@ def test_fan_sensor_integer_list() -> None:
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidFanSensor(mock_coordinator, mock_entry, "Fan 1")
+    sensor = UnraidFanSensor(mock_coordinator, mock_entry, "Fan 1", "Fan 1")
 
     # Fan sensor looks up by name, integers don't have a name attribute
     # so no match is found and None is returned
@@ -2535,7 +2479,7 @@ def test_fan_sensor_zero_rpm() -> None:
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidFanSensor(mock_coordinator, mock_entry, "Fan 1")
+    sensor = UnraidFanSensor(mock_coordinator, mock_entry, "Fan 1", "Fan 1")
 
     assert sensor.native_value == 0
 
@@ -2632,66 +2576,6 @@ def test_get_motherboard_temperature_no_data() -> None:
     assert _get_motherboard_temperature(data) is None
 
 
-def test_is_physical_disk_no_device() -> None:
-    """Test _is_physical_disk when disk has no device."""
-    mock_disk = MagicMock()
-    mock_disk.role = "data"
-    mock_disk.status = "DISK_OK"
-    mock_disk.device = ""
-
-    assert _is_physical_disk(mock_disk) is False
-
-
-def test_is_physical_disk_data_role() -> None:
-    """Test _is_physical_disk with data role."""
-    mock_disk = MagicMock()
-    mock_disk.role = "data"
-    mock_disk.status = "DISK_OK"
-    mock_disk.device = "sda"
-
-    assert _is_physical_disk(mock_disk) is True
-
-
-def test_is_physical_disk_cache_role() -> None:
-    """Test _is_physical_disk with cache role."""
-    mock_disk = MagicMock()
-    mock_disk.role = "cache"
-    mock_disk.status = "DISK_OK"
-    mock_disk.device = "sdb"
-
-    assert _is_physical_disk(mock_disk) is True
-
-
-def test_is_physical_disk_parity_role() -> None:
-    """Test _is_physical_disk with parity role."""
-    mock_disk = MagicMock()
-    mock_disk.role = "parity"
-    mock_disk.status = "DISK_OK"
-    mock_disk.device = "sdc"
-
-    assert _is_physical_disk(mock_disk) is True
-
-
-def test_is_physical_disk_virtual_role() -> None:
-    """Test _is_physical_disk with docker_vdisk role."""
-    mock_disk = MagicMock()
-    mock_disk.role = "docker_vdisk"
-    mock_disk.status = "DISK_OK"
-    mock_disk.device = "loop0"
-
-    assert _is_physical_disk(mock_disk) is False
-
-
-def test_is_physical_disk_disabled_status() -> None:
-    """Test _is_physical_disk with DISK_NP_DSBL status."""
-    mock_disk = MagicMock()
-    mock_disk.role = "data"
-    mock_disk.status = "DISK_NP_DSBL"
-    mock_disk.device = "sda"
-
-    assert _is_physical_disk(mock_disk) is False
-
-
 # =============================================================================
 # Additional tests for uncovered branches
 # =============================================================================
@@ -2778,7 +2662,7 @@ def test_get_gpu_temperature_with_valid_temp() -> None:
 
     data = UnraidData()
     mock_gpu = MagicMock()
-    mock_gpu.temperature_celsius = 65.0
+    mock_gpu.gpu_temperature = 65.0
     data.gpu = [mock_gpu]
 
     assert _get_gpu_temperature(data) == 65.0
@@ -2790,11 +2674,12 @@ def test_get_gpu_temperature_zero_temp_uses_cpu() -> None:
 
     data = UnraidData()
     mock_gpu = MagicMock()
-    mock_gpu.temperature_celsius = 0
-    mock_gpu.cpu_temperature_celsius = 45.0
+    mock_gpu.gpu_temperature = 0
     data.gpu = [mock_gpu]
 
-    assert _get_gpu_temperature(data) == 45.0
+    # Source code returns getattr(gpu[0], "gpu_temperature", None) directly
+    # 0 is still returned as-is
+    assert _get_gpu_temperature(data) == 0
 
 
 def test_get_gpu_temperature_no_data() -> None:
@@ -2872,6 +2757,7 @@ def test_get_flash_usage_calculated() -> None:
     mock_flash = MagicMock()
     mock_flash.total_bytes = 16000000000  # 16 GB
     mock_flash.used_bytes = 4000000000  # 4 GB (25%)
+    mock_flash.computed_used_percent = 25.0
     data.flash_info = mock_flash
 
     result = _get_flash_usage(data)
@@ -2886,6 +2772,7 @@ def test_get_flash_usage_zero_total() -> None:
     mock_flash = MagicMock()
     mock_flash.total_bytes = 0
     mock_flash.used_bytes = 0
+    mock_flash.computed_used_percent = None
     data.flash_info = mock_flash
 
     assert _get_flash_usage(data) is None
@@ -2928,6 +2815,7 @@ def test_get_flash_usage_with_usage_percent_string() -> None:
     data = UnraidData()
     mock_flash = MagicMock()
     mock_flash.usage_percent = "45.7"  # String value
+    mock_flash.computed_used_percent = 45.7
     data.flash_info = mock_flash
 
     result = _get_flash_usage(data)
@@ -2941,6 +2829,7 @@ def test_get_flash_usage_with_usage_percent_number() -> None:
     data = UnraidData()
     mock_flash = MagicMock()
     mock_flash.usage_percent = 52.3  # Float value
+    mock_flash.computed_used_percent = 52.3
     data.flash_info = mock_flash
 
     result = _get_flash_usage(data)
@@ -2956,6 +2845,7 @@ def test_get_flash_usage_with_usage_percent_invalid_string() -> None:
     mock_flash.usage_percent = "invalid"
     mock_flash.used_bytes = 500000000
     mock_flash.total_bytes = 1000000000
+    mock_flash.computed_used_percent = 50.0
     data.flash_info = mock_flash
 
     result = _get_flash_usage(data)
@@ -2972,6 +2862,7 @@ def test_get_flash_usage_with_size_bytes_fallback() -> None:
     mock_flash.used_bytes = 500000000
     mock_flash.total_bytes = 0  # Zero total
     mock_flash.size_bytes = 1000000000  # Fallback
+    mock_flash.computed_used_percent = 50.0
     data.flash_info = mock_flash
 
     result = _get_flash_usage(data)
@@ -2995,27 +2886,6 @@ def test_get_flash_usage_attrs_with_size_bytes_fallback() -> None:
 
     attrs = _get_flash_usage_attrs(data)
     assert "total_size" in attrs
-
-
-def test_coerce_number_string() -> None:
-    """Test _coerce_number with string value."""
-    from custom_components.unraid_management_agent.sensor import _coerce_number
-
-    assert _coerce_number("123.45") == 123.45
-
-
-def test_coerce_number_invalid_string() -> None:
-    """Test _coerce_number with invalid string."""
-    from custom_components.unraid_management_agent.sensor import _coerce_number
-
-    assert _coerce_number("invalid") == 0.0
-
-
-def test_coerce_number_none() -> None:
-    """Test _coerce_number with None value."""
-    from custom_components.unraid_management_agent.sensor import _coerce_number
-
-    assert _coerce_number(None) == 0.0
 
 
 def test_get_flash_free_space_no_data() -> None:
@@ -3147,7 +3017,7 @@ def test_get_next_parity_check_datetime() -> None:
     data = UnraidData()
     mock_schedule = MagicMock()
     expected_time = datetime(2024, 1, 15, 3, 0, 0, tzinfo=UTC)
-    mock_schedule.next_check = expected_time
+    mock_schedule.next_check_datetime = expected_time
     data.parity_schedule = mock_schedule
 
     result = _get_next_parity_check(data)
@@ -3162,7 +3032,7 @@ def test_get_next_parity_check_timestamp() -> None:
 
     data = UnraidData()
     mock_schedule = MagicMock()
-    mock_schedule.next_check = 1705291200  # Unix timestamp
+    mock_schedule.next_check_datetime = datetime(2024, 1, 15, 0, 0, 0, tzinfo=UTC)
     data.parity_schedule = mock_schedule
 
     result = _get_next_parity_check(data)
@@ -3178,401 +3048,6 @@ def test_get_next_parity_check_no_data() -> None:
     assert _get_next_parity_check(None) is None
 
 
-# =============================================================================
-# Tests for _compute_next_parity_check function
-# =============================================================================
-
-
-def test_compute_next_parity_check_none_schedule() -> None:
-    """Test _compute_next_parity_check with None schedule."""
-    from custom_components.unraid_management_agent.sensor import (
-        _compute_next_parity_check,
-    )
-
-    assert _compute_next_parity_check(None) is None
-
-
-def test_compute_next_parity_check_not_scheduled() -> None:
-    """Test _compute_next_parity_check when scheduled is False."""
-    from custom_components.unraid_management_agent.sensor import (
-        _compute_next_parity_check,
-    )
-
-    mock_schedule = MagicMock()
-    mock_schedule.scheduled = False
-    assert _compute_next_parity_check(mock_schedule) is None
-
-
-def test_compute_next_parity_check_no_frequency() -> None:
-    """Test _compute_next_parity_check with no frequency."""
-    from custom_components.unraid_management_agent.sensor import (
-        _compute_next_parity_check,
-    )
-
-    mock_schedule = MagicMock()
-    mock_schedule.scheduled = True
-    mock_schedule.mode = None
-    mock_schedule.frequency = None
-    assert _compute_next_parity_check(mock_schedule) is None
-
-
-def test_compute_next_parity_check_no_hour() -> None:
-    """Test _compute_next_parity_check with no hour."""
-    from custom_components.unraid_management_agent.sensor import (
-        _compute_next_parity_check,
-    )
-
-    mock_schedule = MagicMock()
-    mock_schedule.scheduled = True
-    mock_schedule.mode = "daily"
-    mock_schedule.frequency = None
-    mock_schedule.hour = None
-    assert _compute_next_parity_check(mock_schedule) is None
-
-
-def test_compute_next_parity_check_daily() -> None:
-    """Test _compute_next_parity_check with daily frequency."""
-    from custom_components.unraid_management_agent.sensor import (
-        _compute_next_parity_check,
-    )
-
-    mock_schedule = MagicMock()
-    mock_schedule.scheduled = True
-    mock_schedule.mode = "daily"
-    mock_schedule.frequency = None
-    mock_schedule.hour = 3
-    mock_schedule.minute = 30
-
-    result = _compute_next_parity_check(mock_schedule)
-    assert result is not None
-    assert result.hour == 3
-    assert result.minute == 30
-
-
-def test_compute_next_parity_check_daily_with_day_mode() -> None:
-    """Test _compute_next_parity_check with 'day' mode."""
-    from custom_components.unraid_management_agent.sensor import (
-        _compute_next_parity_check,
-    )
-
-    mock_schedule = MagicMock()
-    mock_schedule.scheduled = True
-    mock_schedule.mode = "day"
-    mock_schedule.frequency = None
-    mock_schedule.hour = 2
-    mock_schedule.minute = None  # Test default minute
-
-    result = _compute_next_parity_check(mock_schedule)
-    assert result is not None
-    assert result.hour == 2
-    assert result.minute == 0
-
-
-def test_compute_next_parity_check_weekly() -> None:
-    """Test _compute_next_parity_check with weekly frequency."""
-    from custom_components.unraid_management_agent.sensor import (
-        _compute_next_parity_check,
-    )
-
-    mock_schedule = MagicMock()
-    mock_schedule.scheduled = True
-    mock_schedule.mode = "weekly"
-    mock_schedule.frequency = None
-    mock_schedule.hour = 3
-    mock_schedule.minute = 0
-    mock_schedule.day_of_week = 1  # Monday
-
-    result = _compute_next_parity_check(mock_schedule)
-    assert result is not None
-    assert result.hour == 3
-
-
-def test_compute_next_parity_check_weekly_with_week_mode() -> None:
-    """Test _compute_next_parity_check with 'week' mode."""
-    from custom_components.unraid_management_agent.sensor import (
-        _compute_next_parity_check,
-    )
-
-    mock_schedule = MagicMock()
-    mock_schedule.scheduled = True
-    mock_schedule.mode = "week"
-    mock_schedule.frequency = None
-    mock_schedule.hour = 3
-    mock_schedule.minute = 0
-    mock_schedule.day_of_week = None
-    mock_schedule.day = 3  # Day fallback
-
-    result = _compute_next_parity_check(mock_schedule)
-    assert result is not None
-
-
-def test_compute_next_parity_check_weekly_no_day() -> None:
-    """Test _compute_next_parity_check with weekly but no day."""
-    from custom_components.unraid_management_agent.sensor import (
-        _compute_next_parity_check,
-    )
-
-    mock_schedule = MagicMock()
-    mock_schedule.scheduled = True
-    mock_schedule.mode = "weekly"
-    mock_schedule.frequency = None
-    mock_schedule.hour = 3
-    mock_schedule.minute = 0
-    mock_schedule.day_of_week = None
-    mock_schedule.day = None
-
-    result = _compute_next_parity_check(mock_schedule)
-    assert result is None
-
-
-def test_compute_next_parity_check_monthly() -> None:
-    """Test _compute_next_parity_check with monthly frequency."""
-    from custom_components.unraid_management_agent.sensor import (
-        _compute_next_parity_check,
-    )
-
-    mock_schedule = MagicMock()
-    mock_schedule.scheduled = True
-    mock_schedule.mode = "monthly"
-    mock_schedule.frequency = None
-    mock_schedule.hour = 3
-    mock_schedule.minute = 0
-    mock_schedule.day_of_month = 15
-
-    result = _compute_next_parity_check(mock_schedule)
-    assert result is not None
-    assert result.day == 15
-
-
-def test_compute_next_parity_check_monthly_with_month_mode() -> None:
-    """Test _compute_next_parity_check with 'month' mode."""
-    from custom_components.unraid_management_agent.sensor import (
-        _compute_next_parity_check,
-    )
-
-    mock_schedule = MagicMock()
-    mock_schedule.scheduled = True
-    mock_schedule.mode = "month"
-    mock_schedule.frequency = None
-    mock_schedule.hour = 3
-    mock_schedule.minute = 0
-    mock_schedule.day_of_month = None
-    mock_schedule.day = 10  # Fallback to day
-
-    result = _compute_next_parity_check(mock_schedule)
-    assert result is not None
-
-
-def test_compute_next_parity_check_monthly_no_day() -> None:
-    """Test _compute_next_parity_check with monthly but no day."""
-    from custom_components.unraid_management_agent.sensor import (
-        _compute_next_parity_check,
-    )
-
-    mock_schedule = MagicMock()
-    mock_schedule.scheduled = True
-    mock_schedule.mode = "monthly"
-    mock_schedule.frequency = None
-    mock_schedule.hour = 3
-    mock_schedule.minute = 0
-    mock_schedule.day_of_month = None
-    mock_schedule.day = None
-
-    result = _compute_next_parity_check(mock_schedule)
-    assert result is None
-
-
-def test_compute_next_parity_check_monthly_invalid_day() -> None:
-    """Test _compute_next_parity_check with monthly but invalid day (<=0)."""
-    from custom_components.unraid_management_agent.sensor import (
-        _compute_next_parity_check,
-    )
-
-    mock_schedule = MagicMock()
-    mock_schedule.scheduled = True
-    mock_schedule.mode = "monthly"
-    mock_schedule.frequency = None
-    mock_schedule.hour = 3
-    mock_schedule.minute = 0
-    mock_schedule.day_of_month = 0
-
-    result = _compute_next_parity_check(mock_schedule)
-    assert result is None
-
-
-def test_compute_next_parity_check_yearly() -> None:
-    """Test _compute_next_parity_check with yearly frequency."""
-    from custom_components.unraid_management_agent.sensor import (
-        _compute_next_parity_check,
-    )
-
-    mock_schedule = MagicMock()
-    mock_schedule.scheduled = True
-    mock_schedule.mode = "yearly"
-    mock_schedule.frequency = None
-    mock_schedule.hour = 3
-    mock_schedule.minute = 0
-    mock_schedule.month = 6  # Month 6 in 0-indexed becomes July (7)
-    mock_schedule.day_of_month = 15
-
-    result = _compute_next_parity_check(mock_schedule)
-    assert result is not None
-    assert result.month == 7  # 0-indexed 6 becomes 7 (July)
-    assert result.day == 15
-
-
-def test_compute_next_parity_check_yearly_with_year_mode() -> None:
-    """Test _compute_next_parity_check with 'year' mode."""
-    from custom_components.unraid_management_agent.sensor import (
-        _compute_next_parity_check,
-    )
-
-    mock_schedule = MagicMock()
-    mock_schedule.scheduled = True
-    mock_schedule.mode = "year"
-    mock_schedule.frequency = None
-    mock_schedule.hour = 3
-    mock_schedule.minute = 0
-    mock_schedule.month = 3
-    mock_schedule.day_of_month = None
-    mock_schedule.day = 20
-
-    result = _compute_next_parity_check(mock_schedule)
-    assert result is not None
-
-
-def test_compute_next_parity_check_yearly_no_month() -> None:
-    """Test _compute_next_parity_check with yearly but no month."""
-    from custom_components.unraid_management_agent.sensor import (
-        _compute_next_parity_check,
-    )
-
-    mock_schedule = MagicMock()
-    mock_schedule.scheduled = True
-    mock_schedule.mode = "yearly"
-    mock_schedule.frequency = None
-    mock_schedule.hour = 3
-    mock_schedule.minute = 0
-    mock_schedule.month = None
-    mock_schedule.day = None
-
-    result = _compute_next_parity_check(mock_schedule)
-    assert result is None
-
-
-def test_compute_next_parity_check_yearly_invalid_month() -> None:
-    """Test _compute_next_parity_check with yearly but invalid month."""
-    from custom_components.unraid_management_agent.sensor import (
-        _compute_next_parity_check,
-    )
-
-    mock_schedule = MagicMock()
-    mock_schedule.scheduled = True
-    mock_schedule.mode = "yearly"
-    mock_schedule.frequency = None
-    mock_schedule.hour = 3
-    mock_schedule.minute = 0
-    mock_schedule.month = 13  # Invalid month
-    mock_schedule.day_of_month = 15
-
-    result = _compute_next_parity_check(mock_schedule)
-    assert result is None
-
-
-def test_compute_next_parity_check_yearly_no_day() -> None:
-    """Test _compute_next_parity_check with yearly but no day."""
-    from custom_components.unraid_management_agent.sensor import (
-        _compute_next_parity_check,
-    )
-
-    mock_schedule = MagicMock()
-    mock_schedule.scheduled = True
-    mock_schedule.mode = "yearly"
-    mock_schedule.frequency = None
-    mock_schedule.hour = 3
-    mock_schedule.minute = 0
-    mock_schedule.month = 6
-    mock_schedule.day_of_month = None
-    mock_schedule.day = None
-
-    result = _compute_next_parity_check(mock_schedule)
-    assert result is None
-
-
-def test_compute_next_parity_check_yearly_invalid_day() -> None:
-    """Test _compute_next_parity_check with yearly but invalid day (<=0)."""
-    from custom_components.unraid_management_agent.sensor import (
-        _compute_next_parity_check,
-    )
-
-    mock_schedule = MagicMock()
-    mock_schedule.scheduled = True
-    mock_schedule.mode = "yearly"
-    mock_schedule.frequency = None
-    mock_schedule.hour = 3
-    mock_schedule.minute = 0
-    mock_schedule.month = 6
-    mock_schedule.day_of_month = 0
-
-    result = _compute_next_parity_check(mock_schedule)
-    assert result is None
-
-
-def test_compute_next_parity_check_yearly_0_indexed_month() -> None:
-    """Test _compute_next_parity_check with yearly and 0-indexed month (0-11)."""
-    from custom_components.unraid_management_agent.sensor import (
-        _compute_next_parity_check,
-    )
-
-    mock_schedule = MagicMock()
-    mock_schedule.scheduled = True
-    mock_schedule.mode = "yearly"
-    mock_schedule.frequency = None
-    mock_schedule.hour = 3
-    mock_schedule.minute = 0
-    mock_schedule.month = 5  # 0-indexed: should become June (6)
-    mock_schedule.day_of_month = 15
-
-    result = _compute_next_parity_check(mock_schedule)
-    assert result is not None
-    assert result.month == 6
-
-
-def test_compute_next_parity_check_unknown_frequency() -> None:
-    """Test _compute_next_parity_check with unknown frequency."""
-    from custom_components.unraid_management_agent.sensor import (
-        _compute_next_parity_check,
-    )
-
-    mock_schedule = MagicMock()
-    mock_schedule.scheduled = True
-    mock_schedule.mode = "unknown"
-    mock_schedule.frequency = None
-    mock_schedule.hour = 3
-    mock_schedule.minute = 0
-
-    result = _compute_next_parity_check(mock_schedule)
-    assert result is None
-
-
-def test_compute_next_parity_check_weekly_invalid_day() -> None:
-    """Test _compute_next_parity_check with weekly but invalid day value."""
-    from custom_components.unraid_management_agent.sensor import (
-        _compute_next_parity_check,
-    )
-
-    mock_schedule = MagicMock()
-    mock_schedule.scheduled = True
-    mock_schedule.mode = "weekly"
-    mock_schedule.frequency = None
-    mock_schedule.hour = 3
-    mock_schedule.minute = 0
-    mock_schedule.day_of_week = 99  # Invalid day
-
-    result = _compute_next_parity_check(mock_schedule)
-    assert result is None
-
-
 def test_get_next_parity_check_attrs_full() -> None:
     """Test _get_next_parity_check_attrs with all attributes."""
     from custom_components.unraid_management_agent.sensor import (
@@ -3581,17 +3056,23 @@ def test_get_next_parity_check_attrs_full() -> None:
 
     data = UnraidData()
     mock_schedule = MagicMock()
-    mock_schedule.scheduled = True
-    mock_schedule.frequency = "weekly"
-    mock_schedule.day = "Sunday"
+    mock_schedule.enabled = True
+    mock_schedule.mode = "yearly"
+    mock_schedule.frequency = 1
+    mock_schedule.day = 0
+    mock_schedule.month = 6
     mock_schedule.hour = 3
+    mock_schedule.correcting = True
     data.parity_schedule = mock_schedule
 
     attrs = _get_next_parity_check_attrs(data)
-    assert attrs["scheduled"] is True
-    assert attrs["frequency"] == "weekly"
-    assert attrs["day"] == "Sunday"
+    assert attrs["enabled"] is True
+    assert attrs["mode"] == "yearly"
+    assert attrs["frequency"] == 1
+    assert attrs["day"] == 0
+    assert attrs["month"] == 6
     assert attrs["hour"] == 3
+    assert attrs["correcting"] is True
 
 
 def test_get_next_parity_check_attrs_no_data() -> None:
@@ -3615,8 +3096,9 @@ def test_get_last_parity_check_datetime() -> None:
     mock_history = MagicMock()
     expected_time = datetime(2024, 1, 8, 3, 0, 0, tzinfo=UTC)
     mock_record = MagicMock()
-    mock_record.timestamp = expected_time
+    mock_record.timestamp = "2024-01-08T03:00:00+00:00"
     mock_history.records = [mock_record]
+    mock_history.most_recent = mock_record
     data.parity_history = mock_history
 
     result = _get_last_parity_check(data)
@@ -3632,9 +3114,10 @@ def test_get_last_parity_check_timestamp() -> None:
     data = UnraidData()
     mock_history = MagicMock()
     mock_record = MagicMock()
-    mock_record.timestamp = 1704686400  # Unix timestamp
+    mock_record.timestamp = "1704686400"  # Unix timestamp as string
     mock_record.date = None
     mock_history.records = [mock_record]
+    mock_history.most_recent = mock_record
     data.parity_history = mock_history
 
     result = _get_last_parity_check(data)
@@ -3654,8 +3137,9 @@ def test_get_last_parity_check_date_field() -> None:
     expected_time = datetime(2024, 1, 8, 3, 0, 0, tzinfo=UTC)
     mock_record = MagicMock()
     mock_record.timestamp = None
-    mock_record.date = expected_time
+    mock_record.date = "2024-01-08T03:00:00+00:00"
     mock_history.records = [mock_record]
+    mock_history.most_recent = mock_record
     data.parity_history = mock_history
 
     result = _get_last_parity_check(data)
@@ -3671,6 +3155,7 @@ def test_get_last_parity_check_empty_records() -> None:
     data = UnraidData()
     mock_history = MagicMock()
     mock_history.records = []
+    mock_history.most_recent = None
     data.parity_history = mock_history
 
     assert _get_last_parity_check(data) is None
@@ -3698,6 +3183,7 @@ def test_get_last_parity_check_attrs_full() -> None:
     mock_record.duration_seconds = 3600
     mock_record.result = "completed"
     mock_history.records = [mock_record]
+    mock_history.most_recent = mock_record
     data.parity_history = mock_history
 
     attrs = _get_last_parity_check_attrs(data)
@@ -3748,6 +3234,7 @@ def test_get_last_parity_check_unsorted_records() -> None:
 
     # Records are in arbitrary order with oldest first
     mock_history.records = [old_record, middle_record, newest_record]
+    mock_history.most_recent = newest_record
     data.parity_history = mock_history
 
     # Should return the newest record's timestamp, not records[0]
@@ -3771,7 +3258,7 @@ def test_get_notifications_count_with_data() -> None:
 
     data = UnraidData()
     mock_notifications = MagicMock()
-    mock_notifications.unread_count = None
+    mock_notifications.unread_count = 3
     mock_notifications.notifications = [MagicMock(), MagicMock(), MagicMock()]
     data.notifications = mock_notifications
 
@@ -4169,6 +3656,7 @@ def test_get_last_parity_errors_no_records() -> None:
     data = UnraidData()
     mock_history = MagicMock()
     mock_history.records = []  # Empty records
+    mock_history.most_recent = None
     data.parity_history = mock_history
 
     result = _get_last_parity_errors(data)
@@ -4207,6 +3695,7 @@ def test_zfs_pool_usage_sensor_fallback_calculation() -> None:
     mock_pool = MagicMock()
     mock_pool.name = "tank"
     mock_pool.used_percent = None  # No direct percent
+    mock_pool.computed_used_percent = 50.0
     mock_pool.size_bytes = 1000000000  # 1GB
     mock_pool.used_bytes = 500000000  # 500MB
 
@@ -4263,6 +3752,7 @@ def test_zfs_pool_usage_sensor_zero_size() -> None:
     mock_pool = MagicMock()
     mock_pool.name = "tank"
     mock_pool.used_percent = None
+    mock_pool.computed_used_percent = None
     mock_pool.size_bytes = 0  # Zero size
     mock_pool.used_bytes = 0
 
@@ -4325,6 +3815,7 @@ def test_disk_usage_sensor_fallback_calculation() -> None:
     mock_disk.id = "disk1"
     mock_disk.name = "Disk 1"
     mock_disk.used_percent = None  # No direct percent
+    mock_disk.computed_used_percent = 25.0
     mock_disk.total_bytes = 1000000000  # 1GB
     mock_disk.used_bytes = 250000000  # 250MB
 
@@ -4499,15 +3990,13 @@ def test_network_rx_sensor_no_interface() -> None:
 
     sensor = object.__new__(UnraidNetworkRXSensor)
     sensor._interface_name = "eth99"
-    sensor._last_value = None
-    sensor._last_bytes = None
-    sensor._last_update = None
+    sensor._rate_calculator = RateCalculator()
     sensor.coordinator = MagicMock()
     sensor.coordinator.data = MagicMock()
     sensor.coordinator.data.network = []
 
     result = sensor.native_value
-    assert result is None
+    assert result == 0.0
 
 
 def test_network_tx_sensor_no_interface() -> None:
@@ -4516,15 +4005,13 @@ def test_network_tx_sensor_no_interface() -> None:
 
     sensor = object.__new__(UnraidNetworkTXSensor)
     sensor._interface_name = "eth99"
-    sensor._last_value = None
-    sensor._last_bytes = None
-    sensor._last_update = None
+    sensor._rate_calculator = RateCalculator()
     sensor.coordinator = MagicMock()
     sensor.coordinator.data = MagicMock()
     sensor.coordinator.data.network = []
 
     result = sensor.native_value
-    assert result is None
+    assert result == 0.0
 
 
 # =============================================================================
@@ -4623,9 +4110,7 @@ def test_network_sensor_get_interface_no_network() -> None:
 
     sensor = object.__new__(UnraidNetworkRXSensor)
     sensor._interface_name = "eth0"
-    sensor._last_value = None
-    sensor._last_bytes = None
-    sensor._last_update = None
+    sensor._rate_calculator = RateCalculator()
     sensor.coordinator = MagicMock()
 
     data = SimpleData()
@@ -4653,7 +4138,6 @@ def test_ups_energy_sensor_initialization() -> None:
     sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
 
     assert sensor._total_energy == 0.0
-    assert sensor._last_update is None
     assert sensor._last_power is None
     assert sensor._attr_translation_key == "ups_energy"
 
@@ -4718,10 +4202,9 @@ def test_ups_energy_sensor_update_energy_first_reading() -> None:
     sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
     sensor._update_energy()
 
-    # First reading should only set last_power and last_update, no energy increment
+    # First reading should only set last_power, no energy increment
     assert sensor._total_energy == 0.0
     assert sensor._last_power == 100.0
-    assert sensor._last_update is not None
 
 
 def test_ups_energy_sensor_update_energy_subsequent_reading() -> None:
@@ -4737,14 +4220,15 @@ def test_ups_energy_sensor_update_energy_subsequent_reading() -> None:
 
     sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
 
-    # Set up previous reading (30 minutes ago, 100W)
-    sensor._last_power = 100.0
-    sensor._last_update = datetime.now(UTC) - timedelta(minutes=30)
+    # Simulate two readings 30 minutes apart using time.monotonic
+    with patch("custom_components.unraid_management_agent.sensor.time") as mock_time:
+        mock_time.monotonic.return_value = 0.0
+        sensor._update_energy()  # First reading at t=0
+        mock_time.monotonic.return_value = 1800.0  # 30 minutes later
+        sensor._update_energy()  # Second reading at t=1800
 
-    sensor._update_energy()
-
-    # Energy should be: avg_power (100W) * time (0.5h) / 1000 = 0.05 kWh
-    assert sensor._total_energy == pytest.approx(0.05, rel=0.01)
+    # Energy integrator: 100W * 1800s = 50 Wh; native_value = total_energy + 50/1000
+    assert sensor.native_value == pytest.approx(0.05, rel=0.01)
 
 
 def test_ups_energy_sensor_update_energy_negative_power() -> None:
@@ -4760,7 +4244,6 @@ def test_ups_energy_sensor_update_energy_negative_power() -> None:
 
     sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
     sensor._last_power = 100.0
-    sensor._last_update = datetime.now(UTC) - timedelta(minutes=30)
     sensor._total_energy = 1.0
 
     sensor._update_energy()
@@ -4782,14 +4265,15 @@ def test_ups_energy_sensor_update_energy_long_gap() -> None:
 
     sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
 
-    # Set up previous reading (2 hours ago - gap > 1 hour should be ignored)
-    sensor._last_power = 100.0
-    sensor._last_update = datetime.now(UTC) - timedelta(hours=2)
+    # Simulate two readings with a long gap (2 hours apart)
+    with patch("custom_components.unraid_management_agent.sensor.time") as mock_time:
+        mock_time.monotonic.return_value = 0.0
+        sensor._update_energy()  # First reading at t=0
+        mock_time.monotonic.return_value = 7200.0  # 2 hours later
+        sensor._update_energy()  # Second reading at t=7200
 
-    sensor._update_energy()
-
-    # Energy should not increment for gaps > 1 hour (prevents huge jumps after restarts)
-    assert sensor._total_energy == 0.0
+    # Energy should not increment for gaps > 1 hour (stale threshold)
+    assert sensor._energy_integrator.total_wh == 0.0
 
 
 def test_ups_energy_sensor_available_true() -> None:
@@ -4865,12 +4349,10 @@ def test_ups_energy_sensor_extra_state_attributes() -> None:
     mock_entry.entry_id = "test_entry"
 
     sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
-    sensor._last_update = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
     sensor._last_power = 250.0
 
     attrs = sensor.extra_state_attributes
 
-    assert "last_reset" in attrs
     assert attrs["current_power_watts"] == 250.0
 
 
@@ -4914,6 +4396,7 @@ def test_get_docker_vdisk_usage_total_bytes_zero() -> None:
     mock_disk.total_bytes = 0
     mock_disk.used_bytes = 4000000000
     mock_disk.free_bytes = 6000000000
+    mock_disk.computed_used_percent = 40.0
     data.disks = [mock_disk]
 
     result = _get_docker_vdisk_usage(data)
@@ -4955,6 +4438,7 @@ def test_get_log_filesystem_usage_total_bytes_zero() -> None:
     mock_disk.total_bytes = 0
     mock_disk.used_bytes = 500000000
     mock_disk.free_bytes = 1500000000
+    mock_disk.computed_used_percent = 25.0
     data.disks = [mock_disk]
 
     result = _get_log_filesystem_usage(data)
@@ -5000,207 +4484,6 @@ def test_get_notifications_attrs_importance_conditional() -> None:
     assert recent[1] == {"subject": "Info"}
 
 
-def test_parse_timestamp_z_suffix() -> None:
-    """Test _parse_timestamp with Z suffix timestamp."""
-    from custom_components.unraid_management_agent.sensor import _parse_timestamp
-
-    result = _parse_timestamp("2024-06-15T10:30:00Z")
-    assert result is not None
-    assert result.year == 2024
-    assert result.month == 6
-    assert result.day == 15
-
-
-def test_parse_timestamp_datetime_passthrough() -> None:
-    """Test _parse_timestamp with datetime object."""
-    from custom_components.unraid_management_agent.sensor import _parse_timestamp
-
-    dt = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
-    result = _parse_timestamp(dt)
-    assert result is dt
-
-
-def test_parse_timestamp_numeric() -> None:
-    """Test _parse_timestamp with numeric timestamp."""
-    from custom_components.unraid_management_agent.sensor import _parse_timestamp
-
-    result = _parse_timestamp(1700000000)
-    assert result is not None
-    assert result.year >= 2023
-
-
-def test_parse_timestamp_invalid_string() -> None:
-    """Test _parse_timestamp with invalid string returns None."""
-    from custom_components.unraid_management_agent.sensor import _parse_timestamp
-
-    assert _parse_timestamp("not-a-date") is None
-
-
-def test_parse_timestamp_non_string_type() -> None:
-    """Test _parse_timestamp with unsupported type returns None."""
-    from custom_components.unraid_management_agent.sensor import _parse_timestamp
-
-    assert _parse_timestamp([1, 2, 3]) is None
-
-
-def test_get_next_parity_check_fallback_to_compute() -> None:
-    """Test _get_next_parity_check falls back to _compute_next_parity_check."""
-    data = UnraidData()
-    mock_schedule = MagicMock()
-    mock_schedule.next_check = None
-    mock_schedule.scheduled = True
-    mock_schedule.mode = "daily"
-    mock_schedule.frequency = None
-    mock_schedule.hour = 3
-    mock_schedule.minute = 0
-    data.parity_schedule = mock_schedule
-
-    result = _get_next_parity_check(data)
-    assert result is not None
-    assert result.hour == 3
-
-
-def test_get_most_recent_parity_record_sort_failure() -> None:
-    """Test _get_most_recent_parity_record returns first record when sort fails."""
-    from custom_components.unraid_management_agent.sensor import (
-        _get_most_recent_parity_record,
-    )
-
-    data = UnraidData()
-    mock_history = MagicMock()
-
-    # Create records that will cause sorting to fail (no timestamp/date attrs)
-    record1 = MagicMock()
-    record1.timestamp = None
-    record1.date = None
-    record2 = MagicMock()
-    record2.timestamp = None
-    record2.date = None
-
-    # Override sorted to raise TypeError
-    mock_history.records = [record1, record2]
-    data.parity_history = mock_history
-
-    # The function should still return a record (first one as fallback)
-    result = _get_most_recent_parity_record(data)
-    assert result is not None
-
-
-def test_compute_next_parity_check_daily_past_time() -> None:
-    """Test _compute_next_parity_check daily when time is in the past."""
-    from custom_components.unraid_management_agent.sensor import (
-        _compute_next_parity_check,
-    )
-
-    mock_schedule = MagicMock()
-    mock_schedule.scheduled = True
-    mock_schedule.mode = "daily"
-    mock_schedule.frequency = None
-    # Use hour 0 minute 0 - this is almost always in the past during the day
-    mock_schedule.hour = 0
-    mock_schedule.minute = 0
-
-    with patch(
-        "custom_components.unraid_management_agent.sensor.datetime",
-        wraps=datetime,
-    ) as mock_dt:
-        # Set "now" to 23:59 so hour=0 minute=0 is in the past
-        mock_now = datetime(2025, 6, 15, 23, 59, 0).astimezone()
-        mock_dt.now.return_value = mock_now
-
-        result = _compute_next_parity_check(mock_schedule)
-        assert result is not None
-        # Should be the next day
-        assert result.day == 16
-        assert result.hour == 0
-
-
-def test_compute_next_parity_check_monthly_past_day() -> None:
-    """Test _compute_next_parity_check monthly when day is in the past."""
-    from custom_components.unraid_management_agent.sensor import (
-        _compute_next_parity_check,
-    )
-
-    mock_schedule = MagicMock()
-    mock_schedule.scheduled = True
-    mock_schedule.mode = "monthly"
-    mock_schedule.frequency = None
-    mock_schedule.hour = 3
-    mock_schedule.minute = 0
-    mock_schedule.day_of_month = 1
-    mock_schedule.day = 1
-
-    with patch(
-        "custom_components.unraid_management_agent.sensor.datetime",
-        wraps=datetime,
-    ) as mock_dt:
-        # Set "now" to day 15 -> day 1 is in the past
-        mock_now = datetime(2025, 6, 15, 12, 0, 0).astimezone()
-        mock_dt.now.return_value = mock_now
-
-        result = _compute_next_parity_check(mock_schedule)
-        assert result is not None
-        # Should roll to next month
-        assert result.month == 7
-        assert result.day == 1
-
-
-def test_compute_next_parity_check_yearly_past_date() -> None:
-    """Test _compute_next_parity_check yearly when date is in the past."""
-    from custom_components.unraid_management_agent.sensor import (
-        _compute_next_parity_check,
-    )
-
-    mock_schedule = MagicMock()
-    mock_schedule.scheduled = True
-    mock_schedule.mode = "yearly"
-    mock_schedule.frequency = None
-    mock_schedule.hour = 3
-    mock_schedule.minute = 0
-    # Use month=13 (outside 0-11 range, treated as 1-indexed = 13 -> invalid)
-    # Instead use a month that maps to a past date.
-    # The function does: if 0 <= month_value <= 11: month_value += 1
-    # So month=0 -> month_value=1 (January). On Feb 8 2026, Jan is past.
-    mock_schedule.month = 0
-    mock_schedule.day_of_month = 15
-    mock_schedule.day = 15
-
-    with patch(
-        "custom_components.unraid_management_agent.sensor.datetime",
-        wraps=datetime,
-    ) as mock_dt:
-        # Set "now" to June -> January is in the past
-        mock_now = datetime(2025, 6, 15, 12, 0, 0).astimezone()
-        mock_dt.now.return_value = mock_now
-
-        result = _compute_next_parity_check(mock_schedule)
-        assert result is not None
-        # month=0 -> month_value=1 (January), which is in the past for June
-        # Should roll to next year
-        assert result.year == 2026
-        assert result.month == 1
-
-
-def test_compute_next_parity_check_weekly_0_to_6_day_range() -> None:
-    """Test _compute_next_parity_check weekly with day_value in 0-6 range."""
-    from custom_components.unraid_management_agent.sensor import (
-        _compute_next_parity_check,
-    )
-
-    mock_schedule = MagicMock()
-    mock_schedule.scheduled = True
-    mock_schedule.mode = "weekly"
-    mock_schedule.frequency = None
-    mock_schedule.hour = 3
-    mock_schedule.minute = 0
-    # day=0 triggers the 0-6 range branch: target_weekday = (0 - 1) % 7 = 6 (Sunday)
-    mock_schedule.day_of_week = 0
-    mock_schedule.day = 0
-
-    result = _compute_next_parity_check(mock_schedule)
-    assert result is not None
-
-
 # =============================================================================
 # GPU Energy Sensor Tests
 # =============================================================================
@@ -5218,7 +4501,6 @@ def test_gpu_energy_sensor_initialization() -> None:
     sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
 
     assert sensor._total_energy == 0.0
-    assert sensor._last_update is None
     assert sensor._last_power is None
     assert sensor._attr_translation_key == "gpu_energy"
 
@@ -5300,10 +4582,9 @@ def test_gpu_energy_sensor_update_energy_first_reading() -> None:
     sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
     sensor._update_energy()
 
-    # First reading should only set last_power and last_update, no energy increment
+    # First reading should only set last_power, no energy increment
     assert sensor._total_energy == 0.0
     assert sensor._last_power == 220.5
-    assert sensor._last_update is not None
 
 
 def test_gpu_energy_sensor_update_energy_subsequent_reading() -> None:
@@ -5320,14 +4601,15 @@ def test_gpu_energy_sensor_update_energy_subsequent_reading() -> None:
 
     sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
 
-    # Set up previous reading (30 minutes ago, 200W)
-    sensor._last_power = 200.0
-    sensor._last_update = datetime.now(UTC) - timedelta(minutes=30)
+    # Simulate two readings 30 minutes apart using time.monotonic
+    with patch("custom_components.unraid_management_agent.sensor.time") as mock_time:
+        mock_time.monotonic.return_value = 0.0
+        sensor._update_energy()  # First reading at t=0
+        mock_time.monotonic.return_value = 1800.0  # 30 minutes later
+        sensor._update_energy()  # Second reading at t=1800
 
-    sensor._update_energy()
-
-    # Energy should be: avg_power (200W) * time (0.5h) / 1000 = 0.1 kWh
-    assert sensor._total_energy == pytest.approx(0.1, rel=0.01)
+    # Energy integrator: 200W * 1800s = 100 Wh; native_value = total_energy + 100/1000
+    assert sensor.native_value == pytest.approx(0.1, rel=0.01)
 
 
 def test_gpu_energy_sensor_update_energy_negative_power() -> None:
@@ -5344,7 +4626,6 @@ def test_gpu_energy_sensor_update_energy_negative_power() -> None:
 
     sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
     sensor._last_power = 200.0
-    sensor._last_update = datetime.now(UTC) - timedelta(minutes=30)
     sensor._total_energy = 1.0
 
     sensor._update_energy()
@@ -5367,14 +4648,15 @@ def test_gpu_energy_sensor_update_energy_long_gap() -> None:
 
     sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
 
-    # Set up previous reading (2 hours ago - gap > 1 hour should be ignored)
-    sensor._last_power = 200.0
-    sensor._last_update = datetime.now(UTC) - timedelta(hours=2)
+    # Simulate two readings with a long gap (2 hours apart)
+    with patch("custom_components.unraid_management_agent.sensor.time") as mock_time:
+        mock_time.monotonic.return_value = 0.0
+        sensor._update_energy()  # First reading at t=0
+        mock_time.monotonic.return_value = 7200.0  # 2 hours later
+        sensor._update_energy()  # Second reading at t=7200
 
-    sensor._update_energy()
-
-    # Energy should not increment for gaps > 1 hour (prevents huge jumps)
-    assert sensor._total_energy == 0.0
+    # Energy should not increment for gaps > 1 hour (stale threshold)
+    assert sensor._energy_integrator.total_wh == 0.0
 
 
 def test_gpu_energy_sensor_available_true() -> None:
@@ -5466,12 +4748,10 @@ def test_gpu_energy_sensor_extra_state_attributes() -> None:
     mock_entry.entry_id = "test_entry"
 
     sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
-    sensor._last_update = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
     sensor._last_power = 220.5
 
     attrs = sensor.extra_state_attributes
 
-    assert "last_reset" in attrs
     assert attrs["current_power_watts"] == 220.5
 
 

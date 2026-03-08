@@ -60,9 +60,19 @@ repos:
     rev: v3.6.2
     hooks:
       - id: prettier
-        types_or: [markdown]
+        types_or: [markdown, json, yaml]
         additional_dependencies:
           - prettier@3.6.2
+        exclude: (.vscode|.devcontainer)
+
+  # Bandit - Security scanning for Python code
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.8.3
+    hooks:
+      - id: bandit
+        args: ["-c", "pyproject.toml"]
+        additional_dependencies: ["bandit[toml]"]
+        files: ^custom_components/.+\.py$
 
   # Local hooks
   - repo: local
@@ -94,5 +104,5 @@ ci:
   autoupdate_branch: ""
   autoupdate_commit_msg: "[pre-commit.ci] pre-commit autoupdate"
   autoupdate_schedule: weekly
-  skip: [mypy]  # Skip mypy in CI as it requires dependencies
+  skip: [mypy] # Skip mypy in CI as it requires dependencies
   submodules: false

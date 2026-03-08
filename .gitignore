@@ -90,6 +90,10 @@ __pycache__
 .vscode
 
 
+# AI agent scratch space (temporary notes, never committed)
+.ai-scratch/*
+!.ai-scratch/.gitkeep
+
 # Home Assistant configuration
 config/*
 !config/configuration.yaml

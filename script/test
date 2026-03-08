@@ -1,0 +1,120 @@
+#!/bin/bash
+
+# script/test: Run project tests
+#
+# Runs pytest with project configuration. Automatically cleans up package
+# installations after test run to prevent Home Assistant from loading the
+# wrong version.
+#
+# Usage:
+#   ./script/test [OPTIONS] [PYTEST_OPTIONS]
+#
+# Options:
+#   --cov           Generate coverage report (terminal output)
+#   --cov-html      Generate HTML coverage report in htmlcov/
+#
+# Examples:
+#   ./script/test
+#   ./script/test -v
+#   ./script/test --cov
+#   ./script/test --cov-html
+#   ./script/test --cov -k test_coordinator
+#   ./script/test tests/test_api_wrapper.py
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR/.."
+
+TEST_PYTHON_VERSION="3.14.2"
+TEST_HOME_ASSISTANT_VERSION="2026.2.3"
+TEST_PLUGIN_VERSION="0.13.316"
+
+# shellcheck source=script/.lib/output.sh
+source "$SCRIPT_DIR/.lib/output.sh"
+
+if ! command -v uv >/dev/null 2>&1; then
+    log_error "uv is required to provision the isolated test environment"
+    log_info "Run: ./script/setup/bootstrap"
+    exit 1
+fi
+
+if [[ -n "${REMOTE_CONTAINERS:-}" || -n "${CODESPACES:-}" ]]; then
+    TEST_VENV_PATH="$HOME/.local/ha-test-venv"
+else
+    TEST_VENV_PATH="$PWD/.local/ha-test-venv"
+fi
+
+log_header "Preparing isolated test environment"
+uv python install "$TEST_PYTHON_VERSION"
+
+CURRENT_TEST_PYTHON=""
+if [[ -x "$TEST_VENV_PATH/bin/python3" ]]; then
+    CURRENT_TEST_PYTHON=$("$TEST_VENV_PATH/bin/python3" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || true)
+fi
+
+if [[ ! -d "$TEST_VENV_PATH" ]]; then
+    log_info "Creating test virtual environment at $TEST_VENV_PATH"
+    uv venv --seed --python "$TEST_PYTHON_VERSION" "$TEST_VENV_PATH"
+elif [[ ! -x "$TEST_VENV_PATH/bin/python3" || "$CURRENT_TEST_PYTHON" != "3.14" ]]; then
+    log_warning "Existing test venv uses Python ${CURRENT_TEST_PYTHON:-unknown} - recreating for Python 3.14"
+    rm -rf "$TEST_VENV_PATH"
+    log_info "Creating test virtual environment at $TEST_VENV_PATH"
+    uv venv --seed --python "$TEST_PYTHON_VERSION" "$TEST_VENV_PATH"
+fi
+
+# pytest-homeassistant-custom-component has not released HA 2026.3.0 support yet,
+# so tests run in a dedicated compatible environment until upstream catches up.
+# shellcheck source=/dev/null
+source "$TEST_VENV_PATH/bin/activate"
+
+log_info "Installing compatible Home Assistant test dependencies"
+uv pip install \
+    -e . \
+    "homeassistant==${TEST_HOME_ASSISTANT_VERSION}" \
+    "pytest-homeassistant-custom-component==${TEST_PLUGIN_VERSION}" \
+    "pytest>=8.0.0" \
+    "pytest-asyncio>=0.23.0" \
+    "pytest-cov>=4.0.0" \
+    "pytest-timeout>=2.0.0"
+
+# Parse coverage flags
+COVERAGE_ARGS=()
+PYTEST_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --cov)
+            COVERAGE_ARGS+=("--cov=custom_components/unraid_management_agent" "--cov-report=term-missing")
+            shift
+            ;;
+        --cov-html)
+            COVERAGE_ARGS+=("--cov=custom_components/unraid_management_agent" "--cov-report=html")
+            shift
+            ;;
+        *)
+            PYTEST_ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+# Ensure cleanup runs even when tests fail (set -e would exit before cleanup)
+cleanup() {
+    "$SCRIPT_DIR/clean" --minimal || true
+}
+trap cleanup EXIT
+
+# Run pytest with project configuration
+if [[ ${#COVERAGE_ARGS[@]} -gt 0 ]]; then
+    log_header "Running tests with coverage"
+else
+    log_header "Running tests"
+fi
+echo ""
+pytest "${COVERAGE_ARGS[@]}" "${PYTEST_ARGS[@]}"
+
+if [[ ${#COVERAGE_ARGS[@]} -gt 0 ]] && [[ " ${COVERAGE_ARGS[*]} " =~ " --cov-report=html " ]]; then
+    echo ""
+    log_success "Coverage report generated in htmlcov/index.html"
+fi

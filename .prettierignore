@@ -1,0 +1,46 @@
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+venv/
+.venv/
+
+# Coverage reports
+htmlcov/
+coverage.xml
+.coverage
+
+# Cache directories
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.cache/
+
+# Home Assistant config (runtime artifacts)
+config/deps/
+config/tts/
+config/*.log
+config/*.log.*
+
+# IDE / editor
+.vscode/
+.idea/
+
+# Git
+.git/
+
+# AI scratch space
+.ai-scratch/
+
+# Node modules (if ever added)
+node_modules/
+
+# Auto-generated files
+*.min.js
+*.min.css

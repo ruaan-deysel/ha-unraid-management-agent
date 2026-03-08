@@ -22,7 +22,6 @@ from custom_components.unraid_management_agent.binary_sensor import (
     _is_parity_check_running,
     _is_parity_check_scheduled,
     _is_parity_invalid,
-    _is_physical_network_interface,
     _is_update_available,
     _is_ups_connected,
     _is_zfs_available,
@@ -93,6 +92,7 @@ def test_is_parity_check_running_no_parity_status():
     coordinator.data = UnraidData()
     coordinator.data.array = MagicMock()
     coordinator.data.array.parity_check_status = None
+    coordinator.data.array.is_parity_check_running = False
     assert _is_parity_check_running(coordinator) is False
 
 
@@ -103,6 +103,7 @@ def test_is_parity_check_running_idle():
     coordinator.data.array = MagicMock()
     coordinator.data.array.parity_check_status = MagicMock()
     coordinator.data.array.parity_check_status.status = "idle"
+    coordinator.data.array.is_parity_check_running = False
     assert _is_parity_check_running(coordinator) is False
 
 
@@ -113,6 +114,7 @@ def test_is_parity_check_running_running():
     coordinator.data.array = MagicMock()
     coordinator.data.array.parity_check_status = MagicMock()
     coordinator.data.array.parity_check_status.status = "running"
+    coordinator.data.array.is_parity_check_running = True
     assert _is_parity_check_running(coordinator) is True
 
 
@@ -123,6 +125,7 @@ def test_is_parity_check_running_paused():
     coordinator.data.array = MagicMock()
     coordinator.data.array.parity_check_status = MagicMock()
     coordinator.data.array.parity_check_status.status = "paused"
+    coordinator.data.array.is_parity_check_running = True
     assert _is_parity_check_running(coordinator) is True
 
 
@@ -133,6 +136,7 @@ def test_is_parity_check_running_checking():
     coordinator.data.array = MagicMock()
     coordinator.data.array.parity_check_status = MagicMock()
     coordinator.data.array.parity_check_status.status = "checking"
+    coordinator.data.array.is_parity_check_running = True
     assert _is_parity_check_running(coordinator) is True
 
 
@@ -534,24 +538,6 @@ async def test_binary_sensor_device_class(
         assert state.attributes.get("device_class") == "connectivity"
 
 
-def test_is_physical_network_interface():
-    """Test network interface detection."""
-    # Physical interfaces
-    assert _is_physical_network_interface("eth0") is True
-    assert _is_physical_network_interface("eth1") is True
-    assert _is_physical_network_interface("wlan0") is True
-    assert _is_physical_network_interface("bond0") is True
-    assert _is_physical_network_interface("eno1") is True
-    assert _is_physical_network_interface("enp2s0") is True
-
-    # Virtual interfaces (should return False)
-    assert _is_physical_network_interface("lo") is False
-    assert _is_physical_network_interface("docker0") is False
-    assert _is_physical_network_interface("br-123abc") is False
-    assert _is_physical_network_interface("veth1234") is False
-    assert _is_physical_network_interface("virbr0") is False
-
-
 @pytest.mark.usefixtures(
     "mock_unraid_client_class",
     "mock_unraid_websocket_client_class",
@@ -915,6 +901,7 @@ def test_is_flash_healthy_no_smart():
     coordinator.data.flash_info = MagicMock()
     coordinator.data.flash_info.smart_available = False
     coordinator.data.flash_info.usage_percent = 50
+    coordinator.data.flash_info.is_healthy = True
     assert _is_flash_healthy(coordinator) is True
 
 
@@ -925,6 +912,7 @@ def test_is_flash_healthy_low_usage():
     coordinator.data.flash_info = MagicMock()
     coordinator.data.flash_info.smart_available = True
     coordinator.data.flash_info.usage_percent = 50
+    coordinator.data.flash_info.is_healthy = True
     assert _is_flash_healthy(coordinator) is True
 
 
@@ -935,6 +923,7 @@ def test_is_flash_healthy_high_usage():
     coordinator.data.flash_info = MagicMock()
     coordinator.data.flash_info.smart_available = True
     coordinator.data.flash_info.usage_percent = 95
+    coordinator.data.flash_info.is_healthy = False
     assert _is_flash_healthy(coordinator) is False
 
 
@@ -945,6 +934,7 @@ def test_is_flash_healthy_none_usage():
     coordinator.data.flash_info = MagicMock()
     coordinator.data.flash_info.smart_available = True
     coordinator.data.flash_info.usage_percent = None
+    coordinator.data.flash_info.is_healthy = True
     assert _is_flash_healthy(coordinator) is True
 
 
@@ -1098,6 +1088,7 @@ def test_is_parity_check_scheduled_disabled():
     coordinator.data = UnraidData()
     coordinator.data.parity_schedule = MagicMock()
     coordinator.data.parity_schedule.mode = "disabled"
+    coordinator.data.parity_schedule.is_enabled = False
     assert _is_parity_check_scheduled(coordinator) is False
 
 
@@ -1107,6 +1098,7 @@ def test_is_parity_check_scheduled_none_mode():
     coordinator.data = UnraidData()
     coordinator.data.parity_schedule = MagicMock()
     coordinator.data.parity_schedule.mode = None
+    coordinator.data.parity_schedule.is_enabled = False
     assert _is_parity_check_scheduled(coordinator) is False
 
 
@@ -1116,6 +1108,7 @@ def test_is_parity_check_scheduled_weekly():
     coordinator.data = UnraidData()
     coordinator.data.parity_schedule = MagicMock()
     coordinator.data.parity_schedule.mode = "weekly"
+    coordinator.data.parity_schedule.is_enabled = True
     assert _is_parity_check_scheduled(coordinator) is True
 
 
@@ -1125,6 +1118,7 @@ def test_is_parity_check_scheduled_monthly():
     coordinator.data = UnraidData()
     coordinator.data.parity_schedule = MagicMock()
     coordinator.data.parity_schedule.mode = "monthly"
+    coordinator.data.parity_schedule.is_enabled = True
     assert _is_parity_check_scheduled(coordinator) is True
 
 

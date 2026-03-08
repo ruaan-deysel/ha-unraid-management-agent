@@ -11,9 +11,9 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import slugify
-from uma_api.formatting import format_bytes
 
 from . import UnraidConfigEntry, UnraidDataUpdateCoordinator
+from .api.formatting import format_bytes
 from .const import (
     ATTR_CONTAINER_IMAGE,
     ATTR_CONTAINER_PORTS,
@@ -44,6 +44,13 @@ def _make_unique_key(name: str) -> str:
     return f"{slug}_{name_hash}"
 
 
+def _make_vm_unique_key(vm_identifier: str, vm_name: str) -> str:
+    """Create a stable VM key that prefers the backend VM identifier."""
+    if vm_identifier and vm_identifier != vm_name:
+        return slugify(vm_identifier)
+    return _make_unique_key(vm_name)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: UnraidConfigEntry,
@@ -58,18 +65,23 @@ async def async_setup_entry(
     # Container switches - only if docker collector is enabled AND docker service is enabled
     if coordinator.is_collector_enabled("docker") and coordinator.is_docker_enabled():
         containers = data.containers if data else []
+        seen_container_names: set[str] = set()
         for container in containers or []:
             container_name = getattr(container, "name", None)
-            if container_name:
+            if container_name and container_name not in seen_container_names:
+                seen_container_names.add(container_name)
                 entities.append(UnraidContainerSwitch(coordinator, container_name))
 
     # VM switches - only if vm collector is enabled AND vm service is enabled
     if coordinator.is_collector_enabled("vm") and coordinator.is_vm_enabled():
         vms = data.vms if data else []
+        seen_vm_identifiers: set[str] = set()
         for vm in vms or []:
+            vm_identifier = getattr(vm, "id", None) or getattr(vm, "name", None)
             vm_name = getattr(vm, "name", None)
-            if vm_name:
-                entities.append(UnraidVMSwitch(coordinator, vm_name))
+            if vm_identifier and vm_name and vm_identifier not in seen_vm_identifiers:
+                seen_vm_identifiers.add(vm_identifier)
+                entities.append(UnraidVMSwitch(coordinator, vm_identifier, vm_name))
 
     _LOGGER.debug("Adding %d Unraid switch entities", len(entities))
     async_add_entities(entities)
@@ -223,16 +235,20 @@ class UnraidVMSwitch(UnraidBaseEntity, SwitchEntity):
     def __init__(
         self,
         coordinator: UnraidDataUpdateCoordinator,
-        vm_name: str,
+        vm_identifier: str,
+        vm_name: str | None = None,
     ) -> None:
         """
         Initialize the switch.
 
-        Uses VM name as the stable identifier.
+        Uses the backend VM identifier when available so VM renames and
+        punctuation changes do not create duplicate entities.
         """
+        if vm_name is None:
+            vm_name = vm_identifier
+        self._vm_identifier = vm_identifier
         self._vm_name = vm_name
-        # Use unique key from VM name for stable unique_id
-        safe_name = _make_unique_key(vm_name)
+        safe_name = _make_vm_unique_key(vm_identifier, vm_name)
         super().__init__(coordinator, f"vm_{safe_name}")
         self._attr_translation_key = "vm"
         self._attr_translation_placeholders = {"name": vm_name}
@@ -251,13 +267,19 @@ class UnraidVMSwitch(UnraidBaseEntity, SwitchEntity):
         super()._handle_coordinator_update()
 
     def _find_vm(self) -> Any | None:
-        """Find the VM in coordinator data by name."""
+        """Find the VM in coordinator data by stable identifier."""
         data = self.coordinator.data
         if not data or not data.vms:
             return None
 
+        vm_identifier = getattr(self, "_vm_identifier", None)
+        vm_name = getattr(self, "_vm_name", None)
+
         for vm in data.vms:
-            if getattr(vm, "name", None) == self._vm_name:
+            current_identifier = getattr(vm, "id", None) or getattr(vm, "name", None)
+            if vm_identifier is not None and current_identifier == vm_identifier:
+                return vm
+            if vm_name is not None and getattr(vm, "name", None) == vm_name:
                 return vm
         return None
 

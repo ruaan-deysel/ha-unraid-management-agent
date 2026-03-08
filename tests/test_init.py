@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
-from uma_api import UnraidConnectionError
 
+from custom_components.unraid_management_agent import (
+    _async_migrate_legacy_entity_unique_ids,
+    _make_vm_key,
+)
+from custom_components.unraid_management_agent.api import UnraidConnectionError
 from custom_components.unraid_management_agent.const import DOMAIN
+from custom_components.unraid_management_agent.coordinator import UnraidData
 
 
 async def test_setup_entry_success(
@@ -173,3 +178,100 @@ async def test_services_registered(
     assert hass.services.has_service(DOMAIN, "array_stop")
     assert hass.services.has_service(DOMAIN, "parity_check_start")
     assert hass.services.has_service(DOMAIN, "parity_check_stop")
+
+
+def test_make_vm_key_uses_identifier_when_name_changes() -> None:
+    """Test VM key prefers the backend identifier when it differs from the display name."""
+    assert (
+        _make_vm_key("Windows Server 2016", "Home Assistant") == "windows_server_2016"
+    )
+
+
+async def test_migrate_legacy_unique_ids_skips_when_no_data(
+    hass: HomeAssistant,
+    mock_config_entry,
+) -> None:
+    """Test legacy unique ID migration exits early when coordinator data is unavailable."""
+    coordinator = MagicMock()
+    coordinator.data = None
+
+    await _async_migrate_legacy_entity_unique_ids(hass, mock_config_entry, coordinator)
+
+
+async def test_migrate_legacy_vm_unique_id_skips_when_target_exists(
+    hass: HomeAssistant,
+    mock_config_entry,
+) -> None:
+    """Test legacy VM migration does not rewrite entities when the target unique ID already exists."""
+    coordinator = MagicMock()
+    vm = MagicMock()
+    vm.id = "Windows Server 2016"
+    vm.name = "Home Assistant"
+    coordinator.data = UnraidData(vms=[vm])
+
+    source_entry = MagicMock(
+        domain="switch",
+        unique_id=f"{mock_config_entry.entry_id}_vm_switch_Windows Server 2016",
+        entity_id="switch.cube_vm_home_assistant_old",
+    )
+    target_entry = MagicMock(
+        domain="switch",
+        unique_id=f"{mock_config_entry.entry_id}_vm_windows_server_2016",
+        entity_id="switch.cube_vm_home_assistant",
+    )
+    registry = MagicMock()
+
+    with (
+        patch(
+            "custom_components.unraid_management_agent.er.async_get",
+            return_value=registry,
+        ),
+        patch(
+            "custom_components.unraid_management_agent.er.async_entries_for_config_entry",
+            return_value=[source_entry, target_entry],
+        ),
+    ):
+        await _async_migrate_legacy_entity_unique_ids(
+            hass, mock_config_entry, coordinator
+        )
+
+    registry.async_update_entity.assert_not_called()
+
+
+async def test_migrate_legacy_vm_unique_id_handles_registry_update_error(
+    hass: HomeAssistant,
+    mock_config_entry,
+) -> None:
+    """Test legacy VM migration tolerates registry update errors."""
+    coordinator = MagicMock()
+    vm = MagicMock()
+    vm.id = "Windows Server 2016"
+    vm.name = "Home Assistant"
+    coordinator.data = UnraidData(vms=[vm])
+
+    source_entry = MagicMock(
+        domain="switch",
+        unique_id=f"{mock_config_entry.entry_id}_vm_switch_Windows Server 2016",
+        entity_id="switch.cube_vm_home_assistant_old",
+    )
+    registry = MagicMock()
+    registry.async_update_entity.side_effect = ValueError("duplicate entity")
+
+    with (
+        patch(
+            "custom_components.unraid_management_agent.er.async_get",
+            return_value=registry,
+        ),
+        patch(
+            "custom_components.unraid_management_agent.er.async_entries_for_config_entry",
+            return_value=[source_entry],
+        ),
+    ):
+        await _async_migrate_legacy_entity_unique_ids(
+            hass, mock_config_entry, coordinator
+        )
+
+    registry.async_update_entity.assert_called_once_with(
+        "switch.cube_vm_home_assistant_old",
+        new_unique_id=f"{mock_config_entry.entry_id}_vm_windows_server_2016",
+    )

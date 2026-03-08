@@ -7,6 +7,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2026.3.0] - 2026-03-01
+
+### Added
+
+- **Disk I/O Sensors**: New per-disk read and write byte counters (#37)
+  - `sensor.{hostname}_disk_{name}_read` — Total bytes read (TOTAL_INCREASING)
+  - `sensor.{hostname}_disk_{name}_write` — Total bytes written (TOTAL_INCREASING)
+  - Includes `read_ops` / `write_ops` as extra state attributes
+  - Disabled by default to avoid entity clutter; enable per-disk as needed
+
+- **Disk SMART Errors Sensor**: New per-disk SMART error count sensor (#37)
+  - `sensor.{hostname}_disk_{name}_smart_errors` — Exposes SMART error count with `smart_status` attribute
+  - Disabled by default; enable for disks you want to monitor
+
+- **WebSocket Event Handling**: Added support for additional WebSocket event types
+  - `NUT_STATUS_UPDATE` — Real-time UPS status updates via WebSocket
+  - `HARDWARE_UPDATE` — Real-time system hardware updates (fans, temps, power)
+  - `COLLECTOR_STATE_CHANGE` — Collector enable/disable state changes
+  - `NOTIFICATIONS_RESPONSE` — Full notification response handling
+
+- **Parity Schedule Attributes**: Exposed new `mode`, `month`, and `correcting` attributes on the next parity check sensor
+
+- **System Status Sensor**: Added `sensor.{hostname}_system_status` to expose high-level runtime state during shutdown and reboot actions
+  - Reports `shutdown_requested`, `stopping_array`, `shutting_down`, `server_shutdown`, `reboot_requested`, `server_rebooting`, `array_stopped`, `starting_array`, `online`, and `offline`
+  - Remains available while the server is intentionally going offline so users can see action progress instead of a generic unavailable state
+  - Includes `pending_action`, `action_message`, `action_requested_at`, `array_state`, and WebSocket connection attributes for diagnostics
+
+### Changed
+
+- **uma-api 1.6.0**: Upgraded minimum dependency from `uma-api>=1.5.0` to `uma-api>=1.6.0`
+  - Leverages new computed properties (`computed_used_percent`, `is_physical`, `is_healthy`, `is_enabled`, `is_parity_check_running`, `has_smart_errors`, `temperature_status()`, `normalized_name`, `most_recent`, `EnergyIntegrator`, `RateCalculator`, `parse_timestamp`)
+  - Removes ~400 lines of manual workarounds, fallback calculations, and defensive `getattr()` calls that are now handled by the library
+
+- **Energy Sensors Refactored**: UPS and GPU energy sensors now use `uma-api`'s `EnergyIntegrator` utility
+  - Replaces manual trapezoidal integration with library implementation
+  - Uses `time.monotonic()` for drift-free timing
+  - Simplified state restore logic
+
+- **Fan Sensor Stability**: Fan sensors now use `normalized_name` from the API for stable unique IDs
+  - Original fan name preserved as `original_name` attribute when it differs from the normalized form
+  - Handles duplicate normalized names gracefully with index-based suffixes
+
+- **Network/Disk Filtering**: Physical interface and disk detection now uses `is_physical` property from the API instead of local regex/heuristic matching
+
+- **Parity Schedule Sensor**: Next parity check calculation now fully delegated to `uma-api`
+  - Removed ~160 lines of manual schedule computation (daily/weekly/monthly/yearly modes)
+  - Library returns timezone-aware UTC datetimes; removed local timezone workaround
+  - Supports yearly parity schedule mode (previously returned "unknown")
+
+- **Disk Temperature Monitoring**: Repair issue creation now uses `disk.temperature_status()` and `disk.get_temp_thresholds()` from the API (#35)
+  - Respects per-disk and global (HDD/SSD) temperature thresholds configured in Unraid
+  - Removes hardcoded threshold logic and SSD detection heuristics from the integration
+
+- **Usage Calculations**: Array, flash, docker vdisk, log filesystem, share, and ZFS pool usage sensors now use `computed_used_percent` from the API instead of manual bytes-to-percent calculations
+
+- **Collector Status**: `is_collector_enabled()` now uses `get_collector_by_name()` lookup instead of iterating the collector list
+
+### Removed
+
+- Removed manual `_compute_next_parity_check()` function (replaced by `uma-api` `next_check_datetime`)
+- Removed manual `_parse_timestamp()` function (replaced by `uma-api` `parse_timestamp()`)
+- Removed `_coerce_number()` helper (no longer needed with typed API models)
+- Removed `_is_physical_network_interface()` regex matcher (replaced by `is_physical` property)
+- Removed `_is_physical_disk()` heuristic (replaced by `is_physical` property)
+- Removed `_is_ssd()` and `_get_disk_temp_thresholds()` from repairs (replaced by API methods)
+- Removed manual CPU core count fix heuristic
+- Removed special-case `NotificationsResponse` parsing in WebSocket handler (now handled by `parse_event()`)
+
+### Fixed
+
+- **Next Parity Check "Unknown"**: Fixed `sensor.{hostname}_next_parity_check` showing "unknown" for yearly parity schedules (#36)
+- **Parity Schedule Timezones**: Next parity check timestamps are now timezone-aware (UTC) instead of naive datetimes
+- **Disk Temperature Thresholds**: Integration now respects Unraid's configured warning/critical temperatures instead of using hardcoded values (#35)
+- **Legacy Entity ID Migration**: Added non-destructive entity registry migration for legacy container, VM, disk, and fan unique IDs to reduce duplicate `_2` entities after upgrades (#27)
+  - Migrates older container/VM IDs that were tied to backend object IDs instead of stable names
+  - Migrates older sanitized disk IDs to the current release-line format before platform setup so existing entity_ids are retained when possible
+  - Migrates pre-`normalized_name` fan IDs to the current stable fan key format to avoid another round of entity duplication on upgrade
+  - VM switches now prefer the backend VM identifier for unique IDs, which prevents future duplicates when the VM display name changes or gets normalized differently by the API
+  - Switch setup now de-duplicates repeated container and VM records within a single coordinator payload before entities are created
+- **WebSocket Runtime Compatibility**: Fixed WebSocket connection state checks on current Home Assistant runtime versions where the underlying client object no longer exposes a `closed` attribute
+  - Prevents repeated `ClientConnection` attribute errors during live updates
+  - Restores clean status updates for the new system status sensor and other coordinator-driven entities during dev-instance verification
+
 ## [2026.2.2] - 2026-02-08
 
 ### Added

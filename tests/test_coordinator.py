@@ -9,13 +9,14 @@ from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
-from uma_api.constants import EventType
-from uma_api.events import WebSocketEvent
 
 from custom_components.unraid_management_agent import (
     UnraidDataUpdateCoordinator,
     async_setup,
 )
+from custom_components.unraid_management_agent.api.constants import EventType
+from custom_components.unraid_management_agent.api.events import WebSocketEvent
+from custom_components.unraid_management_agent.api.models import SystemInfo
 from custom_components.unraid_management_agent.const import DOMAIN
 from custom_components.unraid_management_agent.coordinator import UnraidData
 
@@ -333,6 +334,165 @@ class TestCoordinatorWebSocketEvents:
         ):
             # Should not raise, error is logged
             coordinator._handle_raw_message(data)
+
+
+class TestCoordinatorSystemStatus:
+    """Tests for coordinator system power action state tracking."""
+
+    @pytest.fixture
+    def coordinator(self, hass: HomeAssistant) -> UnraidDataUpdateCoordinator:
+        """Create a coordinator for testing."""
+        entry = _create_mock_entry(hass)
+        mock_client = MagicMock()
+        mock_client.host = "192.168.1.100"
+        mock_client.port = 8043
+        return UnraidDataUpdateCoordinator(
+            hass,
+            entry=entry,
+            client=mock_client,
+            enable_websocket=True,
+        )
+
+    def test_set_and_clear_pending_system_action(self, coordinator) -> None:
+        """Test setting and clearing pending system actions."""
+        coordinator.async_update_listeners = MagicMock()
+
+        coordinator.set_pending_system_action("shutdown", "Shutting down server")
+
+        assert coordinator.pending_system_action == "shutdown"
+        assert coordinator.pending_system_action_message == "Shutting down server"
+        assert coordinator.pending_system_action_requested_at is not None
+        assert coordinator._pending_system_action_disconnected is False
+        coordinator.async_update_listeners.assert_called_once()
+
+        coordinator._clear_pending_system_action()
+
+        assert coordinator.pending_system_action is None
+        assert coordinator.pending_system_action_message is None
+        assert coordinator.pending_system_action_requested_at is None
+        assert coordinator._pending_system_action_disconnected is False
+
+    @pytest.mark.parametrize(
+        "scenario",
+        [
+            {
+                "pending_action": "shutdown",
+                "last_update_success": False,
+                "array_state": "started",
+                "has_data": True,
+                "expected": "server_shutdown",
+            },
+            {
+                "pending_action": "shutdown",
+                "last_update_success": True,
+                "array_state": "stopping",
+                "has_data": True,
+                "expected": "stopping_array",
+            },
+            {
+                "pending_action": "shutdown",
+                "last_update_success": True,
+                "array_state": "stopped",
+                "has_data": True,
+                "expected": "shutting_down",
+            },
+            {
+                "pending_action": "shutdown",
+                "last_update_success": True,
+                "array_state": "started",
+                "has_data": True,
+                "expected": "shutdown_requested",
+            },
+            {
+                "pending_action": "reboot",
+                "last_update_success": False,
+                "array_state": "started",
+                "has_data": True,
+                "expected": "server_rebooting",
+            },
+            {
+                "pending_action": "reboot",
+                "last_update_success": True,
+                "array_state": "stopping",
+                "has_data": True,
+                "expected": "stopping_array",
+            },
+            {
+                "pending_action": "reboot",
+                "last_update_success": True,
+                "array_state": "stopped",
+                "has_data": True,
+                "expected": "server_rebooting",
+            },
+            {
+                "pending_action": "reboot",
+                "last_update_success": True,
+                "array_state": "started",
+                "has_data": True,
+                "expected": "reboot_requested",
+            },
+            {
+                "pending_action": None,
+                "last_update_success": False,
+                "array_state": "started",
+                "has_data": True,
+                "expected": "offline",
+            },
+            {
+                "pending_action": None,
+                "last_update_success": True,
+                "array_state": "starting",
+                "has_data": True,
+                "expected": "starting_array",
+            },
+            {
+                "pending_action": None,
+                "last_update_success": True,
+                "array_state": "stopping",
+                "has_data": True,
+                "expected": "stopping_array",
+            },
+            {
+                "pending_action": None,
+                "last_update_success": True,
+                "array_state": "stopped",
+                "has_data": True,
+                "expected": "array_stopped",
+            },
+            {
+                "pending_action": None,
+                "last_update_success": True,
+                "array_state": "started",
+                "has_data": True,
+                "expected": "online",
+            },
+            {
+                "pending_action": "shutdown",
+                "last_update_success": True,
+                "array_state": None,
+                "has_data": False,
+                "expected": "server_shutdown",
+            },
+        ],
+    )
+    def test_system_status_variants(
+        self,
+        coordinator,
+        scenario: dict[str, str | bool | None],
+    ) -> None:
+        """Test system status for shutdown, reboot, and normal states."""
+        coordinator._pending_system_action = scenario["pending_action"]
+        coordinator.last_update_success = bool(scenario["last_update_success"])
+
+        if scenario["has_data"]:
+            coordinator.data = UnraidData()
+            if scenario["array_state"] is not None:
+                coordinator.data.array = mock_array_status()
+                coordinator.data.array.state = scenario["array_state"]
+        else:
+            coordinator.data = None
+
+        assert coordinator.system_status == scenario["expected"]
 
 
 class TestCoordinatorWebSocketManagement:
@@ -1515,6 +1675,7 @@ class TestCoordinatorIsCollectorEnabled:
         coordinator.data = UnraidData()
         mock_collectors = MagicMock()
         mock_collectors.collectors = []
+        mock_collectors.get_collector_by_name = MagicMock(return_value=None)
         coordinator.data.collectors = mock_collectors
         # Collector not in list should default to True
         assert coordinator.is_collector_enabled("docker") is True
@@ -1527,6 +1688,7 @@ class TestCoordinatorIsCollectorEnabled:
         mock_collector.enabled = True
         mock_collectors = MagicMock()
         mock_collectors.collectors = [mock_collector]
+        mock_collectors.get_collector_by_name = MagicMock(return_value=mock_collector)
         coordinator.data.collectors = mock_collectors
 
         assert coordinator.is_collector_enabled("docker") is True
@@ -1539,6 +1701,7 @@ class TestCoordinatorIsCollectorEnabled:
         mock_collector.enabled = False
         mock_collectors = MagicMock()
         mock_collectors.collectors = [mock_collector]
+        mock_collectors.get_collector_by_name = MagicMock(return_value=mock_collector)
         coordinator.data.collectors = mock_collectors
 
         assert coordinator.is_collector_enabled("zfs") is False
@@ -1551,6 +1714,7 @@ class TestCoordinatorIsCollectorEnabled:
         mock_collector.enabled = True
         mock_collectors = MagicMock()
         mock_collectors.collectors = [mock_collector]
+        mock_collectors.get_collector_by_name = MagicMock(return_value=None)
         coordinator.data.collectors = mock_collectors
 
         # Unknown collector should default to True
@@ -2428,7 +2592,6 @@ class TestCoordinatorAPIErrorHandling:
     async def test_api_error_logs_warning_once(self, coordinator, mock_repairs) -> None:
         """Test API error logs warning only once when repairs module fails."""
         from homeassistant.helpers.update_coordinator import UpdateFailed
-        from uma_api.models import SystemInfo
 
         # Setup valid API responses
         coordinator.client.get_system_info = AsyncMock(
@@ -2479,8 +2642,6 @@ class TestCoordinatorAPIErrorHandling:
         self, coordinator, mock_repairs
     ) -> None:
         """Test disk_settings error is logged but update continues."""
-        from uma_api.models import SystemInfo
-
         coordinator.client.get_system_info = AsyncMock(
             return_value=SystemInfo(hostname="tower", uptime_seconds=1000)
         )
@@ -2532,8 +2693,6 @@ class TestCoordinatorAPIErrorHandling:
         self, coordinator, mock_repairs
     ) -> None:
         """Test mover_settings error is logged but update continues."""
-        from uma_api.models import SystemInfo
-
         coordinator.client.get_system_info = AsyncMock(
             return_value=SystemInfo(hostname="tower", uptime_seconds=1000)
         )
@@ -2585,8 +2744,6 @@ class TestCoordinatorAPIErrorHandling:
         self, coordinator, mock_repairs
     ) -> None:
         """Test parity_schedule error is logged but update continues."""
-        from uma_api.models import SystemInfo
-
         coordinator.client.get_system_info = AsyncMock(
             return_value=SystemInfo(hostname="tower", uptime_seconds=1000)
         )
@@ -2638,8 +2795,6 @@ class TestCoordinatorAPIErrorHandling:
         self, coordinator, mock_repairs
     ) -> None:
         """Test parity_history error is logged but update continues."""
-        from uma_api.models import SystemInfo
-
         coordinator.client.get_system_info = AsyncMock(
             return_value=SystemInfo(hostname="tower", uptime_seconds=1000)
         )
@@ -2689,8 +2844,6 @@ class TestCoordinatorAPIErrorHandling:
     @pytest.mark.asyncio
     async def test_flash_info_error_continues(self, coordinator, mock_repairs) -> None:
         """Test flash_info error is logged but update continues."""
-        from uma_api.models import SystemInfo
-
         coordinator.client.get_system_info = AsyncMock(
             return_value=SystemInfo(hostname="tower", uptime_seconds=1000)
         )
@@ -2740,8 +2893,6 @@ class TestCoordinatorAPIErrorHandling:
     @pytest.mark.asyncio
     async def test_plugins_error_continues(self, coordinator, mock_repairs) -> None:
         """Test plugins error is logged but update continues."""
-        from uma_api.models import SystemInfo
-
         coordinator.client.get_system_info = AsyncMock(
             return_value=SystemInfo(hostname="tower", uptime_seconds=1000)
         )
@@ -2793,8 +2944,6 @@ class TestCoordinatorAPIErrorHandling:
         self, coordinator, mock_repairs
     ) -> None:
         """Test update_status error is logged but update continues."""
-        from uma_api.models import SystemInfo
-
         coordinator.client.get_system_info = AsyncMock(
             return_value=SystemInfo(hostname="tower", uptime_seconds=1000)
         )
@@ -2846,8 +2995,6 @@ class TestCoordinatorAPIErrorHandling:
         self, coordinator, mock_repairs
     ) -> None:
         """Test docker_settings error is logged but update continues."""
-        from uma_api.models import SystemInfo
-
         coordinator.client.get_system_info = AsyncMock(
             return_value=SystemInfo(hostname="tower", uptime_seconds=1000)
         )
@@ -2897,8 +3044,6 @@ class TestCoordinatorAPIErrorHandling:
     @pytest.mark.asyncio
     async def test_vm_settings_error_continues(self, coordinator, mock_repairs) -> None:
         """Test vm_settings error is logged but update continues."""
-        from uma_api.models import SystemInfo
-
         coordinator.client.get_system_info = AsyncMock(
             return_value=SystemInfo(hostname="tower", uptime_seconds=1000)
         )
@@ -2950,8 +3095,6 @@ class TestCoordinatorAPIErrorHandling:
         self, coordinator, mock_repairs
     ) -> None:
         """Test connection restore logs info when previously unavailable."""
-        from uma_api.models import SystemInfo
-
         # Set unavailable flag to True first
         coordinator._unavailable_logged = True
 

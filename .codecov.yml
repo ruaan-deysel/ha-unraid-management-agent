@@ -4,7 +4,7 @@
 codecov:
   require_ci_to_pass: yes
   notify:
-    after_n_builds: 2  # Wait for both Python 3.12 and 3.13 tests
+    after_n_builds: 1 # Single coverage upload from the Python 3.14 test job
 
 coverage:
   precision: 2
@@ -36,7 +36,7 @@ ignore:
   - "**/__pycache__/**"
   - "**/*.pyc"
   - "**/test_*.py"
-  - "scripts/**"
+  - "script/**"
   - "htmlcov/**"
 
 flags:

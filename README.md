@@ -29,6 +29,7 @@ Complete Home Assistant custom integration for monitoring and controlling Unraid
 - **Virtual Machines**: Start, stop, restart VMs via switches
 - **Array Management**: Start/stop array with buttons
 - **Parity Checks**: Start/stop parity checks with buttons
+- **System Power Actions**: Reboot and shutdown buttons with explicit system-status tracking
 
 ### ⚡ Real-Time Updates
 
@@ -140,8 +141,45 @@ Ensure your firewall allows:
 4. Enter your Unraid server details:
    - Host: `192.168.1.100` (your Unraid IP)
    - Port: `8043` (default)
-   - Update Interval: `30` seconds
    - Enable WebSocket: `true` (recommended)
+
+### Configuration Parameters
+
+- **Host**: IP address or DNS name of your Unraid server
+- **Port**: Port exposed by the Unraid Management Agent plugin, `8043` by default
+- **Enable WebSocket**: Recommended. Keeps entity state near real-time and lets the integration fall back to polling automatically if the socket drops
+- **Polling interval**: Fixed at 30 seconds when REST polling is needed. This is not a user-configurable option
+
+### Removal
+
+1. In Home Assistant, go to **Settings** → **Devices & Services**
+2. Open **Unraid Management Agent**
+3. Choose **Delete** to remove the config entry and all entities created by the integration
+4. If installed through HACS, remove the repository from HACS and restart Home Assistant
+5. If installed manually, delete `custom_components/unraid_management_agent` from your Home Assistant config directory and restart Home Assistant
+6. If you no longer need the backend service, uninstall or disable the Unraid Management Agent plugin from your Unraid server
+
+## Supported Environment
+
+- **Supported Unraid versions**: Unraid 6.9.0 and newer, including current 7.x releases
+- **Supported Home Assistant setup**: UI-based config entry setup only. YAML configuration is not supported
+- **Supported subsystems**: Array, disks, Docker, virtual machines, network interfaces, UPS, GPU metrics, shares, flash drive health, parity scheduling, mover status, plugins, and ZFS where exposed by the Unraid Management Agent
+- **Conditional entities**: Container, VM, UPS, GPU, network, and ZFS entities only appear when those services or collectors are available on the target server
+
+## Known Limitations
+
+- The integration depends on the separate Unraid Management Agent plugin running on the Unraid server
+- Discovery is not implemented. You must add the integration manually with the server host and port
+- If WebSocket is unavailable, the integration falls back to REST polling, so some state changes can be delayed by up to 30 seconds
+- Some entities are intentionally conditional and will not be created unless the matching Unraid feature is enabled or the collector is available
+- Older installations can still have historical entity registry entries from previous naming schemes; the integration migrates the known legacy unique IDs during startup, but it does not delete user-managed historical registry rows
+
+## Use Cases
+
+- Monitor core Unraid health in Home Assistant dashboards, including CPU, RAM, temperatures, array status, and flash health
+- Automate maintenance workflows such as parity checks, array start and stop, and graceful shutdown during UPS events
+- Control Docker containers and virtual machines from dashboards, scripts, and automations
+- Feed supported power and energy entities into Home Assistant’s long-term statistics and Energy Dashboard
 
 ## Entity Overview
 
@@ -152,6 +190,7 @@ Ensure your firewall allows:
 - CPU Usage (%)
 - RAM Usage (%)
 - CPU Temperature (°C)
+- System Status
 - Motherboard Temperature (°C) - conditional, only if available
 - Fan {name} (RPM) - dynamic, one per detected fan
 - Uptime (human-readable format)
@@ -215,12 +254,15 @@ Ensure your firewall allows:
 - Container {name} - Start/stop Docker containers
 - VM {name} - Start/stop virtual machines
 
-### Buttons (4)
+### Buttons (6 + dynamic user scripts)
 
 - Start Array
 - Stop Array
 - Start Parity Check
 - Stop Parity Check
+- Shutdown System
+- Reboot System
+- User script buttons are exposed when available and are disabled by default to avoid noise
 
 ## Services
 
@@ -365,15 +407,15 @@ automation:
 
 ### Components
 
-- **API Client** (`api_client.py`) - REST API communication with aiohttp
-- **WebSocket Client** (`websocket_client.py`) - Real-time event streaming
-- **Data Coordinator** (`__init__.py`) - Data management and updates
+- **API Client** (`api/client.py`) - REST API communication with aiohttp
+- **WebSocket Client** (`api/websocket.py`) - Real-time event streaming
+- **Data Coordinator** (`coordinator.py`) - Data management and updates
 - **Config Flow** (`config_flow.py`) - UI-based configuration
 - **Platforms**:
   - `sensor.py` - System, array, GPU, UPS, network sensors
   - `binary_sensor.py` - Status indicators
   - `switch.py` - Container and VM control
-  - `button.py` - Array and parity check control
+  - `button.py` - Array, parity, system power, and user-script control
 
 ### Data Flow
 
@@ -393,7 +435,7 @@ Unraid Server (REST API + WebSocket)
 
 1. **Initial Load**: REST API fetches all data on startup
 2. **Real-Time Updates**: WebSocket receives events and updates coordinator
-3. **Fallback Polling**: REST API polls at configured interval if WebSocket fails
+3. **Fallback Polling**: REST API polls every 30 seconds if WebSocket fails or is disabled
 4. **Control Actions**: REST API sends commands, coordinator refreshes immediately
 
 ## Troubleshooting
@@ -414,9 +456,9 @@ Unraid Server (REST API + WebSocket)
 
 **Entities Not Updating**
 
-- Check update interval in options
 - Verify WebSocket connection in logs
 - Test REST API manually
+- Remember that REST fallback polling is fixed at 30 seconds
 
 **Missing Entities**
 
@@ -467,7 +509,7 @@ pytest -n auto
 **CI/CD Pipeline:**
 
 - Automated tests run on every push and pull request
-- Tests run on Python 3.12 and 3.13
+- Tests run on Python 3.14
 - Coverage reports automatically uploaded to Codecov
 - Test results tracked in GitHub Actions
 
@@ -519,7 +561,7 @@ Contributions are welcome! Please:
 3. Make your changes
 4. Run linting and tests:
    ```bash
-   scripts/lint
+   script/lint
    pytest
    ```
 5. Commit your changes (`git commit -m 'Add amazing feature'`)
@@ -538,7 +580,7 @@ Contributions are welcome! Please:
 All pull requests must pass:
 
 - ✅ Ruff linting (format and check)
-- ✅ Pytest test suite (Python 3.12 & 3.13)
+- ✅ Pytest test suite (Python 3.14)
 - ✅ Coverage threshold (60% minimum)
 - ✅ Manifest and configuration validation
 

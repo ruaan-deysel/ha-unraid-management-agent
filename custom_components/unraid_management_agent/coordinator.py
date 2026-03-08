@@ -10,10 +10,12 @@ from datetime import timedelta
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from uma_api import UnraidClient
-from uma_api.constants import EventType
-from uma_api.events import WebSocketEvent, parse_event
-from uma_api.models import (
+from homeassistant.util import dt as dt_util
+
+from .api import UnraidClient
+from .api.constants import EventType
+from .api.events import WebSocketEvent, parse_event
+from .api.models import (
     ArrayStatus,
     CollectorStatus,
     ContainerInfo,
@@ -40,8 +42,7 @@ from uma_api.models import (
     ZFSPool,
     ZFSSnapshot,
 )
-from uma_api.websocket import UnraidWebSocketClient
-
+from .api.websocket import UnraidWebSocketClient
 from .const import (
     DOMAIN,
     UPDATE_INTERVAL,
@@ -112,6 +113,10 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
         self._ws_client: UnraidWebSocketClient | None = None
         self._ws_task: asyncio.Task[None] | None = None
         self._unavailable_logged = False
+        self._pending_system_action: str | None = None
+        self._pending_system_action_message: str | None = None
+        self._pending_system_action_requested_at = None
+        self._pending_system_action_disconnected = False
 
         super().__init__(
             hass,
@@ -137,6 +142,80 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
         """Return True if websocket is connected."""
         return self._ws_client is not None and self._ws_client.is_connected
 
+    @property
+    def pending_system_action(self) -> str | None:
+        """Return the pending reboot or shutdown action, if any."""
+        return self._pending_system_action
+
+    @property
+    def pending_system_action_message(self) -> str | None:
+        """Return the last action response message for the pending system action."""
+        return self._pending_system_action_message
+
+    @property
+    def pending_system_action_requested_at(self):
+        """Return when the current pending system action was requested."""
+        return self._pending_system_action_requested_at
+
+    def set_pending_system_action(
+        self,
+        action: str,
+        message: str | None = None,
+    ) -> None:
+        """Track a reboot or shutdown action requested through the integration."""
+        self._pending_system_action = action
+        self._pending_system_action_message = message
+        self._pending_system_action_requested_at = dt_util.utcnow()
+        self._pending_system_action_disconnected = False
+        self.async_update_listeners()
+
+    def _clear_pending_system_action(self) -> None:
+        """Clear any pending reboot or shutdown action state."""
+        self._pending_system_action = None
+        self._pending_system_action_message = None
+        self._pending_system_action_requested_at = None
+        self._pending_system_action_disconnected = False
+
+    @property
+    def system_status(self) -> str:
+        """Return a high-level status string for the Unraid system."""
+        data = self.data
+        array_state = (
+            getattr(data.array, "state", None) if data and data.array else None
+        )
+        normalized_array_state = (
+            str(array_state).lower() if array_state is not None else None
+        )
+
+        if self._pending_system_action == "shutdown":
+            if not self.last_update_success or data is None:
+                return "server_shutdown"
+            if normalized_array_state == "stopping":
+                return "stopping_array"
+            if normalized_array_state == "stopped":
+                return "shutting_down"
+            return "shutdown_requested"
+
+        if self._pending_system_action == "reboot":
+            if not self.last_update_success or data is None:
+                return "server_rebooting"
+            if normalized_array_state == "stopping":
+                return "stopping_array"
+            if normalized_array_state == "stopped":
+                return "server_rebooting"
+            return "reboot_requested"
+
+        if not self.last_update_success:
+            return "offline"
+
+        if normalized_array_state == "starting":
+            return "starting_array"
+        if normalized_array_state == "stopping":
+            return "stopping_array"
+        if normalized_array_state == "stopped":
+            return "array_stopped"
+        return "online"
+
     def is_collector_enabled(self, collector_name: str) -> bool:
         """
         Check if a specific collector is enabled.
@@ -152,10 +231,9 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
             # If we can't determine collector status, default to enabled
             return True
 
-        collectors = self.data.collectors.collectors or []
-        for collector in collectors:
-            if getattr(collector, "name", "") == collector_name:
-                return getattr(collector, "enabled", True)
+        collector = self.data.collectors.get_collector_by_name(collector_name)
+        if collector is not None:
+            return getattr(collector, "enabled", True)
 
         # Collector not found in list, default to enabled
         return True
@@ -384,6 +462,13 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
                 _LOGGER.info("Connection to Unraid server restored")
                 self._unavailable_logged = False
 
+            if self._pending_system_action and self._pending_system_action_disconnected:
+                _LOGGER.info(
+                    "Clearing pending system %s action after server became reachable again",
+                    self._pending_system_action,
+                )
+                self._clear_pending_system_action()
+
             # Mark update as successful
             self.update_success = True
 
@@ -428,6 +513,8 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
             if not self._unavailable_logged:
                 _LOGGER.warning("Error communicating with Unraid API: %s", err)
                 self._unavailable_logged = True
+            if self._pending_system_action:
+                self._pending_system_action_disconnected = True
             self.update_success = False
             raise UpdateFailed(
                 translation_domain=DOMAIN,
@@ -439,7 +526,7 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
         if not self.data:
             return
 
-        # Update coordinator data based on event type using uma-api EventType enum
+        # Update coordinator data based on event type using the vendored EventType enum
         if event.event_type == EventType.SYSTEM_UPDATE:
             self.data.system = event.data
         elif event.event_type == EventType.ARRAY_STATUS_UPDATE:
@@ -469,6 +556,9 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
         elif event.event_type == EventType.NOTIFICATION_UPDATE:
             # WebSocket notification updates come as NotificationsResponse
             self.data.notifications = event.data
+        elif event.event_type == EventType.NOTIFICATIONS_RESPONSE:
+            # Full notifications response with overview and counts
+            self.data.notifications = event.data
         elif event.event_type == EventType.ZFS_POOL_UPDATE:
             self.data.zfs_pools = (
                 event.data if isinstance(event.data, list) else [event.data]
@@ -483,6 +573,15 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
             )
         elif event.event_type == EventType.ZFS_ARC_UPDATE:
             self.data.zfs_arc = event.data
+        elif event.event_type == EventType.NUT_STATUS_UPDATE:
+            # NUT (Network UPS Tools) status is stored as UPS data
+            self.data.ups = event.data
+        elif event.event_type == EventType.HARDWARE_UPDATE:
+            # Hardware updates contain system info (fans, temps, power)
+            self.data.system = event.data
+        elif event.event_type == EventType.COLLECTOR_STATE_CHANGE:
+            # Collector state changes update the collectors status
+            self.data.collectors = event.data
 
         # Notify listeners of data update without resetting the polling timer.
         # Using async_set_updated_data would cancel and reschedule the poll
@@ -493,19 +592,6 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
     def _handle_raw_message(self, data: dict) -> None:
         """Handle raw WebSocket message and parse to typed event."""
         try:
-            # Handle special case where notifications come as NotificationsResponse
-            # instead of a list of Notification objects
-            if (
-                isinstance(data, dict)
-                and "notifications" in data
-                and "overview" in data
-            ):
-                # This is a NotificationsResponse format, store the full response
-                if self.data:
-                    self.data.notifications = NotificationsResponse.model_validate(data)
-                    self.async_update_listeners()
-                return
-
             event = parse_event(data)
             self._handle_websocket_event(event)
         except Exception as err:
@@ -522,7 +608,7 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
             return
 
         try:
-            # Create WebSocket client from uma-api with auto-reconnect
+            # Create the vendored WebSocket client with auto-reconnect
             self._ws_client = UnraidWebSocketClient(
                 host=self.client.host,
                 port=self.client.port,

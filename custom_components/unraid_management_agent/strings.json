@@ -63,6 +63,9 @@
       "uptime": {
         "name": "Uptime"
       },
+      "system_status": {
+        "name": "System Status"
+      },
       "array_usage": {
         "name": "Array Usage"
       },
@@ -131,6 +134,15 @@
       },
       "zfs_arc_hit_ratio": {
         "name": "ZFS ARC Hit Ratio"
+      },
+      "disk_smart_errors": {
+        "name": "Disk {disk_name} SMART Errors"
+      },
+      "disk_read_bytes": {
+        "name": "Disk {disk_name} Read"
+      },
+      "disk_write_bytes": {
+        "name": "Disk {disk_name} Write"
       }
     },
     "binary_sensor": {

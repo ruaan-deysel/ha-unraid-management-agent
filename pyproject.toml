@@ -4,7 +4,7 @@ version = "2026.1.0"
 description = "Home Assistant custom integration for Unraid server monitoring and management"
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.13"
+requires-python = ">=3.14.2"
 authors = [
     { name = "Ruaan Deysel" }
 ]
@@ -14,27 +14,32 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Home Automation",
 ]
 keywords = ["home-assistant", "unraid", "hacs", "integration"]
 
 dependencies = [
-    "uma-api[async]>=1.3.0",
+    "pydantic>=2.12.2,<3.0.0",
+    "websockets>=15.0.1,<16.0.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "homeassistant>=2025.6.3",
+    "homeassistant==2026.3.0",
+    "ruff>=0.13.0",
+    "mypy>=1.0.0",
+    "pyright>=1.1.0",
+    "pre-commit>=3.0.0",
+    "codespell>=2.4.0",
+    "bandit[toml]>=1.8.0",
+]
+test = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "pytest-homeassistant-custom-component>=0.13.0",
     "pytest-cov>=4.0.0",
     "pytest-timeout>=2.0.0",
-    "ruff>=0.13.0",
-    "mypy>=1.0.0",
-    "pre-commit>=3.0.0",
-    "codespell>=2.4.0",
 ]
 
 [project.urls]
@@ -52,7 +57,7 @@ packages = ["custom_components/unraid_management_agent"]
 
 # Ruff configuration (following HA Core standards)
 [tool.ruff]
-target-version = "py313"
+target-version = "py314"
 line-length = 88
 
 [tool.ruff.lint]
@@ -127,17 +132,35 @@ ignore = [
     "F841",    # Allow unused variables in tests (for context)
 ]
 
+[tool.ruff.lint.flake8-import-conventions.extend-aliases]
+# Commonly used Home Assistant imports
+voluptuous = "vol"
+"homeassistant.helpers.config_validation" = "cv"
+"homeassistant.helpers.device_registry" = "dr"
+"homeassistant.helpers.entity_registry" = "er"
+"homeassistant.util.dt" = "dt_util"
+
+[tool.ruff.lint.flake8-pytest-style]
+fixture-parentheses = false
+mark-parentheses = false
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"async_timeout".msg = "use asyncio.timeout instead"
+"pytz".msg = "use zoneinfo instead"
+"tests".msg = "You should not import tests"
+
 [tool.ruff.lint.isort]
-known-first-party = ["custom_components.unraid_management_agent"]
+known-first-party = ["custom_components", "homeassistant"]
 force-sort-within-sections = true
 combine-as-imports = true
+split-on-trailing-comma = false
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
 # Mypy configuration
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.14"
 show_error_codes = true
 follow_imports = "silent"
 ignore_missing_imports = true
@@ -174,8 +197,8 @@ filterwarnings = [
 # Coverage configuration
 [tool.coverage.run]
 source = ["custom_components/unraid_management_agent"]
-omit = ["tests/*"]
-branch = true
+omit = ["tests/*", "custom_components/unraid_management_agent/api/*"]
+branch = false
 
 [tool.coverage.report]
 exclude_lines = [
@@ -185,5 +208,13 @@ exclude_lines = [
     "raise NotImplementedError",
     "@overload",
 ]
-fail_under = 60
+fail_under = 95
 show_missing = true
+
+# Bandit security scanning configuration
+[tool.bandit]
+targets = ["custom_components/unraid_management_agent"]
+skips = [
+    "B101",  # assert used (acceptable in HA integrations for internal checks)
+]
+exclude_dirs = ["tests", ".venv", "venv"]

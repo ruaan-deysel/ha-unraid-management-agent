@@ -37,6 +37,9 @@ def mock_system_info() -> MagicMock:
     system.ram_cached_bytes = 8087633920
     system.ram_buffers_bytes = 0
     system.uptime_seconds = 86400  # 1 day
+    system.uptime_days = 1
+    system.uptime_hours = 0
+    system.uptime_minutes = 0
     system.server_model = "Custom Build"
     system.fans = [
         MagicMock(name="CPU Fan", rpm=1200),
@@ -44,7 +47,9 @@ def mock_system_info() -> MagicMock:
     ]
     # Set fan name as an attribute since MagicMock(name=...) sets the mock's name
     system.fans[0].name = "CPU Fan"
+    system.fans[0].normalized_name = "CPU Fan"
     system.fans[1].name = "System Fan"
+    system.fans[1].normalized_name = "System Fan"
     return system
 
 
@@ -56,6 +61,9 @@ def mock_array_status() -> MagicMock:
     array.used_bytes = 8000000000000
     array.free_bytes = 8000000000000
     array.used_percent = 50.0  # Add used_percent for direct access
+    array.computed_used_percent = 50.0
+    array.is_parity_check_running = False
+    array.is_parity_check_stuck = False
     array.num_disks = 4
     array.num_data_disks = 3
     array.num_parity_disks = 1
@@ -86,6 +94,18 @@ def mock_disks() -> list[MagicMock]:
     disk1.filesystem = "xfs"
     disk1.serial_number = "WDC_WD80EFAX_12345"
     disk1.used_percent = 50.0
+    disk1.computed_used_percent = 50.0
+    disk1.is_physical = True
+    disk1.is_ssd = False
+    disk1.is_standby = False
+    disk1.has_smart_errors = False
+    disk1.smart_errors = 0
+    disk1.read_bytes = 1024000000
+    disk1.write_bytes = 512000000
+    disk1.read_ops = 50000
+    disk1.write_ops = 25000
+    disk1.power_on_hours = 8760
+    disk1.io_utilization_percent = 5.2
 
     disk2 = MagicMock()
     disk2.id = "Samsung_SSD_980_67890"
@@ -105,6 +125,18 @@ def mock_disks() -> list[MagicMock]:
     disk2.filesystem = "btrfs"
     disk2.serial_number = "Samsung_SSD_980_67890"
     disk2.used_percent = 14.2
+    disk2.computed_used_percent = 14.2
+    disk2.is_physical = True
+    disk2.is_ssd = True
+    disk2.is_standby = False
+    disk2.has_smart_errors = False
+    disk2.smart_errors = 0
+    disk2.read_bytes = 2048000000
+    disk2.write_bytes = 1024000000
+    disk2.read_ops = 100000
+    disk2.write_ops = 50000
+    disk2.power_on_hours = 4380
+    disk2.io_utilization_percent = 2.1
 
     return [disk1, disk2]
 
@@ -117,9 +149,8 @@ def mock_ups_info() -> MagicMock:
     ups.model = "APC Back-UPS 1500"
     ups.battery_charge_percent = 100
     ups.runtime_minutes = 60
-    # Add runtime_left_seconds for uma-api compatibility
+    # Add runtime_left_seconds for vendored API model compatibility
     ups.runtime_left_seconds = 3600  # 60 minutes in seconds
-    ups.battery_runtime_seconds = 3600  # fallback field
     ups.power_watts = 150.5
     ups.load_percent = 25
     ups.energy_kwh = 10.5
@@ -181,6 +212,7 @@ def mock_gpu_list() -> list[MagicMock]:
     gpu.driver_version = "535.86.05"
     gpu.utilization_gpu_percent = 45
     gpu.temperature_celsius = 65
+    gpu.gpu_temperature = 65
     gpu.cpu_temperature_celsius = 50  # Fallback for iGPUs
     gpu.power_draw_watts = 220.5
     return [gpu]
@@ -190,6 +222,7 @@ def mock_network_interfaces() -> list[MagicMock]:
     """Create mock NetworkInterface Pydantic models."""
     eth0 = MagicMock()
     eth0.name = "eth0"
+    eth0.is_physical = True
     eth0.state = "up"
     eth0.speed_mbps = 1000
     eth0.mac_address = "00:11:22:33:44:55"
@@ -202,6 +235,7 @@ def mock_network_interfaces() -> list[MagicMock]:
 
     eth1 = MagicMock()
     eth1.name = "eth1"
+    eth1.is_physical = True
     eth1.state = "down"
     eth1.speed_mbps = 0
     eth1.mac_address = "00:11:22:33:44:56"
@@ -260,6 +294,14 @@ def mock_collectors_status(*, all_enabled: bool = True) -> MagicMock:
     collectors_status.total = len(collectors)
     collectors_status.enabled_count = sum(1 for c in collectors if c.enabled)
     collectors_status.disabled_count = sum(1 for c in collectors if not c.enabled)
+
+    def _get_collector_by_name(name: str) -> MagicMock | None:
+        for c in collectors:
+            if c.name == name:
+                return c
+        return None
+
+    collectors_status.get_collector_by_name = _get_collector_by_name
 
     return collectors_status
 
