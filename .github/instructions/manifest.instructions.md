@@ -18,7 +18,7 @@ applyTo: "**/manifest.json"
   "integration_type": "device",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/ruaan-deysel/ha-unraid-management-agent/issues",
-  "requirements": ["uma-api>=..."],
+  "requirements": [],
   "version": "2026.2.2"
 }
 ```
@@ -39,7 +39,7 @@ applyTo: "**/manifest.json"
 - `config_flow` - `true` (UI-based configuration)
 - `integration_type` - `device` (represents physical devices)
 - `iot_class` - `local_push` (local device with WebSocket push updates)
-- `requirements` - Python package dependencies (`uma-api`)
+- `requirements` - Only direct external Python package dependencies required at runtime
 
 ## IoT Class
 
@@ -51,10 +51,10 @@ This integration uses `local_push`:
 ## Requirements Format
 
 ```json
-"requirements": ["uma-api>=1.0.0"]
+"requirements": []
 ```
 
-Pin to minimum compatible version, not exact version.
+Use `requirements` only for true external packages. Vendored modules under the integration package must not be listed here.
 
 ## Version
 

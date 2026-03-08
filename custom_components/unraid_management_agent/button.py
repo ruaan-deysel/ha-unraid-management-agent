@@ -62,12 +62,22 @@ async def _async_stop_parity_check(coordinator: UnraidDataUpdateCoordinator) -> 
 
 async def _async_shutdown_system(coordinator: UnraidDataUpdateCoordinator) -> None:
     """Shutdown the Unraid system."""
-    await coordinator.client.shutdown_system()
+    response = await coordinator.client.shutdown_system()
+    coordinator.set_pending_system_action(
+        "shutdown",
+        getattr(response, "message", None),
+    )
+    await coordinator.async_request_refresh()
 
 
 async def _async_reboot_system(coordinator: UnraidDataUpdateCoordinator) -> None:
     """Reboot the Unraid system."""
-    await coordinator.client.reboot_system()
+    response = await coordinator.client.reboot_system()
+    coordinator.set_pending_system_action(
+        "reboot",
+        getattr(response, "message", None),
+    )
+    await coordinator.async_request_refresh()
 
 
 BUTTON_DESCRIPTIONS: tuple[UnraidButtonEntityDescription, ...] = (

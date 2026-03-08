@@ -107,7 +107,7 @@ If not provided, ask for:
 
 - JSON must be valid (no trailing commas, proper quotes)
 - Maintain identical structure between `strings.json` and `translations/en.json`
-- Run `scripts/lint` to validate JSON syntax
+- Run `script/lint` to validate JSON syntax
 
 **Related Files:**
 
@@ -116,7 +116,7 @@ If not provided, ask for:
 
 ## Before Finishing
 
-- Validate JSON syntax with `scripts/lint`
+- Validate JSON syntax with `script/lint`
 - Restart Home Assistant to load new translations
 - Verify translations appear correctly in UI
 

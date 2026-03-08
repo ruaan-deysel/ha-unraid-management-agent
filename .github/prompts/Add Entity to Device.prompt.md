@@ -52,7 +52,7 @@ If not provided, ask for:
 
 **Verification:**
 
-- Run `scripts/lint` to validate code quality
+- Run `script/lint` to validate code quality
 - Verify entity description follows existing patterns in the platform file
 - Check that `value_fn` handles `None` coordinator data
 

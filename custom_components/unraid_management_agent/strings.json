@@ -63,6 +63,9 @@
       "uptime": {
         "name": "Uptime"
       },
+      "system_status": {
+        "name": "System Status"
+      },
       "array_usage": {
         "name": "Array Usage"
       },

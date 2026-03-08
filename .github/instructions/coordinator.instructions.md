@@ -70,7 +70,7 @@ class UnraidData:
 ## WebSocket Lifecycle
 
 - Started in `async_setup_entry()` after first refresh
-- Event types parsed with `parse_event()` from `uma-api`
+- Event types parsed with `parse_event()` from the vendored `api` package
 - Auto-reconnect handled by `UnraidWebSocketClient`
 - Stopped in `async_unload_entry()` before client close
 - Tasks cancelled and awaited on cleanup

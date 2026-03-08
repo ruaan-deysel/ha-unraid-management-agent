@@ -134,6 +134,6 @@ async def async_handle_action(call: ServiceCall) -> None:
 - [ ] Registered in `async_setup` (NOT `async_setup_entry`)
 - [ ] Icons added to `icons.json`
 - [ ] Type hints complete
-- [ ] `scripts/lint` passes
+- [ ] `script/lint` passes
 
 **DO NOT create tests unless explicitly requested.**

@@ -43,7 +43,7 @@ def mock_setup_entry() -> Generator[AsyncMock]:
 
 @pytest.fixture
 def mock_async_unraid_client() -> Generator[MagicMock]:
-    """Mock UnraidClient from uma-api (async by default in v1.2.1+)."""
+    """Mock the vendored UnraidClient used by the integration."""
     with patch(
         "custom_components.unraid_management_agent.UnraidClient",
         autospec=True,
@@ -75,7 +75,7 @@ def mock_async_unraid_client() -> Generator[MagicMock]:
         client.get_zfs_arc_stats = AsyncMock(return_value=None)
         client.get_collectors_status = AsyncMock(return_value=mock_collectors_status())
 
-        # New API methods for uma-api v1.3.0
+        # Additional vendored API methods used by the integration
         client.get_disk_settings = AsyncMock(return_value=None)
         client.get_mover_settings = AsyncMock(return_value=None)
         client.get_parity_schedule = AsyncMock(return_value=None)
@@ -121,7 +121,7 @@ def mock_async_unraid_client() -> Generator[MagicMock]:
 
 @pytest.fixture
 def mock_websocket_client() -> Generator[MagicMock]:
-    """Mock UnraidWebSocketClient from uma-api."""
+    """Mock the vendored UnraidWebSocketClient used by the integration."""
     with patch(
         "custom_components.unraid_management_agent.UnraidWebSocketClient",
         autospec=True,

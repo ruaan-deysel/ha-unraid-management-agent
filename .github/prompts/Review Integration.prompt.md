@@ -21,7 +21,7 @@ If not provided, ask for:
 Run all validation tools first:
 
 ```bash
-scripts/lint                    # Auto-format and fix
+script/lint                     # Auto-format and fix
 pytest tests/ -v --timeout=30   # Run tests
 mypy custom_components/unraid_management_agent/  # Type checking
 ```

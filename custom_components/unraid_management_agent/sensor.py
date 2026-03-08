@@ -34,10 +34,10 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
-from uma_api import EnergyIntegrator, RateCalculator, parse_timestamp
-from uma_api.formatting import format_bytes, format_duration
 
 from . import UnraidConfigEntry, UnraidDataUpdateCoordinator
+from .api import EnergyIntegrator, RateCalculator, parse_timestamp
+from .api.formatting import format_bytes, format_duration
 from .const import (
     ATTR_ARRAY_STATE,
     ATTR_CPU_CORES,
@@ -270,7 +270,7 @@ def _get_parity_attrs(data: UnraidData) -> dict[str, Any]:
         return {}
 
     array = data.array
-    attrs = {}
+    attrs: dict[str, Any] = {}
 
     if array.sync_action:
         attrs["sync_action"] = array.sync_action
@@ -497,7 +497,7 @@ def _get_latest_version_attrs(data: UnraidData) -> dict[str, Any]:
         current = getattr(data.system, "version", None)
     latest = update.latest_version if update else None
 
-    attrs = {}
+    attrs: dict[str, Any] = {}
     if current:
         attrs["current_version"] = current
     if latest:
@@ -1223,6 +1223,71 @@ class UnraidSensorEntity(UnraidBaseEntity, SensorEntity):
         return self.entity_description.available_fn(self.coordinator.data)
 
 
+class UnraidSystemStatusSensor(UnraidBaseEntity, SensorEntity):
+    """High-level system status sensor for shutdown and reboot visibility."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+    ) -> None:
+        """Initialize the system status sensor."""
+        super().__init__(coordinator, "system_status")
+        self._attr_translation_key = "system_status"
+
+    @property
+    def native_value(self) -> str:
+        """Return the current status of the Unraid system."""
+        return self.coordinator.system_status
+
+    @property
+    def icon(self) -> str:
+        """Return a status-specific icon."""
+        status = self.native_value
+        if status == "online":
+            return "mdi:server"
+        if status in {"starting_array", "reboot_requested", "server_rebooting"}:
+            return "mdi:restart"
+        if status in {"stopping_array", "shutdown_requested", "shutting_down"}:
+            return "mdi:power"
+        if status == "server_shutdown":
+            return "mdi:server-off"
+        if status == "array_stopped":
+            return "mdi:harddisk-remove"
+        return "mdi:server-network-off"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra attributes for system status diagnostics."""
+        attrs: dict[str, Any] = {
+            "websocket_connected": self.coordinator.websocket_connected,
+        }
+
+        if self.coordinator.pending_system_action is not None:
+            attrs["pending_action"] = self.coordinator.pending_system_action
+
+        if self.coordinator.pending_system_action_message is not None:
+            attrs["action_message"] = self.coordinator.pending_system_action_message
+
+        requested_at = self.coordinator.pending_system_action_requested_at
+        if requested_at is not None:
+            attrs["action_requested_at"] = requested_at.isoformat()
+
+        data = self.coordinator.data
+        if data and data.array:
+            array_state = getattr(data.array, "state", None)
+            if array_state is not None:
+                attrs["array_state"] = array_state
+
+        return attrs
+
+    @property
+    def available(self) -> bool:
+        """Keep the status sensor available during reboots and shutdowns."""
+        return True
+
+
 # =============================================================================
 # Dynamic Sensor Entity Classes (for sensors needing runtime context)
 # =============================================================================
@@ -1306,7 +1371,7 @@ class UnraidNetworkSensorBase(UnraidBaseEntity, SensorEntity):
             "mdi:download-network" if direction == "rx" else "mdi:upload-network"
         )
 
-        # Use uma-api RateCalculator for rate computation (replaces PR #12 fix)
+        # Use the vendored RateCalculator for rate computation (replaces PR #12 fix)
         self._rate_calculator = RateCalculator()
 
     @property
@@ -1872,7 +1937,7 @@ class UnraidShareUsageSensor(UnraidBaseEntity, SensorEntity):
         if free:
             attrs["free_size"] = format_bytes(free)
 
-        # Cache configuration attributes (from uma-api#33)
+        # Cache configuration attributes from the vendored API models
         use_cache = getattr(share, "use_cache", None)
         if use_cache:
             attrs["use_cache"] = use_cache
@@ -2062,7 +2127,7 @@ class UnraidUPSEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
         ) is not None and last_state.state not in (None, "unknown", "unavailable"):
             try:
                 self._total_energy = float(last_state.state)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 self._total_energy = 0.0
 
     @callback
@@ -2151,7 +2216,7 @@ class UnraidGPUEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
         ) is not None and last_state.state not in (None, "unknown", "unavailable"):
             try:
                 self._total_energy = float(last_state.state)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 self._total_energy = 0.0
 
     @callback
@@ -2225,6 +2290,8 @@ async def async_setup_entry(
     for description in SYSTEM_SENSOR_DESCRIPTIONS:
         if description.supported_fn(data):
             entities.append(UnraidSensorEntity(coordinator, description))
+
+    entities.append(UnraidSystemStatusSensor(coordinator))
 
     # Array sensors
     for description in ARRAY_SENSOR_DESCRIPTIONS:

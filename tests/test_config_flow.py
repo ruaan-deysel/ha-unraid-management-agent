@@ -8,8 +8,8 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
-from uma_api import UnraidConnectionError
 
+from custom_components.unraid_management_agent.api import UnraidConnectionError
 from custom_components.unraid_management_agent.const import (
     CONF_ENABLE_WEBSOCKET,
     DOMAIN,

@@ -149,7 +149,7 @@ def mock_ups_info() -> MagicMock:
     ups.model = "APC Back-UPS 1500"
     ups.battery_charge_percent = 100
     ups.runtime_minutes = 60
-    # Add runtime_left_seconds for uma-api compatibility
+    # Add runtime_left_seconds for vendored API model compatibility
     ups.runtime_left_seconds = 3600  # 60 minutes in seconds
     ups.power_watts = 150.5
     ups.load_percent = 25

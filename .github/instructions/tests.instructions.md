@@ -44,7 +44,7 @@ tests/
 6. `mock_unraid_data` -- Populated `UnraidData` instance
 7. `mock_coordinator` -- Mocked coordinator with data
 
-**Mock data factories** in `tests/const.py` return Pydantic model instances from `uma-api`.
+**Mock data factories** in `tests/const.py` mirror the vendored API models used by the integration.
 
 ## Test Patterns
 
@@ -78,7 +78,7 @@ assert result["type"] is FlowResultType.CREATE_ENTRY
 
 ## Mocking
 
-- **Mock:** External APIs (`uma-api` client methods), network calls
+- **Mock:** The vendored API client methods and network calls
 - **Don't mock:** Home Assistant internals, your own integration code
 - Use `patch.object()` for success cases, `side_effect` for errors
 

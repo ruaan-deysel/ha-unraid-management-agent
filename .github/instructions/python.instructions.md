@@ -125,7 +125,7 @@ Use `if TYPE_CHECKING:` block for type-only imports that would cause circular de
 
 ## Validation
 
-Run before submitting: `scripts/lint`
+Run before submitting: `script/lint`
 
 **Suppressing checks (use sparingly):**
 

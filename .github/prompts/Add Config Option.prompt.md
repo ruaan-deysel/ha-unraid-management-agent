@@ -59,7 +59,7 @@ If not provided, ask for:
 
 - Follow existing config flow patterns in `config_flow.py`
 - Use proper selector types for best UX
-- Run `scripts/lint` to validate before completion
+- Run `script/lint` to validate before completion
 
 **Related Files:**
 

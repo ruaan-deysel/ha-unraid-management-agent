@@ -106,8 +106,8 @@ PLATFORMS: list[Platform] = [
 Run validation and test:
 
 ```bash
-scripts/lint           # Linting and formatting
-./scripts/develop      # Start Home Assistant for testing
+script/lint            # Linting and formatting
+./script/develop       # Start Home Assistant for testing
 ```
 
 ## Platform-Specific Guidance
@@ -147,7 +147,7 @@ scripts/lint           # Linting and formatting
 - [ ] Translations added matching translation_key
 - [ ] Icons added to `icons.json`
 - [ ] Type hints complete
-- [ ] `scripts/lint` passes
+- [ ] `script/lint` passes
 
 **Integration Context:**
 

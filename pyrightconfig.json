@@ -1,0 +1,15 @@
+{
+  "include": ["custom_components/unraid_management_agent"],
+  "exclude": [
+    "custom_components/unraid_management_agent/api",
+    "tests",
+    ".local",
+    "config",
+    "htmlcov"
+  ],
+  "typeCheckingMode": "basic",
+  "reportIncompatibleVariableOverride": "none",
+  "reportArgumentType": "none",
+  "reportOptionalMemberAccess": "none",
+  "reportPossiblyUnboundVariable": "none"
+}

@@ -5,8 +5,8 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from homeassistant.core import HomeAssistant
-from uma_api.models import ArrayStatus, DiskInfo
 
+from custom_components.unraid_management_agent.api.models import ArrayStatus, DiskInfo
 from custom_components.unraid_management_agent.coordinator import UnraidData
 from custom_components.unraid_management_agent.repairs import (
     ArrayIssueRepairFlow,

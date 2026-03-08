@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **System Status Sensor**: Added `sensor.{hostname}_system_status` to expose high-level runtime state during shutdown and reboot actions
+  - Reports `shutdown_requested`, `stopping_array`, `shutting_down`, `server_shutdown`, `reboot_requested`, `server_rebooting`, `array_stopped`, `starting_array`, `online`, and `offline`
+  - Remains available while the server is intentionally going offline so users can see action progress instead of a generic unavailable state
+  - Includes `pending_action`, `action_message`, `action_requested_at`, `array_state`, and WebSocket connection attributes for diagnostics
+
+### Fixed
+
+- **Legacy Entity ID Migration**: Added non-destructive entity registry migration for legacy container, VM, disk, and fan unique IDs to reduce duplicate `_2` entities after upgrades (#27)
+  - Migrates older container/VM IDs that were tied to backend object IDs instead of stable names
+  - Migrates older sanitized disk IDs to the current release-line format before platform setup so existing entity_ids are retained when possible
+  - Migrates pre-`normalized_name` fan IDs to the current stable fan key format to avoid another round of entity duplication on upgrade
+  - VM switches now prefer the backend VM identifier for unique IDs, which prevents future duplicates when the VM display name changes or gets normalized differently by the API
+  - Switch setup now de-duplicates repeated container and VM records within a single coordinator payload before entities are created
+- **WebSocket Runtime Compatibility**: Fixed WebSocket connection state checks on current Home Assistant runtime versions where the underlying client object no longer exposes a `closed` attribute
+  - Prevents repeated `ClientConnection` attribute errors during live updates
+  - Restores clean status updates for the new system status sensor and other coordinator-driven entities during dev-instance verification
+
 ## [2026.3.0] - 2026-03-01
 
 ### Added

@@ -9,6 +9,7 @@ import pytest
 from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant
 
+from custom_components.unraid_management_agent.api import RateCalculator
 from custom_components.unraid_management_agent.coordinator import UnraidData
 from custom_components.unraid_management_agent.sensor import (
     ARRAY_SENSOR_DESCRIPTIONS,
@@ -737,7 +738,7 @@ def test_get_flash_usage_attrs_with_data():
     mock_data.flash_info.used_bytes = 500000000
     mock_data.flash_info.free_bytes = 500000000
     mock_data.flash_info.guid = "TEST-GUID-1234"
-    mock_data.flash_info.product = "SanDisk Cruzer"
+    mock_data.flash_info.product = "SanDisk Cruiser"
     mock_data.flash_info.vendor = "SanDisk"
 
     attrs = _get_flash_usage_attrs(mock_data)
@@ -745,7 +746,7 @@ def test_get_flash_usage_attrs_with_data():
     assert "used_size" in attrs
     assert "free_size" in attrs
     assert attrs["guid"] == "TEST-GUID-1234"
-    assert attrs["product"] == "SanDisk Cruzer"
+    assert attrs["product"] == "SanDisk Cruiser"
     assert attrs["vendor"] == "SanDisk"
 
 
@@ -1302,8 +1303,6 @@ def test_network_rx_sensor_extra_attrs() -> None:
 
 def test_network_rx_sensor_handle_update_sets_rate() -> None:
     """Test network RX sensor update calculates rate."""
-    from uma_api import RateCalculator
-
     mock_interface = MagicMock()
     mock_interface.name = "eth0"
     mock_interface.bytes_received = 2000
@@ -1329,8 +1328,6 @@ def test_network_rx_sensor_handle_update_sets_rate() -> None:
 
 def test_network_rx_sensor_handle_update_negative_bytes() -> None:
     """Test network RX sensor update handles counter reset."""
-    from uma_api import RateCalculator
-
     mock_interface = MagicMock()
     mock_interface.name = "eth0"
     mock_interface.bytes_received = 1000
@@ -1356,8 +1353,6 @@ def test_network_rx_sensor_handle_update_negative_bytes() -> None:
 
 def test_network_rx_sensor_handle_update_initial_bytes() -> None:
     """Test network RX sensor update initializes bytes tracking."""
-    from uma_api import RateCalculator
-
     mock_interface = MagicMock()
     mock_interface.name = "eth0"
     mock_interface.bytes_received = 500
@@ -3991,8 +3986,6 @@ def test_fan_sensor_no_fans() -> None:
 
 def test_network_rx_sensor_no_interface() -> None:
     """Test network RX sensor returns None when interface not found."""
-    from uma_api import RateCalculator
-
     from custom_components.unraid_management_agent.sensor import UnraidNetworkRXSensor
 
     sensor = object.__new__(UnraidNetworkRXSensor)
@@ -4008,8 +4001,6 @@ def test_network_rx_sensor_no_interface() -> None:
 
 def test_network_tx_sensor_no_interface() -> None:
     """Test network TX sensor returns None when interface not found."""
-    from uma_api import RateCalculator
-
     from custom_components.unraid_management_agent.sensor import UnraidNetworkTXSensor
 
     sensor = object.__new__(UnraidNetworkTXSensor)
@@ -4115,8 +4106,6 @@ def test_fan_sensor_no_system() -> None:
 
 def test_network_sensor_get_interface_no_network() -> None:
     """Test network sensor _get_interface returns None when network is None."""
-    from uma_api import RateCalculator
-
     from custom_components.unraid_management_agent.sensor import UnraidNetworkRXSensor
 
     sensor = object.__new__(UnraidNetworkRXSensor)

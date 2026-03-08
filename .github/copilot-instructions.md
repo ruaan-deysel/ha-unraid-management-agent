@@ -10,9 +10,9 @@
 - **Title:** Unraid Management Agent
 - **Class prefix:** `Unraid`
 - **Main code:** `custom_components/unraid_management_agent/`
-- **Lint:** `scripts/lint` (ruff format + ruff check --fix)
+- **Lint:** `script/lint` (ruff format + ruff check --fix)
 - **Test:** `pytest tests/ -v --timeout=30`
-- **Start HA:** `./scripts/develop`
+- **Start HA:** `./script/develop`
 
 Use these exact identifiers throughout the codebase. Never hardcode different values.
 
@@ -25,7 +25,7 @@ Use these exact identifiers throughout the codebase. Never hardcode different va
 Before considering any coding task complete, the following **must** pass:
 
 ```bash
-scripts/lint      # Runs ruff format + ruff check --fix
+script/lint       # Runs ruff format + ruff check --fix
 ```
 
 Generate code that passes these checks on first run. As an AI agent, you should produce higher quality code than manual development. Aim for zero validation errors.
@@ -51,7 +51,7 @@ Generate code that passes these checks on first run. As an AI agent, you should 
 - Unique ID: `{entry_id}_{description.key}` (set in base entity)
 - Services: register in `async_setup()`, NOT `async_setup_entry()` (Quality Scale requirement)
 - Config entry data: `entry.runtime_data.client` / `entry.runtime_data.coordinator`
-- API library: `uma-api` (async, Pydantic models, WebSocket)
+- API library: vendored under `custom_components/unraid_management_agent/api/` (async, Pydantic models, WebSocket)
 
 ## Workflow Rules
 
@@ -61,7 +61,7 @@ Generate code that passes these checks on first run. As an AI agent, you should 
    - Example: Bug fix touching coordinator + entity + error handling -> do all at once
 3. **Multiple independent features:** implement one at a time, suggest commit between each
 4. **Large refactoring (>10 files or architectural changes):** propose plan first, get explicit confirmation
-5. **Validation:** run `scripts/lint` before considering task complete
+5. **Validation:** run `script/lint` before considering task complete
 6. **File size:** keep files at ~200-400 lines. Split large modules into smaller ones when needed.
 
 **Important: Do NOT write tests unless explicitly requested.** Focus on implementing functionality. The developer decides when and if tests are needed.
@@ -81,7 +81,7 @@ Generate code that passes these checks on first run. As an AI agent, you should 
 1. Search [Home Assistant Developer Docs](https://developers.home-assistant.io/) for current patterns
 2. Check the [developer blog](https://developers.home-assistant.io/blog/) for recent changes
 3. Look at existing patterns in similar files in the integration
-4. Run `scripts/lint` early and often -- catch issues before they compound
+4. Run `script/lint` early and often -- catch issues before they compound
 5. Consult [Ruff rules](https://docs.astral.sh/ruff/rules/) when validation fails
 6. Ask for clarification rather than implementing based on assumptions
 
@@ -94,7 +94,7 @@ Generate code that passes these checks on first run. As an AI agent, you should 
 **Start Home Assistant:**
 
 ```bash
-./scripts/develop
+./script/develop
 ```
 
 **When to restart HA:** After modifying Python files, `manifest.json`, `services.yaml`, translations, or config flow changes
@@ -102,12 +102,12 @@ Generate code that passes these checks on first run. As an AI agent, you should 
 **Validate changes:**
 
 ```bash
-scripts/lint      # Always run before considering task complete
+script/lint       # Always run before considering task complete
 ```
 
 **Logs:**
 
-- Live: terminal where `./scripts/develop` runs
+- Live: terminal where `./script/develop` runs
 - File: `config/home-assistant.log` (most recent)
 - Debug level: `custom_components.unraid_management_agent: debug` in `config/configuration.yaml`
 

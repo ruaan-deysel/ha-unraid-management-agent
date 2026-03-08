@@ -49,10 +49,10 @@ Your goal is to diagnose and fix issues with the data update coordinator.
        logs:
          custom_components.unraid_management_agent: debug
      ```
-   - Restart Home Assistant: `./scripts/develop`
+   - Restart Home Assistant: `./script/develop`
 
 2. **Check Logs:**
-   - Look at terminal output where `./scripts/develop` is running
+   - Look at terminal output where `./script/develop` is running
    - Or check `config/home-assistant.log`
    - Search for error traces and `UpdateFailed` exceptions
 
@@ -94,7 +94,7 @@ value_fn=lambda data: data.system_info.cpu_usage if data.system_info else None,
 
 ## Before Finishing
 
-- Run `scripts/lint` to validate code quality
+- Run `script/lint` to validate code quality
 - Restart Home Assistant to test fixes
 - Monitor logs for any remaining errors
 - Verify entities update correctly and stay available

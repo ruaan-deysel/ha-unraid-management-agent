@@ -78,7 +78,7 @@ if not coordinator.is_collector_enabled("collector_name"):
 - Follow existing sensor patterns in `sensor.py`
 - Use constants from `const.py` for keys
 - Add proper docstrings (Google-style)
-- Run `scripts/lint` to validate before completion
+- Run `script/lint` to validate before completion
 
 **Related Files:**
 

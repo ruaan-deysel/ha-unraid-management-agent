@@ -23,19 +23,19 @@ rules:
     comment: tests/test_config_flow.py covers success, errors, options
   dependency-transparency:
     status: done
-    comment: Only uma-api>=1.2.1 in requirements
+    comment: API client is vendored under custom_components/unraid_management_agent/api
   docs-actions:
-    status: todo
-    comment: README lacks detailed service action documentation
+    status: done
+    comment: README documents all integration services with grouped examples
   docs-high-level-description:
     status: done
     comment: README has project description
   docs-installation-instructions:
-    status: todo
-    comment: README needs step-by-step HACS/manual install instructions
+    status: done
+    comment: README documents prerequisites plus HACS and manual installation paths
   docs-removal-instructions:
-    status: todo
-    comment: No removal instructions in README
+    status: done
+    comment: README includes Home Assistant, HACS, manual, and backend plugin removal steps
   entity-event-setup:
     status: done
     comment: Uses CoordinatorEntity pattern correctly
@@ -66,11 +66,11 @@ rules:
     status: done
     comment: async_unload_entry properly stops WebSocket and closes client
   docs-configuration-parameters:
-    status: todo
-    comment: Options in strings.json but not documented in README
+    status: done
+    comment: README documents host, port, websocket option, and fixed polling behavior
   docs-installation-parameters:
-    status: todo
-    comment: Host/port parameters not fully documented
+    status: done
+    comment: README documents prerequisites, system requirements, network requirements, and setup parameters
   entity-unavailable:
     status: done
     comment: Entities use CoordinatorEntity which handles unavailability
@@ -87,8 +87,8 @@ rules:
     status: exempt
     comment: No authentication required (local API without credentials)
   test-coverage:
-    status: todo
-    comment: Tests exist but 95% coverage not verified
+    status: done
+    comment: The isolated pytest suite enforces a 95% coverage floor for the integration package, excluding the vendored api helper package
 
   # Gold
   devices:
@@ -104,26 +104,26 @@ rules:
     status: exempt
     comment: No discovery mechanism
   docs-data-update:
-    status: todo
-    comment: No documentation about polling/websocket update mechanism
+    status: done
+    comment: README documents initial load, websocket updates, and 30-second REST fallback polling
   docs-examples:
-    status: todo
-    comment: No automation examples in documentation
+    status: done
+    comment: README includes multiple automation examples for alerts and control actions
   docs-known-limitations:
-    status: todo
-    comment: No known limitations documented
+    status: done
+    comment: README documents manual setup, websocket fallback behavior, conditional entities, and legacy registry limitations
   docs-supported-devices:
-    status: todo
-    comment: No supported Unraid versions documented
+    status: done
+    comment: README documents supported Unraid versions, Home Assistant setup mode, and conditional subsystem support
   docs-supported-functions:
-    status: todo
-    comment: No entity/platform list in documentation
+    status: done
+    comment: README documents entity platforms, services, and supported subsystem coverage
   docs-troubleshooting:
-    status: todo
-    comment: No troubleshooting section in documentation
+    status: done
+    comment: README includes a troubleshooting section for connectivity, websocket, updates, and missing entities
   docs-use-cases:
-    status: todo
-    comment: No use case examples in documentation
+    status: done
+    comment: README includes concrete monitoring, automation, orchestration, and energy dashboard use cases
   dynamic-devices:
     status: exempt
     comment: Single device per config entry, dynamic entities created at setup
@@ -158,10 +158,10 @@ rules:
   # Platinum
   async-dependency:
     status: done
-    comment: uma-api is fully async
+    comment: Vendored API client is fully async
   inject-websession:
     status: done
     comment: Uses async_get_clientsession(hass) for shared session pooling in __init__.py and config_flow.py
   strict-typing:
     status: done
-    comment: Type hints present with py.typed marker
+    comment: Typed integration modules pass repo type checks and ship a py.typed marker

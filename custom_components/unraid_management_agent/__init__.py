@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from typing import Final
 
@@ -10,10 +11,11 @@ from homeassistant.const import CONF_HOST, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from uma_api import UnraidClient, UnraidConnectionError
-from uma_api.websocket import UnraidWebSocketClient
+from homeassistant.util import slugify
 
+from .api import UnraidClient, UnraidConnectionError, UnraidWebSocketClient
 from .const import (
     CONF_ENABLE_WEBSOCKET,
     DEFAULT_ENABLE_WEBSOCKET,
@@ -54,6 +56,158 @@ __all__ = [
 ]
 
 _LOGGER = logging.getLogger(__name__)
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+
+def _make_entity_name_key(name: str) -> str:
+    """Build a stable key from a user-facing name."""
+    slug = slugify(name)
+    name_hash = hashlib.md5(name.encode(), usedforsecurity=False).hexdigest()[:6]
+    return f"{slug}_{name_hash}"
+
+
+def _make_vm_key(vm_identifier: str, vm_name: str) -> str:
+    """Build the canonical VM key used for registry migration."""
+    if vm_identifier and vm_identifier != vm_name:
+        return slugify(vm_identifier)
+    return _make_entity_name_key(vm_name)
+
+
+def _legacy_disk_key_fragment(disk_id: str) -> str:
+    """Build the legacy sanitized disk identifier used by older releases."""
+    return disk_id.replace(" ", "_").replace("/", "_").lower()
+
+
+async def _async_migrate_legacy_entity_unique_ids(
+    hass: HomeAssistant,
+    entry: UnraidConfigEntry,
+    coordinator: UnraidDataUpdateCoordinator,
+) -> None:
+    """Migrate legacy entity unique IDs to the current stable schemes."""
+    data = coordinator.data
+    if data is None:
+        return
+
+    registry = er.async_get(hass)
+    registry_entries = er.async_entries_for_config_entry(registry, entry.entry_id)
+    entries_by_unique_id = {
+        (registry_entry.domain, registry_entry.unique_id): registry_entry
+        for registry_entry in registry_entries
+    }
+
+    def migrate(
+        domain: str, old_unique_id: str, new_unique_id: str, label: str
+    ) -> None:
+        if old_unique_id == new_unique_id:
+            return
+
+        source_entry = entries_by_unique_id.get((domain, old_unique_id))
+        if source_entry is None:
+            return
+
+        if (domain, new_unique_id) in entries_by_unique_id:
+            _LOGGER.debug(
+                "Skipping legacy unique ID migration for %s because target already exists",
+                label,
+            )
+            return
+
+        try:
+            updated_entry = registry.async_update_entity(
+                source_entry.entity_id,
+                new_unique_id=new_unique_id,
+            )
+        except ValueError as err:
+            _LOGGER.warning(
+                "Failed to migrate legacy unique ID for %s: %s",
+                label,
+                err,
+            )
+            return
+
+        entries_by_unique_id.pop((domain, old_unique_id), None)
+        entries_by_unique_id[(domain, new_unique_id)] = updated_entry
+        _LOGGER.info("Migrated legacy unique ID for %s", label)
+
+    if data.containers:
+        for container in data.containers:
+            container_id = getattr(container, "id", None) or getattr(
+                container, "container_id", None
+            )
+            container_name = getattr(container, "name", None)
+            if not container_id or not container_name:
+                continue
+
+            migrate(
+                "switch",
+                f"{entry.entry_id}_container_switch_{container_id}",
+                f"{entry.entry_id}_container_{_make_entity_name_key(container_name)}",
+                f"container {container_name}",
+            )
+
+    if data.vms:
+        for vm in data.vms:
+            vm_id = getattr(vm, "id", None) or getattr(vm, "name", None)
+            vm_name = getattr(vm, "name", None)
+            if not vm_id or not vm_name:
+                continue
+
+            new_unique_id = f"{entry.entry_id}_vm_{_make_vm_key(vm_id, vm_name)}"
+
+            migrate(
+                "switch",
+                f"{entry.entry_id}_vm_switch_{vm_id}",
+                new_unique_id,
+                f"VM {vm_name}",
+            )
+            migrate(
+                "switch",
+                f"{entry.entry_id}_vm_{_make_entity_name_key(vm_name)}",
+                new_unique_id,
+                f"VM {vm_name}",
+            )
+
+    if data.disks:
+        for disk in data.disks:
+            disk_id = getattr(disk, "id", None) or getattr(disk, "name", None)
+            if not disk_id:
+                continue
+
+            legacy_disk_id = _legacy_disk_key_fragment(disk_id)
+            for sensor_type in ("usage", "health", "temperature"):
+                migrate(
+                    "sensor",
+                    f"{entry.entry_id}_disk_{legacy_disk_id}_{sensor_type}",
+                    f"{entry.entry_id}_disk_{disk_id}_{sensor_type}",
+                    f"disk {disk_id} {sensor_type}",
+                )
+
+    if data.system:
+        fans = getattr(data.system, "fans", []) or []
+        seen_names: set[str] = set()
+        for idx, fan in enumerate(fans):
+            if isinstance(fan, dict):
+                fan_name = fan.get("name") or f"fan_{idx}"
+                normalized = fan_name
+            else:
+                fan_name = getattr(fan, "name", None) or f"fan_{idx}"
+                normalized = getattr(fan, "normalized_name", fan_name)
+
+            legacy_fan_name = fan_name
+            normalized_key = normalized
+            if normalized_key in seen_names:
+                normalized_key = f"{normalized}_{idx}"
+
+            seen_names.add(normalized_key)
+
+            migrate(
+                "sensor",
+                f"{entry.entry_id}_fan_{legacy_fan_name.lower().replace(' ', '_')}",
+                f"{entry.entry_id}_fan_{normalized_key.lower().replace(' ', '_')}",
+                f"fan {legacy_fan_name}",
+            )
+
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
@@ -102,6 +256,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: UnraidConfigEntry) -> bo
 
     # Fetch initial data
     await coordinator.async_config_entry_first_refresh()
+
+    # Migrate known legacy unique IDs before platforms are set up so existing
+    # registry entries keep their original entity_ids instead of creating _2 duplicates.
+    await _async_migrate_legacy_entity_unique_ids(hass, entry, coordinator)
 
     # Store runtime data using the new pattern
     entry.runtime_data = UnraidRuntimeData(coordinator=coordinator, client=client)

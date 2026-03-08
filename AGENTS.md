@@ -20,7 +20,7 @@ This is a Home Assistant custom integration for monitoring and controlling Unrai
 
 - `custom_components/unraid_management_agent/` - Main integration code
 - `tests/` - Unit and integration tests
-- `scripts/` - Development and validation scripts
+- `script/` - Development and validation scripts
 
 **Local development:**
 
@@ -29,12 +29,12 @@ This is a Home Assistant custom integration for monitoring and controlling Unrai
 **Start Home Assistant:**
 
 ```bash
-./scripts/develop
+./script/develop
 ```
 
 **Reading logs:**
 
-- Live: Terminal where `./scripts/develop` runs
+- Live: Terminal where `./script/develop` runs
 - File: `config/home-assistant.log` (most recent)
 
 **Adjusting log levels:**
@@ -111,7 +111,7 @@ When a task completes and the developer moves to a new topic, suggest committing
 **Third-party libraries (PyPI):**
 
 - Prefer existing PyPI libraries when maintained and fit the use case
-- The integration uses `uma-api` as its primary API client library
+- The integration vendors its API client under `custom_components/unraid_management_agent/api/`
 - Uses aiohttp for HTTP and WebSocket communication
 
 **Quality Scale expectations:**
@@ -132,7 +132,7 @@ As an AI agent, **aim for Platinum Quality Scale** when generating code:
 
 **JSON:** 2 spaces, no trailing commas, no comments
 
-**Validation:** Run `scripts/lint` before committing (runs ruff format + ruff check --fix)
+**Validation:** Run `script/lint` before committing (runs ruff format + ruff check --fix)
 
 **For comprehensive standards, see `pyproject.toml`** which configures ruff, mypy, and pytest.
 
@@ -261,7 +261,7 @@ All entities provide consistent device info via the base entity class (manufactu
 
 - **integration_type:** `device` - Single device per config entry
 - **iot_class:** `local_push` - Local communication with push updates
-- **requirements:** `["uma-api>=1.3.0"]`
+- **requirements:** `[]` unless a true external runtime dependency is added
 - **config_flow:** `true`
 - **No authentication** - local API without auth (exempt from reauth flow)
 
@@ -330,7 +330,7 @@ All entities provide consistent device info via the base entity class (manufactu
 **Before committing, run:**
 
 ```bash
-scripts/lint                          # Auto-format and fix linting issues
+script/lint                           # Auto-format and fix linting issues
 pytest tests/ -v --timeout=30         # Run tests
 mypy custom_components/unraid_management_agent/  # Type checking
 pre-commit run --all-files            # All pre-commit hooks
@@ -487,7 +487,7 @@ def test_is_array_started_no_data():
 
 - **Always check current patterns** in [Home Assistant Developer Docs](https://developers.home-assistant.io/)
 - **Read the blog** at [Home Assistant Developer Blog](https://developers.home-assistant.io/blog/) for recent changes
-- **Verify with tools** before assuming -- run `scripts/lint` to catch issues early
+- **Verify with tools** before assuming -- run `script/lint` to catch issues early
 
 **Don't rely on assumptions:**
 
@@ -497,7 +497,7 @@ def test_is_array_started_no_data():
 
 ## API Library Reference
 
-The integration depends on `uma-api>=1.3.0` which provides:
+The integration vendors its API client in `custom_components/unraid_management_agent/api/`, which provides:
 
 - **`UnraidClient`** - Async HTTP client for Unraid Management Agent REST API
 - **`UnraidWebSocketClient`** - WebSocket client with auto-reconnect

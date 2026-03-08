@@ -18,9 +18,9 @@ Read `AGENTS.md` completely before starting any work. It contains:
 - **Title:** Unraid Management Agent
 - **Class prefix:** `Unraid`
 - **Main code:** `custom_components/unraid_management_agent/`
-- **Lint:** `scripts/lint` (ruff format + ruff check --fix)
+- **Lint:** `script/lint` (ruff format + ruff check --fix)
 - **Test:** `pytest tests/ -v --timeout=30`
-- **Run HA:** `./scripts/develop`
+- **Run HA:** `./script/develop`
 
 ## Copilot Prompts
 
