@@ -16,7 +16,12 @@ from custom_components.unraid_management_agent import (
 )
 from custom_components.unraid_management_agent.api.constants import EventType
 from custom_components.unraid_management_agent.api.events import WebSocketEvent
-from custom_components.unraid_management_agent.api.models import SystemInfo
+from custom_components.unraid_management_agent.api.models import (
+    NotificationCounts,
+    NotificationOverview,
+    NotificationsResponse,
+    SystemInfo,
+)
 from custom_components.unraid_management_agent.const import DOMAIN
 from custom_components.unraid_management_agent.coordinator import UnraidData
 
@@ -216,6 +221,9 @@ class TestCoordinatorWebSocketEvents:
     def test_handle_websocket_event_notification_update(self, coordinator) -> None:
         """Test handling notification update WebSocket event."""
         coordinator.data = MagicMock()
+        coordinator.data.notifications = NotificationsResponse(
+            overview=NotificationOverview(unread=NotificationCounts(total=2))
+        )
         new_notifications = MagicMock()
         event = WebSocketEvent(
             event_type=EventType.NOTIFICATION_UPDATE, data=new_notifications
@@ -224,7 +232,10 @@ class TestCoordinatorWebSocketEvents:
         with patch.object(coordinator, "async_set_updated_data"):
             coordinator._handle_websocket_event(event)
 
-        assert coordinator.data.notifications == new_notifications
+        assert coordinator.data.notifications is not None
+        assert coordinator.data.notifications.overview is not None
+        assert coordinator.data.notifications.overview.unread_count == 2
+        assert coordinator.data.notifications.notifications == new_notifications
 
     def test_handle_websocket_event_zfs_pool_update(self, coordinator) -> None:
         """Test handling ZFS pool update WebSocket event."""
@@ -2068,6 +2079,7 @@ class TestCoordinatorAPIExceptionHandling:
         mock_async_unraid_client.list_notifications.side_effect = Exception(
             "Notifications error"
         )
+        mock_async_unraid_client.get_notification_overview.return_value = None
 
         with (
             patch(

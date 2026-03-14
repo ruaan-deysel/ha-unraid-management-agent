@@ -19,6 +19,7 @@ from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
+    SensorExtraStoredData,
     SensorStateClass,
 )
 from homeassistant.const import (
@@ -63,6 +64,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # Coordinator handles updates, so no parallel update limit needed
 PARALLEL_UPDATES = 0
+NETWORK_RATE_STALE_SECONDS = 300.0
 
 
 def _add_attr_if_set(attrs: dict[str, Any], key: str, value: Any) -> None:
@@ -84,6 +86,139 @@ class UnraidSensorEntityDescription(SensorEntityDescription):
     extra_state_attributes_fn: Callable[[UnraidData], dict[str, Any]] | None = None
     available_fn: Callable[[UnraidData], bool] = lambda data: data is not None
     supported_fn: Callable[[UnraidData], bool] = lambda _: True
+
+
+@dataclass
+class UnraidRateSensorExtraStoredData(SensorExtraStoredData):
+    """Extra restore-state data for network rate sensors."""
+
+    last_bytes: int | None
+    last_timestamp: float | None
+    last_uptime_seconds: int | None
+
+    def as_dict(self) -> dict[str, Any]:
+        """Return a dict representation of the network rate restore data."""
+        data = super().as_dict()
+        data["last_bytes"] = self.last_bytes
+        data["last_timestamp"] = self.last_timestamp
+        data["last_uptime_seconds"] = self.last_uptime_seconds
+        return data
+
+    @classmethod
+    def from_dict(
+        cls, restored: dict[str, Any]
+    ) -> UnraidRateSensorExtraStoredData | None:
+        """Create restore data from a persisted dict."""
+        extra = SensorExtraStoredData.from_dict(restored)
+        if extra is None:
+            return None
+
+        try:
+            last_bytes = (
+                int(restored["last_bytes"])
+                if restored.get("last_bytes") is not None
+                else None
+            )
+            last_timestamp = (
+                float(restored["last_timestamp"])
+                if restored.get("last_timestamp") is not None
+                else None
+            )
+            last_uptime_seconds = (
+                int(restored["last_uptime_seconds"])
+                if restored.get("last_uptime_seconds") is not None
+                else None
+            )
+        except TypeError, ValueError:
+            return None
+
+        return cls(
+            extra.native_value,
+            extra.native_unit_of_measurement,
+            last_bytes,
+            last_timestamp,
+            last_uptime_seconds,
+        )
+
+
+@dataclass
+class UnraidEnergySensorExtraStoredData(SensorExtraStoredData):
+    """Extra restore-state data for derived energy sensors."""
+
+    last_power_watts: float | None
+    last_timestamp: float | None
+    last_uptime_seconds: int | None
+
+    def as_dict(self) -> dict[str, Any]:
+        """Return a dict representation of the energy restore data."""
+        data = super().as_dict()
+        data["last_power_watts"] = self.last_power_watts
+        data["last_timestamp"] = self.last_timestamp
+        data["last_uptime_seconds"] = self.last_uptime_seconds
+        return data
+
+    @classmethod
+    def from_dict(
+        cls, restored: dict[str, Any]
+    ) -> UnraidEnergySensorExtraStoredData | None:
+        """Create restore data from a persisted dict."""
+        extra = SensorExtraStoredData.from_dict(restored)
+        if extra is None:
+            return None
+
+        try:
+            last_power_watts = (
+                float(restored["last_power_watts"])
+                if restored.get("last_power_watts") is not None
+                else None
+            )
+            last_timestamp = (
+                float(restored["last_timestamp"])
+                if restored.get("last_timestamp") is not None
+                else None
+            )
+            last_uptime_seconds = (
+                int(restored["last_uptime_seconds"])
+                if restored.get("last_uptime_seconds") is not None
+                else None
+            )
+        except TypeError, ValueError:
+            return None
+
+        return cls(
+            extra.native_value,
+            extra.native_unit_of_measurement,
+            last_power_watts,
+            last_timestamp,
+            last_uptime_seconds,
+        )
+
+
+def _get_system_uptime_seconds(data: UnraidData | None) -> int | None:
+    """Get the current system uptime in seconds from coordinator data."""
+    if not data or not data.system:
+        return None
+
+    uptime_seconds = getattr(data.system, "uptime_seconds", None)
+    if uptime_seconds is None:
+        return None
+
+    try:
+        return int(uptime_seconds)
+    except TypeError, ValueError:
+        return None
+
+
+def _did_system_reboot(
+    current_uptime_seconds: int | None,
+    previous_uptime_seconds: int | None,
+) -> bool:
+    """Return true if the current uptime indicates the Unraid host rebooted."""
+    return (
+        current_uptime_seconds is not None
+        and previous_uptime_seconds is not None
+        and current_uptime_seconds < previous_uptime_seconds
+    )
 
 
 # =============================================================================
@@ -261,7 +396,7 @@ def _get_parity_progress(data: UnraidData) -> float | None:
     """Get parity check progress from coordinator data."""
     if data and data.array and data.array.sync_percent is not None:
         return round(data.array.sync_percent, 1)
-    return 0.0
+    return None
 
 
 def _get_parity_attrs(data: UnraidData) -> dict[str, Any]:
@@ -652,9 +787,21 @@ def _get_last_parity_errors(data: UnraidData) -> int | None:
 
 def _get_notifications_count(data: UnraidData) -> int | None:
     """Get unread notifications count from coordinator data."""
-    if data and data.notifications is not None:
-        return getattr(data.notifications, "unread_count", None)
-    return None
+    if not data or data.notifications is None:
+        return None
+
+    notifications = data.notifications
+    if isinstance(notifications, list):
+        return len(notifications)
+
+    overview = getattr(notifications, "overview", None)
+    unread_count = getattr(notifications, "unread_count", None)
+    notif_list = getattr(notifications, "notifications", None) or []
+
+    if overview is None and notif_list:
+        return len(notif_list)
+
+    return unread_count
 
 
 def _get_notifications_attrs(data: UnraidData) -> dict[str, Any]:
@@ -663,13 +810,46 @@ def _get_notifications_attrs(data: UnraidData) -> dict[str, Any]:
         return {}
 
     notifications = data.notifications
-    attrs = {}
+    attrs: dict[str, Any] = {}
+
+    if isinstance(notifications, list):
+        if notifications:
+            attrs["total_count"] = len(notifications)
+
+        recent = []
+        for notif in notifications[:5]:
+            subject = getattr(notif, "subject", None)
+            importance = getattr(notif, "importance", None)
+            if subject:
+                recent.append(
+                    {"subject": subject, "importance": importance}
+                    if importance
+                    else {"subject": subject}
+                )
+        if recent:
+            attrs["recent_notifications"] = recent
+
+        return attrs
+
+    unread_count = getattr(notifications, "unread_count", None)
+    if unread_count is not None:
+        attrs["unread_count"] = unread_count
 
     total = getattr(notifications, "total_count", None)
+    overview = getattr(notifications, "overview", None)
+    if total is None and overview is not None:
+        unread_total = getattr(getattr(overview, "unread", None), "total", None) or 0
+        archive_total = getattr(getattr(overview, "archive", None), "total", None) or 0
+        if unread_total or archive_total:
+            total = unread_total + archive_total
+
+    notif_list = getattr(notifications, "notifications", None) or []
+    if total is None and notif_list:
+        total = len(notif_list)
+
     if total is not None:
         attrs["total_count"] = total
 
-    notif_list = getattr(notifications, "notifications", []) or []
     if notif_list:
         recent = []
         for notif in notif_list[:5]:
@@ -1347,8 +1527,8 @@ class UnraidFanSensor(UnraidBaseEntity, SensorEntity):
         return attrs
 
 
-class UnraidNetworkSensorBase(UnraidBaseEntity, SensorEntity):
-    """Base class for network rate sensors with caching (PR #12 fix)."""
+class UnraidNetworkSensorBase(UnraidBaseEntity, RestoreEntity, SensorEntity):
+    """Base class for network rate sensors with restart-safe caching."""
 
     _attr_native_unit_of_measurement = UnitOfDataRate.KILOBITS_PER_SECOND
     _attr_device_class = SensorDeviceClass.DATA_RATE
@@ -1371,8 +1551,53 @@ class UnraidNetworkSensorBase(UnraidBaseEntity, SensorEntity):
             "mdi:download-network" if direction == "rx" else "mdi:upload-network"
         )
 
-        # Use the vendored RateCalculator for rate computation (replaces PR #12 fix)
-        self._rate_calculator = RateCalculator()
+        self._rate_calculator = RateCalculator(
+            stale_threshold_seconds=NETWORK_RATE_STALE_SECONDS
+        )
+        self._last_uptime_seconds: int | None = None
+
+    async def async_added_to_hass(self) -> None:
+        """Restore previous calculator context when added to hass."""
+        await super().async_added_to_hass()
+        await self._async_restore_rate_state()
+
+    async def _async_restore_rate_state(self) -> None:
+        """Restore the previously persisted rate calculator context."""
+        if (extra_data := await self.async_get_last_extra_data()) is None:
+            return
+
+        restored = UnraidRateSensorExtraStoredData.from_dict(extra_data.as_dict())
+        if restored is None:
+            return
+
+        try:
+            restored_rate = float(restored.native_value)
+        except TypeError, ValueError:
+            restored_rate = 0.0
+
+        self._rate_calculator.restore_state(
+            last_bytes=restored.last_bytes,
+            last_timestamp=restored.last_timestamp,
+            rate_kbps=restored_rate,
+        )
+        self._last_uptime_seconds = restored.last_uptime_seconds
+
+    @property
+    def extra_restore_state_data(self) -> UnraidRateSensorExtraStoredData:
+        """Return network sensor state data that should survive restarts."""
+        interface = self._get_interface()
+        current_bytes = (
+            self._get_bytes(interface)
+            if interface is not None
+            else self._rate_calculator.last_bytes
+        )
+        return UnraidRateSensorExtraStoredData(
+            self.native_value,
+            self.native_unit_of_measurement,
+            current_bytes,
+            self._rate_calculator.last_timestamp,
+            getattr(self, "_last_uptime_seconds", None),
+        )
 
     @property
     def unique_id(self) -> str:
@@ -1409,7 +1634,15 @@ class UnraidNetworkSensorBase(UnraidBaseEntity, SensorEntity):
 
         current_bytes = self._get_bytes(interface)
         if current_bytes is not None:
-            self._rate_calculator.add_sample(current_bytes, time.monotonic())
+            current_uptime_seconds = _get_system_uptime_seconds(self.coordinator.data)
+            if _did_system_reboot(
+                current_uptime_seconds,
+                getattr(self, "_last_uptime_seconds", None),
+            ):
+                self._rate_calculator.reset()
+
+            self._rate_calculator.add_sample(current_bytes, time.time())
+            self._last_uptime_seconds = current_uptime_seconds
 
         super()._handle_coordinator_update()
 
@@ -1417,6 +1650,11 @@ class UnraidNetworkSensorBase(UnraidBaseEntity, SensorEntity):
     def native_value(self) -> float:
         """Return the calculated rate."""
         return self._rate_calculator.rate_kbps
+
+    @property
+    def available(self) -> bool:
+        """Return if the sensor's interface is present in coordinator data."""
+        return super().available and self._get_interface() is not None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -1568,7 +1806,7 @@ class UnraidDiskUsageSensor(UnraidDiskSensorBase):
         return attrs
 
 
-class UnraidDiskHealthSensor(UnraidDiskSensorBase):
+class UnraidDiskHealthSensor(UnraidDiskSensorBase, RestoreEntity):
     """Disk health/SMART status sensor."""
 
     _attr_icon = "mdi:harddisk"
@@ -1585,6 +1823,19 @@ class UnraidDiskHealthSensor(UnraidDiskSensorBase):
         super().__init__(coordinator, entry, disk_id, disk_name, "health")
         self._attr_name = f"Disk {disk_name} Health"
         self._last_known_health: str | None = None
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the cached SMART health value when added to hass."""
+        await super().async_added_to_hass()
+        await self._async_restore_last_known_health()
+
+    async def _async_restore_last_known_health(self) -> None:
+        """Restore the last known SMART health value."""
+        if (last_state := await self.async_get_last_state()) is None:
+            return
+
+        if last_state.state not in (None, "unknown", "unavailable"):
+            self._last_known_health = last_state.state
 
     @property
     def unique_id(self) -> str:
@@ -2116,19 +2367,53 @@ class UnraidUPSEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
         self._energy_integrator = EnergyIntegrator()
         self._total_energy: float = 0.0
         self._last_power: float | None = None
+        self._last_uptime_seconds: int | None = None
 
     async def async_added_to_hass(self) -> None:
         """Restore previous state when added to hass."""
         await super().async_added_to_hass()
+        await self._async_restore_energy_state()
 
-        # Restore previous state
+    async def _async_restore_energy_state(self) -> None:
+        """Restore the accumulated energy total and integration baseline."""
         if (
             last_state := await self.async_get_last_state()
         ) is not None and last_state.state not in (None, "unknown", "unavailable"):
             try:
                 self._total_energy = float(last_state.state)
-            except ValueError, TypeError:
+            except TypeError, ValueError:
                 self._total_energy = 0.0
+
+        if (extra_data := await self.async_get_last_extra_data()) is None:
+            return
+
+        restored = UnraidEnergySensorExtraStoredData.from_dict(extra_data.as_dict())
+        if restored is None:
+            return
+
+        if self._total_energy == 0.0:
+            try:
+                self._total_energy = float(restored.native_value)
+            except TypeError, ValueError:
+                pass
+
+        self._last_power = restored.last_power_watts
+        self._last_uptime_seconds = restored.last_uptime_seconds
+        self._energy_integrator.restore_state(
+            last_power_watts=restored.last_power_watts,
+            last_timestamp=restored.last_timestamp,
+        )
+
+    @property
+    def extra_restore_state_data(self) -> UnraidEnergySensorExtraStoredData:
+        """Return energy sensor state data that should survive restarts."""
+        return UnraidEnergySensorExtraStoredData(
+            self.native_value,
+            self.native_unit_of_measurement,
+            self._last_power,
+            self._energy_integrator.last_timestamp,
+            self._last_uptime_seconds,
+        )
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -2146,8 +2431,16 @@ class UnraidUPSEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
         if current_power is None or current_power < 0:
             return
 
-        self._energy_integrator.add_sample(current_power, time.monotonic())
+        current_uptime_seconds = _get_system_uptime_seconds(self.coordinator.data)
+        if _did_system_reboot(
+            current_uptime_seconds,
+            self._last_uptime_seconds,
+        ):
+            self._energy_integrator.reset()
+
+        self._energy_integrator.add_sample(current_power, time.time())
         self._last_power = current_power
+        self._last_uptime_seconds = current_uptime_seconds
 
     @property
     def native_value(self) -> float:
@@ -2205,19 +2498,53 @@ class UnraidGPUEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
         self._energy_integrator = EnergyIntegrator()
         self._total_energy: float = 0.0
         self._last_power: float | None = None
+        self._last_uptime_seconds: int | None = None
 
     async def async_added_to_hass(self) -> None:
         """Restore previous state when added to hass."""
         await super().async_added_to_hass()
+        await self._async_restore_energy_state()
 
-        # Restore previous state
+    async def _async_restore_energy_state(self) -> None:
+        """Restore the accumulated energy total and integration baseline."""
         if (
             last_state := await self.async_get_last_state()
         ) is not None and last_state.state not in (None, "unknown", "unavailable"):
             try:
                 self._total_energy = float(last_state.state)
-            except ValueError, TypeError:
+            except TypeError, ValueError:
                 self._total_energy = 0.0
+
+        if (extra_data := await self.async_get_last_extra_data()) is None:
+            return
+
+        restored = UnraidEnergySensorExtraStoredData.from_dict(extra_data.as_dict())
+        if restored is None:
+            return
+
+        if self._total_energy == 0.0:
+            try:
+                self._total_energy = float(restored.native_value)
+            except TypeError, ValueError:
+                pass
+
+        self._last_power = restored.last_power_watts
+        self._last_uptime_seconds = restored.last_uptime_seconds
+        self._energy_integrator.restore_state(
+            last_power_watts=restored.last_power_watts,
+            last_timestamp=restored.last_timestamp,
+        )
+
+    @property
+    def extra_restore_state_data(self) -> UnraidEnergySensorExtraStoredData:
+        """Return energy sensor state data that should survive restarts."""
+        return UnraidEnergySensorExtraStoredData(
+            self.native_value,
+            self.native_unit_of_measurement,
+            self._last_power,
+            self._energy_integrator.last_timestamp,
+            self._last_uptime_seconds,
+        )
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -2239,8 +2566,16 @@ class UnraidGPUEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
         if current_power is None or current_power < 0:
             return
 
-        self._energy_integrator.add_sample(current_power, time.monotonic())
+        current_uptime_seconds = _get_system_uptime_seconds(self.coordinator.data)
+        if _did_system_reboot(
+            current_uptime_seconds,
+            self._last_uptime_seconds,
+        ):
+            self._energy_integrator.reset()
+
+        self._energy_integrator.add_sample(current_power, time.time())
         self._last_power = current_power
+        self._last_uptime_seconds = current_uptime_seconds
 
     @property
     def native_value(self) -> float:

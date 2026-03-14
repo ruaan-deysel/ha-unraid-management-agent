@@ -68,6 +68,7 @@ def mock_async_unraid_client() -> Generator[MagicMock]:
         )
         client.list_shares = AsyncMock(return_value=[])
         client.list_notifications = AsyncMock(return_value=[])
+        client.get_notification_overview = AsyncMock(return_value=None)
         client.list_user_scripts = AsyncMock(return_value=[])
         client.list_zfs_pools = AsyncMock(return_value=[])
         client.list_zfs_datasets = AsyncMock(return_value=[])

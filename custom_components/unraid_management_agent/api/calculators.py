@@ -66,6 +66,16 @@ class EnergyIntegrator:
         """
         return self._total_wh
 
+    @property
+    def last_power_watts(self) -> float | None:
+        """Get the most recent power reading used by the integrator."""
+        return self._last_power_watts
+
+    @property
+    def last_timestamp(self) -> float | None:
+        """Get the most recent sample timestamp used by the integrator."""
+        return self._last_timestamp
+
     def add_sample(self, power_watts: float, timestamp: float) -> None:
         """
         Add a power reading sample.
@@ -84,6 +94,23 @@ class EnergyIntegrator:
 
         self._last_power_watts = power_watts
         self._last_timestamp = timestamp
+
+    def restore_state(
+        self,
+        *,
+        last_power_watts: float | None,
+        last_timestamp: float | None,
+        total_wh: float = 0.0,
+    ) -> None:
+        """Restore the integrator state from persisted data."""
+        if last_power_watts is None or last_timestamp is None:
+            self._last_power_watts = None
+            self._last_timestamp = None
+        else:
+            self._last_power_watts = last_power_watts
+            self._last_timestamp = last_timestamp
+
+        self._total_wh = total_wh
 
     def reset(self) -> None:
         """Reset the integrator to zero."""
@@ -110,8 +137,9 @@ class RateCalculator:
     COUNTER_32_MAX = 2**32
     COUNTER_64_MAX = 2**64
 
-    def __init__(self) -> None:
+    def __init__(self, stale_threshold_seconds: float | None = None) -> None:
         """Initialize the rate calculator."""
+        self._stale_threshold = stale_threshold_seconds
         self._last_bytes: int | None = None
         self._last_timestamp: float | None = None
         self._rate_kbps: float = 0.0
@@ -127,6 +155,16 @@ class RateCalculator:
         """
         return self._rate_kbps
 
+    @property
+    def last_bytes(self) -> int | None:
+        """Get the most recent byte counter sample."""
+        return self._last_bytes
+
+    @property
+    def last_timestamp(self) -> float | None:
+        """Get the most recent sample timestamp."""
+        return self._last_timestamp
+
     def add_sample(self, byte_count: int, timestamp: float) -> None:
         """
         Add a byte counter sample.
@@ -139,19 +177,34 @@ class RateCalculator:
         if self._last_bytes is not None and self._last_timestamp is not None:
             dt = timestamp - self._last_timestamp
             if dt > 0:
-                delta_bytes = byte_count - self._last_bytes
-                # Handle counter wrap
-                if delta_bytes < 0:
-                    if self._last_bytes < self.COUNTER_32_MAX:
-                        delta_bytes += self.COUNTER_32_MAX
-                    else:
-                        delta_bytes += self.COUNTER_64_MAX
+                if self._stale_threshold is not None and dt > self._stale_threshold:
+                    self._rate_kbps = 0.0
+                else:
+                    delta_bytes = byte_count - self._last_bytes
+                    # Handle counter wrap
+                    if delta_bytes < 0:
+                        if self._last_bytes < self.COUNTER_32_MAX:
+                            delta_bytes += self.COUNTER_32_MAX
+                        else:
+                            delta_bytes += self.COUNTER_64_MAX
 
-                # Convert bytes/sec to kilobits/sec
-                self._rate_kbps = (delta_bytes / dt) * 8 / 1000
+                    # Convert bytes/sec to kilobits/sec
+                    self._rate_kbps = (delta_bytes / dt) * 8 / 1000
 
         self._last_bytes = byte_count
         self._last_timestamp = timestamp
+
+    def restore_state(
+        self,
+        *,
+        last_bytes: int | None,
+        last_timestamp: float | None,
+        rate_kbps: float = 0.0,
+    ) -> None:
+        """Restore the calculator state from persisted data."""
+        self._last_bytes = last_bytes
+        self._last_timestamp = last_timestamp
+        self._rate_kbps = rate_kbps
 
     def reset(self) -> None:
         """Reset the calculator state."""

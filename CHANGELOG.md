@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2026.3.1] - 2026-03-14
+
+### Fixed
+
+- **Parity Sensor Compatibility**: Parity progress and running-state handling now accept sync progress compatibility fields and no longer report a false `0%` state when parity data is unavailable (#38)
+- **Notification Count Updates**: Notification WebSocket list updates now preserve notification overview state instead of overwriting it with a bare list payload (#39)
+- **Restart-Safe Sensor Restore**: Stateful derived sensors now restore their cached calculation context after Home Assistant restarts without carrying stale values across Unraid reboots (#42)
+  - Network RX/TX sensors restore their previous byte-counter baseline and last calculated rate after Home Assistant restarts
+  - Network rate baselines are discarded automatically when Unraid uptime indicates the server rebooted
+  - Disk health sensors restore the last known SMART status so standby disks do not temporarily regress to unknown after Home Assistant restarts
+  - UPS and GPU energy sensors now restore both their accumulated total and their integration baseline, while resetting the baseline safely after an Unraid reboot
+
 ## [2026.3.0] - 2026-03-01
 
 ### Added

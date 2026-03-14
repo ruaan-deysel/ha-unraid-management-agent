@@ -26,6 +26,7 @@ from .api.models import (
     GPUInfo,
     MoverSettings,
     NetworkInterface,
+    NotificationOverview,
     NotificationsResponse,
     ParityHistory,
     ParitySchedule,
@@ -289,6 +290,7 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
             network: list[NetworkInterface] = []
             shares: list[ShareInfo] = []
             notifications: NotificationsResponse | None = None
+            notification_overview: NotificationOverview | None = None
             user_scripts: list[UserScript] = []
             zfs_pools: list[ZFSPool] = []
             zfs_datasets: list[ZFSDataset] = []
@@ -355,6 +357,24 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
                 notifications = await self.client.list_notifications()
             except Exception as err:
                 _LOGGER.debug("Error fetching notifications: %s", err)
+
+            if isinstance(notifications, list):
+                notifications = NotificationsResponse(notifications=notifications)
+
+            try:
+                notification_overview = await self.client.get_notification_overview()
+            except Exception as err:
+                _LOGGER.debug("Error fetching notification overview: %s", err)
+
+            if notification_overview is not None:
+                if notifications is None:
+                    notifications = NotificationsResponse(
+                        overview=notification_overview
+                    )
+                else:
+                    notifications = notifications.model_copy(
+                        update={"overview": notification_overview}
+                    )
 
             # Fetch user scripts
             try:
@@ -554,8 +574,15 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
                 event.data if isinstance(event.data, list) else [event.data]
             )
         elif event.event_type == EventType.NOTIFICATION_UPDATE:
-            # WebSocket notification updates come as NotificationsResponse
-            self.data.notifications = event.data
+            current_notifications = self.data.notifications
+            if isinstance(current_notifications, NotificationsResponse):
+                self.data.notifications = current_notifications.model_copy(
+                    update={"notifications": event.data}
+                )
+            else:
+                self.data.notifications = NotificationsResponse(
+                    notifications=event.data
+                )
         elif event.event_type == EventType.NOTIFICATIONS_RESPONSE:
             # Full notifications response with overview and counts
             self.data.notifications = event.data

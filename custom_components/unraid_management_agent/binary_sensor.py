@@ -64,12 +64,19 @@ def _parity_check_attributes(
     if not data or not data.array:
         return {}
     parity_status = getattr(data.array, "parity_check_status", None)
-    if not parity_status:
+    status = (
+        parity_status
+        if isinstance(parity_status, str)
+        else getattr(parity_status, "status", None)
+    )
+    if status is None:
+        sync_action = getattr(data.array, "sync_action", None)
+        status = sync_action if isinstance(sync_action, str) else None
+    if status is None:
         return {}
-    status = getattr(parity_status, "status", None)
     return {
         ATTR_PARITY_CHECK_STATUS: status,
-        "is_paused": status.lower() == "paused" if status else False,
+        "is_paused": status.lower() == "paused",
     }
 
 

@@ -1,0 +1,91 @@
+integration:
+  - changed-files:
+      - any-glob-to-any-file:
+          - custom_components/unraid_management_agent/__init__.py
+          - custom_components/unraid_management_agent/const.py
+          - custom_components/unraid_management_agent/icons.json
+          - custom_components/unraid_management_agent/manifest.json
+          - custom_components/unraid_management_agent/py.typed
+          - custom_components/unraid_management_agent/quality_scale.yaml
+          - custom_components/unraid_management_agent/services.yaml
+
+api:
+  - changed-files:
+      - any-glob-to-any-file:
+          - custom_components/unraid_management_agent/api/**
+
+coordinator:
+  - changed-files:
+      - any-glob-to-any-file:
+          - custom_components/unraid_management_agent/coordinator.py
+
+entities:
+  - changed-files:
+      - any-glob-to-any-file:
+          - custom_components/unraid_management_agent/entity.py
+          - custom_components/unraid_management_agent/sensor.py
+          - custom_components/unraid_management_agent/binary_sensor.py
+          - custom_components/unraid_management_agent/switch.py
+          - custom_components/unraid_management_agent/button.py
+
+config-flow:
+  - changed-files:
+      - any-glob-to-any-file:
+          - custom_components/unraid_management_agent/config_flow.py
+
+diagnostics:
+  - changed-files:
+      - any-glob-to-any-file:
+          - custom_components/unraid_management_agent/diagnostics.py
+
+repairs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - custom_components/unraid_management_agent/repairs.py
+
+translations:
+  - changed-files:
+      - any-glob-to-any-file:
+          - custom_components/unraid_management_agent/strings.json
+          - custom_components/unraid_management_agent/translations/**
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file:
+          - tests/**
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - CHANGELOG.md
+          - README.md
+          - docs/**
+          - .github/ISSUE_TEMPLATE/**
+          - .github/prompts/**
+          - .github/instructions/**
+          - "**/*.md"
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - .python-version
+          - hacs.json
+          - pyproject.toml
+          - pyrightconfig.json
+          - requirements.txt
+
+python:
+  - changed-files:
+      - any-glob-to-any-file:
+          - custom_components/**/*.py
+          - tests/**/*.py
+          - script/**
+
+github-actions:
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/workflows/**
+          - .github/dependabot.yml
+          - .github/labeler.yml
+          - .github/labels.yml
+          - .github/FUNDING.yml

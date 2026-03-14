@@ -260,7 +260,9 @@ class ArrayStatus(BaseModel):
         None, description="Parity check status (e.g., 'idle', 'running')"
     )
     parity_check_progress: CoercedFloat = Field(
-        None, description="Parity check progress percentage"
+        None,
+        description="Parity check progress percentage",
+        validation_alias=AliasChoices("parity_check_progress", "sync_percent"),
     )
 
     # Sync/parity operation fields (Issue #59)
@@ -311,7 +313,7 @@ class ArrayStatus(BaseModel):
         Check if a parity check is currently running.
 
         Returns:
-            True if parity check status indicates running or checking.
+            True if parity check status indicates an active parity operation.
 
         Example:
             >>> status = ArrayStatus(parity_check_status="running")
@@ -319,13 +321,25 @@ class ArrayStatus(BaseModel):
             True
 
         """
-        if self.parity_check_status is None:
+        if self.parity_check_status is not None:
+            normalized_status = self.parity_check_status.lower().strip()
+            if normalized_status in (
+                "running",
+                "checking",
+                "in progress",
+                "paused",
+                "clearing",
+                "reconstructing",
+            ):
+                return True
+
+            if normalized_status not in ("", "idle", "none", "unknown"):
+                return False
+
+        if self.sync_action is None:
             return False
-        return self.parity_check_status.lower() in (
-            "running",
-            "checking",
-            "in progress",
-        )
+
+        return self.sync_action.lower() not in ("", "idle", "none", "unknown")
 
     @property
     def is_parity_check_stuck(self) -> bool:

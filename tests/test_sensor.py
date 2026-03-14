@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.const import PERCENTAGE
@@ -23,10 +23,12 @@ from custom_components.unraid_management_agent.sensor import (
     UnraidDiskHealthSensor,
     UnraidDiskTemperatureSensor,
     UnraidDiskUsageSensor,
+    UnraidEnergySensorExtraStoredData,
     UnraidFanSensor,
     UnraidGPUEnergySensor,
     UnraidNetworkRXSensor,
     UnraidNetworkTXSensor,
+    UnraidRateSensorExtraStoredData,
     # Entity description pattern classes
     UnraidSensorEntity,
     UnraidShareUsageSensor,
@@ -507,7 +509,7 @@ def test_get_parity_progress_with_data():
 def test_get_parity_progress_none_data():
     """Test _get_parity_progress with None data."""
     result = _get_parity_progress(None)
-    assert result == 0.0
+    assert result is None
 
 
 def test_get_parity_attrs_with_data():
@@ -973,6 +975,26 @@ def test_get_notifications_count_with_list():
     assert result == 3
 
 
+def test_get_notifications_count_from_notification_list() -> None:
+    """Test _get_notifications_count with a bare notifications list."""
+    data = UnraidData()
+    data.notifications = [MagicMock(), MagicMock()]
+
+    assert _get_notifications_count(data) == 2
+
+
+def test_get_notifications_count_without_overview_uses_list_length() -> None:
+    """Test _get_notifications_count falls back to list length without overview."""
+    data = UnraidData()
+    notifications = MagicMock()
+    notifications.overview = None
+    notifications.unread_count = 0
+    notifications.notifications = [MagicMock(), MagicMock(), MagicMock()]
+    data.notifications = notifications
+
+    assert _get_notifications_count(data) == 3
+
+
 def test_get_notifications_attrs_with_data():
     """Test _get_notifications_attrs with valid data."""
     mock_data = MagicMock(spec=UnraidData)
@@ -987,6 +1009,45 @@ def test_get_notifications_attrs_with_data():
     assert attrs["total_count"] == 10
     assert len(attrs["recent_notifications"]) == 1
     assert attrs["recent_notifications"][0]["subject"] == "Test Notification"
+
+
+def test_get_notifications_attrs_with_list() -> None:
+    """Test _get_notifications_attrs with a bare notifications list."""
+    data = UnraidData()
+    notification = MagicMock()
+    notification.subject = "Disk warning"
+    notification.importance = "warning"
+    data.notifications = [notification]
+
+    attrs = _get_notifications_attrs(data)
+
+    assert attrs["total_count"] == 1
+    assert attrs["recent_notifications"] == [
+        {"subject": "Disk warning", "importance": "warning"}
+    ]
+
+
+def test_get_notifications_attrs_uses_overview_totals() -> None:
+    """Test _get_notifications_attrs derives total count from overview totals."""
+    from custom_components.unraid_management_agent.api.models import (
+        NotificationCounts,
+        NotificationOverview,
+        NotificationsResponse,
+    )
+
+    data = UnraidData()
+    data.notifications = NotificationsResponse(
+        overview=NotificationOverview(
+            unread=NotificationCounts(total=2),
+            archive=NotificationCounts(total=3),
+        ),
+        notifications=[],
+    )
+
+    attrs = _get_notifications_attrs(data)
+
+    assert attrs["unread_count"] == 2
+    assert attrs["total_count"] == 5
 
 
 # =============================================================================
@@ -1279,6 +1340,37 @@ def test_network_tx_sensor_no_data() -> None:
     assert sensor.native_value == 0.0
 
 
+def test_network_rx_sensor_unavailable_when_interface_missing() -> None:
+    """Test network RX sensor availability when the interface is missing."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.last_update_success = True
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.data.network = []
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidNetworkRXSensor(mock_coordinator, mock_entry, "eth0")
+
+    assert sensor.available is False
+
+
+def test_network_tx_sensor_available_when_interface_exists() -> None:
+    """Test network TX sensor availability when the interface exists."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.last_update_success = True
+    mock_coordinator.data = MagicMock()
+    mock_interface = MagicMock()
+    mock_interface.name = "eth0"
+    mock_interface.bytes_sent = 1000
+    mock_coordinator.data.network = [mock_interface]
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidNetworkTXSensor(mock_coordinator, mock_entry, "eth0")
+
+    assert sensor.available is True
+
+
 def test_network_rx_sensor_extra_attrs() -> None:
     """Test network RX sensor extra attributes."""
     mock_coordinator = MagicMock()
@@ -1371,6 +1463,99 @@ def test_network_rx_sensor_handle_update_initial_bytes() -> None:
 
     # After first update, rate should be 0 (only one sample)
     assert sensor._rate_calculator.rate_kbps == 0.0
+
+
+async def test_network_rx_sensor_restore_rate_state() -> None:
+    """Test network RX sensor restores persisted rate calculator context."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidNetworkRXSensor(mock_coordinator, mock_entry, "eth0")
+    sensor.async_get_last_extra_data = AsyncMock(
+        return_value=UnraidRateSensorExtraStoredData(
+            12.5,
+            sensor.native_unit_of_measurement,
+            2048,
+            100.0,
+            500,
+        )
+    )
+
+    await sensor._async_restore_rate_state()
+
+    assert sensor.native_value == 12.5
+    assert sensor._rate_calculator.last_bytes == 2048
+    assert sensor._rate_calculator.last_timestamp == 100.0
+    assert sensor._last_uptime_seconds == 500
+
+
+def test_network_rx_sensor_handle_update_uses_restored_context() -> None:
+    """Test network RX sensor continues rate calculation after a HA restart."""
+    mock_interface = MagicMock()
+    mock_interface.name = "eth0"
+    mock_interface.bytes_received = 1600
+
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.data.network = [mock_interface]
+    mock_coordinator.data.system = MagicMock()
+    mock_coordinator.data.system.uptime_seconds = 1060
+
+    sensor = object.__new__(UnraidNetworkRXSensor)
+    sensor._interface_name = "eth0"
+    sensor._rate_calculator = RateCalculator(stale_threshold_seconds=300.0)
+    sensor._last_uptime_seconds = 1000
+    sensor.coordinator = mock_coordinator
+    sensor.async_write_ha_state = MagicMock()
+    sensor._rate_calculator.restore_state(
+        last_bytes=1000,
+        last_timestamp=100.0,
+        rate_kbps=12.0,
+    )
+
+    with patch(
+        "custom_components.unraid_management_agent.sensor.time.time", return_value=160.0
+    ):
+        sensor._handle_coordinator_update()
+
+    assert sensor.native_value == pytest.approx(0.08, rel=0.01)
+    assert sensor._last_uptime_seconds == 1060
+
+
+def test_network_rx_sensor_handle_update_resets_on_reboot() -> None:
+    """Test network RX sensor discards restored context after an Unraid reboot."""
+    mock_interface = MagicMock()
+    mock_interface.name = "eth0"
+    mock_interface.bytes_received = 1600
+
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.data.network = [mock_interface]
+    mock_coordinator.data.system = MagicMock()
+    mock_coordinator.data.system.uptime_seconds = 10
+
+    sensor = object.__new__(UnraidNetworkRXSensor)
+    sensor._interface_name = "eth0"
+    sensor._rate_calculator = RateCalculator(stale_threshold_seconds=300.0)
+    sensor._last_uptime_seconds = 1000
+    sensor.coordinator = mock_coordinator
+    sensor.async_write_ha_state = MagicMock()
+    sensor._rate_calculator.restore_state(
+        last_bytes=1000,
+        last_timestamp=100.0,
+        rate_kbps=12.0,
+    )
+
+    with patch(
+        "custom_components.unraid_management_agent.sensor.time.time", return_value=160.0
+    ):
+        sensor._handle_coordinator_update()
+
+    assert sensor.native_value == 0.0
+    assert sensor._rate_calculator.last_bytes == 1600
+    assert sensor._last_uptime_seconds == 10
 
 
 # =============================================================================
@@ -2343,6 +2528,27 @@ def test_disk_health_sensor_disk_not_found() -> None:
 
     assert sensor.native_value is None
     assert sensor.extra_state_attributes == {}
+
+
+async def test_disk_health_sensor_restores_last_known_health() -> None:
+    """Test disk health sensor restores cached SMART health after a HA restart."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_disk = MagicMock()
+    mock_disk.id = "disk1"
+    mock_disk.smart_status = None
+    mock_disk.status = None
+    mock_disk.is_standby = True
+    mock_coordinator.data.disks = [mock_disk]
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidDiskHealthSensor(mock_coordinator, mock_entry, "disk1", "Disk 1")
+    sensor.async_get_last_state = AsyncMock(return_value=MagicMock(state="PASSED"))
+
+    await sensor._async_restore_last_known_health()
+
+    assert sensor.native_value == "PASSED"
 
 
 # =============================================================================
@@ -4220,11 +4426,11 @@ def test_ups_energy_sensor_update_energy_subsequent_reading() -> None:
 
     sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
 
-    # Simulate two readings 30 minutes apart using time.monotonic
+    # Simulate two readings 30 minutes apart using wall-clock timestamps
     with patch("custom_components.unraid_management_agent.sensor.time") as mock_time:
-        mock_time.monotonic.return_value = 0.0
+        mock_time.time.return_value = 0.0
         sensor._update_energy()  # First reading at t=0
-        mock_time.monotonic.return_value = 1800.0  # 30 minutes later
+        mock_time.time.return_value = 1800.0  # 30 minutes later
         sensor._update_energy()  # Second reading at t=1800
 
     # Energy integrator: 100W * 1800s = 50 Wh; native_value = total_energy + 50/1000
@@ -4267,9 +4473,9 @@ def test_ups_energy_sensor_update_energy_long_gap() -> None:
 
     # Simulate two readings with a long gap (2 hours apart)
     with patch("custom_components.unraid_management_agent.sensor.time") as mock_time:
-        mock_time.monotonic.return_value = 0.0
+        mock_time.time.return_value = 0.0
         sensor._update_energy()  # First reading at t=0
-        mock_time.monotonic.return_value = 7200.0  # 2 hours later
+        mock_time.time.return_value = 7200.0  # 2 hours later
         sensor._update_energy()  # Second reading at t=7200
 
     # Energy should not increment for gaps > 1 hour (stale threshold)
@@ -4371,6 +4577,69 @@ def test_ups_energy_sensor_extra_state_attributes_empty() -> None:
 
     assert "last_reset" not in attrs
     assert "current_power_watts" not in attrs
+
+
+async def test_ups_energy_sensor_restore_energy_state() -> None:
+    """Test UPS energy sensor restores its total and integration baseline."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
+    sensor.async_get_last_state = AsyncMock(return_value=MagicMock(state="1.25"))
+    sensor.async_get_last_extra_data = AsyncMock(
+        return_value=UnraidEnergySensorExtraStoredData(
+            1.25,
+            sensor.native_unit_of_measurement,
+            100.0,
+            1000.0,
+            500,
+        )
+    )
+
+    await sensor._async_restore_energy_state()
+
+    assert sensor.native_value == 1.25
+    assert sensor._last_power == 100.0
+    assert sensor._energy_integrator.last_power_watts == 100.0
+    assert sensor._energy_integrator.last_timestamp == 1000.0
+    assert sensor._last_uptime_seconds == 500
+
+
+def test_ups_energy_sensor_update_energy_resets_on_reboot() -> None:
+    """Test UPS energy sensor resets the integration baseline after reboot."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.data.system = MagicMock()
+    mock_coordinator.data.system.uptime_seconds = 5
+    mock_coordinator.data.ups = MagicMock()
+    mock_coordinator.data.ups.power_watts = 100.0
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
+    sensor._total_energy = 1.5
+    sensor._last_power = 120.0
+    sensor._last_uptime_seconds = 1000
+    sensor._energy_integrator.restore_state(
+        last_power_watts=120.0,
+        last_timestamp=100.0,
+    )
+
+    with patch(
+        "custom_components.unraid_management_agent.sensor.time.time", return_value=160.0
+    ):
+        sensor._update_energy()
+
+    assert sensor.native_value == 1.5
+    assert sensor._energy_integrator.total_wh == 0.0
+    assert sensor._last_power == 100.0
+    assert sensor._last_uptime_seconds == 5
 
 
 # =============================================================================
@@ -4601,11 +4870,11 @@ def test_gpu_energy_sensor_update_energy_subsequent_reading() -> None:
 
     sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
 
-    # Simulate two readings 30 minutes apart using time.monotonic
+    # Simulate two readings 30 minutes apart using wall-clock timestamps
     with patch("custom_components.unraid_management_agent.sensor.time") as mock_time:
-        mock_time.monotonic.return_value = 0.0
+        mock_time.time.return_value = 0.0
         sensor._update_energy()  # First reading at t=0
-        mock_time.monotonic.return_value = 1800.0  # 30 minutes later
+        mock_time.time.return_value = 1800.0  # 30 minutes later
         sensor._update_energy()  # Second reading at t=1800
 
     # Energy integrator: 200W * 1800s = 100 Wh; native_value = total_energy + 100/1000
@@ -4650,9 +4919,9 @@ def test_gpu_energy_sensor_update_energy_long_gap() -> None:
 
     # Simulate two readings with a long gap (2 hours apart)
     with patch("custom_components.unraid_management_agent.sensor.time") as mock_time:
-        mock_time.monotonic.return_value = 0.0
+        mock_time.time.return_value = 0.0
         sensor._update_energy()  # First reading at t=0
-        mock_time.monotonic.return_value = 7200.0  # 2 hours later
+        mock_time.time.return_value = 7200.0  # 2 hours later
         sensor._update_energy()  # Second reading at t=7200
 
     # Energy should not increment for gaps > 1 hour (stale threshold)
@@ -4770,3 +5039,33 @@ def test_gpu_energy_sensor_extra_state_attributes_empty() -> None:
 
     assert "last_reset" not in attrs
     assert "current_power_watts" not in attrs
+
+
+async def test_gpu_energy_sensor_restore_energy_state() -> None:
+    """Test GPU energy sensor restores its total and integration baseline."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.config_entry = MagicMock()
+    mock_coordinator.config_entry.entry_id = "test_entry"
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+    sensor.async_get_last_state = AsyncMock(return_value=MagicMock(state="2.5"))
+    sensor.async_get_last_extra_data = AsyncMock(
+        return_value=UnraidEnergySensorExtraStoredData(
+            2.5,
+            sensor.native_unit_of_measurement,
+            220.0,
+            2000.0,
+            800,
+        )
+    )
+
+    await sensor._async_restore_energy_state()
+
+    assert sensor.native_value == 2.5
+    assert sensor._last_power == 220.0
+    assert sensor._energy_integrator.last_power_watts == 220.0
+    assert sensor._energy_integrator.last_timestamp == 2000.0
+    assert sensor._last_uptime_seconds == 800

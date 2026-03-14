@@ -1,0 +1,105 @@
+# Repository labels for the Unraid Management Agent integration
+
+# Issue types
+- name: bug
+  color: "d73a4a"
+  description: "Something is not working in the integration"
+
+- name: enhancement
+  color: "a2eeef"
+  description: "New feature or improvement request"
+
+- name: compatibility
+  color: "c5def5"
+  description: "System compatibility request or unsupported device work"
+
+- name: question
+  color: "d876e3"
+  description: "Question or clarification request"
+
+- name: documentation
+  color: "0075ca"
+  description: "Documentation, prompts, or changelog updates"
+
+# Status
+- name: triage
+  color: "fbca04"
+  description: "Needs initial review or investigation"
+
+- name: confirmed
+  color: "0e8a16"
+  description: "Confirmed bug or accepted request"
+
+- name: blocked
+  color: "b60205"
+  description: "Blocked by missing information or prerequisite work"
+
+- name: duplicate
+  color: "cfd3d7"
+  description: "Duplicates an existing issue or pull request"
+
+- name: invalid
+  color: "e4e669"
+  description: "Not actionable for this project"
+
+- name: wontfix
+  color: "ffffff"
+  description: "Not planned for implementation"
+
+# Project areas
+- name: integration
+  color: "1d76db"
+  description: "Core integration setup, manifest, services, constants, or shared integration plumbing"
+
+- name: api
+  color: "1d76db"
+  description: "Vendored UMA API client, models, websocket, or command handling changes"
+
+- name: coordinator
+  color: "1d76db"
+  description: "Coordinator refresh, caching, or state management changes"
+
+- name: entities
+  color: "1d76db"
+  description: "Sensor, binary sensor, switch, button, or base entity changes"
+
+- name: config-flow
+  color: "5319e7"
+  description: "Setup, reauthentication, or options flow changes"
+
+- name: diagnostics
+  color: "5319e7"
+  description: "Diagnostics payloads and debug-report changes"
+
+- name: repairs
+  color: "5319e7"
+  description: "Home Assistant repairs flow changes"
+
+- name: translations
+  color: "5319e7"
+  description: "Translation strings and localization changes"
+
+- name: tests
+  color: "0e8a16"
+  description: "Test coverage, fixtures, or test infrastructure changes"
+
+- name: dependencies
+  color: "0366d6"
+  description: "Dependency, Python version, or packaging updates"
+
+- name: github-actions
+  color: "0366d6"
+  description: "GitHub Actions, Dependabot, or repository automation changes"
+
+- name: python
+  color: "0366d6"
+  description: "Python runtime or tooling updates"
+
+# Community
+- name: good first issue
+  color: "7057ff"
+  description: "Good starting point for new contributors"
+
+- name: help wanted
+  color: "008672"
+  description: "Community contributions are welcome"

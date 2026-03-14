@@ -5,7 +5,11 @@ This library provides a simple and intuitive interface to interact with the
 Unraid Management Agent REST API and WebSocket endpoints.
 """
 
-from ._version import __version__
+from ._version import (
+    __upstream_feature_epoch__,
+    __upstream_release__,
+    __version__,
+)
 from .calculators import (
     EnergyIntegrator,
     RateCalculator,
@@ -320,6 +324,8 @@ __all__ = [
     "ZFSSnapshot",
     "ZFSSnapshotUpdateEvent",
     # Version
+    "__upstream_feature_epoch__",
+    "__upstream_release__",
     "__version__",
     # Formatting utilities
     "format_bytes",
