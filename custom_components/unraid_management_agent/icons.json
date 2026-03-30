@@ -53,7 +53,7 @@
         "default": "mdi:thermometer"
       },
       "disk_smart_errors": {
-        "default": "mdi:harddisk-alert"
+        "default": "mdi:alert-circle-outline"
       },
       "disk_read_bytes": {
         "default": "mdi:harddisk-plus"

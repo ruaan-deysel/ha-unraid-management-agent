@@ -2187,7 +2187,7 @@ class UnraidDiskSmartErrorsSensor(UnraidDiskSensorBase):
     """
 
     _attr_state_class = SensorStateClass.TOTAL
-    _attr_icon = "mdi:harddisk-alert"
+    _attr_icon = "mdi:alert-circle-outline"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False
 
