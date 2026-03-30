@@ -3153,3 +3153,61 @@ class TestCoordinatorAPIErrorHandling:
         assert coordinator._unavailable_logged is False
         assert coordinator.update_success is True
         assert data is not None
+
+
+# ───────────────────────────────────────────────────────────────────
+# _fetch helper tests
+# ───────────────────────────────────────────────────────────────────
+
+
+async def test_fetch_success(hass: HomeAssistant) -> None:
+    """Test _fetch returns result on success."""
+    coordinator = MagicMock(spec=UnraidDataUpdateCoordinator)
+    coordinator._fetch = UnraidDataUpdateCoordinator._fetch.__get__(coordinator)
+
+    async def ok_coro() -> str:
+        return "hello"
+
+    result = await coordinator._fetch("test", ok_coro)
+    assert result == "hello"
+
+
+async def test_fetch_error_returns_none(hass: HomeAssistant) -> None:
+    """Test _fetch returns None and logs on error."""
+    coordinator = MagicMock(spec=UnraidDataUpdateCoordinator)
+    coordinator._fetch = UnraidDataUpdateCoordinator._fetch.__get__(coordinator)
+
+    async def fail_coro() -> str:
+        msg = "boom"
+        raise RuntimeError(msg)
+
+    result = await coordinator._fetch("test_endpoint", fail_coro)
+    assert result is None
+
+
+async def test_fetch_404_suppressed(hass: HomeAssistant) -> None:
+    """Test _fetch suppresses 404 errors when suppress_404=True."""
+    coordinator = MagicMock(spec=UnraidDataUpdateCoordinator)
+    coordinator._fetch = UnraidDataUpdateCoordinator._fetch.__get__(coordinator)
+
+    async def not_found_coro() -> str:
+        msg = "404 Not Found"
+        raise Exception(msg)
+
+    result = await coordinator._fetch(
+        "optional_endpoint", not_found_coro, suppress_404=True
+    )
+    assert result is None
+
+
+async def test_fetch_404_not_suppressed(hass: HomeAssistant) -> None:
+    """Test _fetch logs 404 errors when suppress_404=False."""
+    coordinator = MagicMock(spec=UnraidDataUpdateCoordinator)
+    coordinator._fetch = UnraidDataUpdateCoordinator._fetch.__get__(coordinator)
+
+    async def not_found_coro() -> str:
+        msg = "404 Not Found"
+        raise Exception(msg)
+
+    result = await coordinator._fetch("endpoint", not_found_coro, suppress_404=False)
+    assert result is None

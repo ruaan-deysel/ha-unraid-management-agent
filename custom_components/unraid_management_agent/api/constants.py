@@ -54,6 +54,7 @@ class EventType(StrEnum):
     HARDWARE_UPDATE = "hardware_update"
     COLLECTOR_STATE_CHANGE = "collector_state_change"
     NOTIFICATIONS_RESPONSE = "notifications_response"
+    FAN_CONTROL_UPDATE = "fan_control_update"
 
 
 class ArrayState(StrEnum):
@@ -152,3 +153,32 @@ class TemperatureStatus(StrEnum):
     NORMAL = "normal"
     WARNING = "warning"
     CRITICAL = "critical"
+
+
+class FanControlMode(StrEnum):
+    """
+    Fan control modes.
+
+    Example:
+        >>> if fan.mode == FanControlMode.AUTO:
+        ...     print("Fan is automatically controlled")
+
+    """
+
+    OFF = "off"
+    MANUAL = "manual"
+    AUTO = "auto"
+
+
+class FanControlMethod(StrEnum):
+    """
+    Fan control hardware methods.
+
+    Example:
+        >>> if config.control_method == FanControlMethod.HWMON:
+        ...     print("Using hwmon for fan control")
+
+    """
+
+    HWMON = "hwmon"
+    IPMI = "ipmi"

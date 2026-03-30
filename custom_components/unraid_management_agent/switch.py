@@ -83,6 +83,18 @@ async def async_setup_entry(
                 seen_vm_identifiers.add(vm_identifier)
                 entities.append(UnraidVMSwitch(coordinator, vm_identifier, vm_name))
 
+    # Disk spin switches - only if disk collector is enabled
+    if coordinator.is_collector_enabled("disk"):
+        disks = data.disks if data else []
+        for disk in disks or []:
+            if getattr(disk, "is_physical", False):
+                disk_id = str(getattr(disk, "id", None) or getattr(disk, "name", ""))
+                disk_name = str(getattr(disk, "name", ""))
+                if disk_id and disk_name:
+                    entities.append(
+                        UnraidDiskSpinSwitch(coordinator, disk_id, disk_name)
+                    )
+
     _LOGGER.debug("Adding %d Unraid switch entities", len(entities))
     async_add_entities(entities)
 
@@ -187,11 +199,18 @@ class UnraidContainerSwitch(UnraidBaseEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the container."""
+        container_id = self._container_id
+        if container_id is None:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="container_start_error",
+                translation_placeholders={"name": self._container_name},
+            )
         try:
             self._optimistic_state = True
             self.async_write_ha_state()
 
-            await self.coordinator.client.start_container(self._container_id)
+            await self.coordinator.client.start_container(container_id)
             _LOGGER.info("Started container: %s", self._container_name)
 
             # Request a refresh to update state
@@ -207,11 +226,18 @@ class UnraidContainerSwitch(UnraidBaseEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the container."""
+        container_id = self._container_id
+        if container_id is None:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="container_stop_error",
+                translation_placeholders={"name": self._container_name},
+            )
         try:
             self._optimistic_state = False
             self.async_write_ha_state()
 
-            await self.coordinator.client.stop_container(self._container_id)
+            await self.coordinator.client.stop_container(container_id)
             _LOGGER.info("Stopped container: %s", self._container_name)
 
             # Request a refresh to update state
@@ -344,11 +370,18 @@ class UnraidVMSwitch(UnraidBaseEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the VM."""
+        vm_id = self._vm_id
+        if vm_id is None:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="vm_start_error",
+                translation_placeholders={"name": self._vm_name},
+            )
         try:
             self._optimistic_state = True
             self.async_write_ha_state()
 
-            await self.coordinator.client.start_vm(self._vm_id)
+            await self.coordinator.client.start_vm(vm_id)
             _LOGGER.info("Started VM: %s", self._vm_name)
 
             # Request a refresh to update state
@@ -364,11 +397,18 @@ class UnraidVMSwitch(UnraidBaseEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the VM."""
+        vm_id = self._vm_id
+        if vm_id is None:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="vm_stop_error",
+                translation_placeholders={"name": self._vm_name},
+            )
         try:
             self._optimistic_state = False
             self.async_write_ha_state()
 
-            await self.coordinator.client.stop_vm(self._vm_id)
+            await self.coordinator.client.stop_vm(vm_id)
             _LOGGER.info("Stopped VM: %s", self._vm_name)
 
             # Request a refresh to update state
@@ -380,4 +420,96 @@ class UnraidVMSwitch(UnraidBaseEntity, SwitchEntity):
                 translation_domain=DOMAIN,
                 translation_key="vm_stop_error",
                 translation_placeholders={"name": self._vm_name},
+            ) from exc
+
+
+class UnraidDiskSpinSwitch(UnraidBaseEntity, SwitchEntity):
+    """Disk spin control switch."""
+
+    _attr_icon = "mdi:harddisk"
+    _attr_assumed_state = False
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        disk_id: str,
+        disk_name: str,
+    ) -> None:
+        """Initialize the disk spin switch."""
+        self._disk_id = disk_id
+        self._disk_name = disk_name
+        safe_name = slugify(disk_name)
+        super().__init__(coordinator, f"disk_{safe_name}_spin")
+        self._attr_translation_key = "disk_spin"
+        self._attr_translation_placeholders = {"disk_name": disk_name}
+        self._optimistic_state: bool | None = None
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        if self._optimistic_state is not None:
+            disk = self._find_disk()
+            if disk:
+                actual_active = getattr(disk, "spin_state", "").lower() == "active"
+                if actual_active == self._optimistic_state:
+                    self._optimistic_state = None
+        super()._handle_coordinator_update()
+
+    def _find_disk(self) -> Any | None:
+        """Find the disk in coordinator data."""
+        data = self.coordinator.data
+        if not data or not data.disks:
+            return None
+        for disk in data.disks:
+            d_id = str(getattr(disk, "id", None) or getattr(disk, "name", ""))
+            if d_id == self._disk_id:
+                return disk
+        return None
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        return super().available and self._find_disk() is not None
+
+    @property
+    def is_on(self) -> bool:
+        """Return true if disk is spun up (active)."""
+        if self._optimistic_state is not None:
+            return self._optimistic_state
+        disk = self._find_disk()
+        if disk:
+            return getattr(disk, "spin_state", "").lower() == "active"
+        return False
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Spin up the disk."""
+        try:
+            self._optimistic_state = True
+            self.async_write_ha_state()
+            await self.coordinator.client.spin_up_disk(self._disk_id)
+            await self.coordinator.async_request_refresh()
+        except Exception as exc:
+            self._optimistic_state = None
+            self.async_write_ha_state()
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="disk_spin_up_error",
+                translation_placeholders={"disk_name": self._disk_name},
+            ) from exc
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Spin down the disk."""
+        try:
+            self._optimistic_state = False
+            self.async_write_ha_state()
+            await self.coordinator.client.spin_down_disk(self._disk_id)
+            await self.coordinator.async_request_refresh()
+        except Exception as exc:
+            self._optimistic_state = None
+            self.async_write_ha_state()
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="disk_spin_down_error",
+                translation_placeholders={"disk_name": self._disk_name},
             ) from exc

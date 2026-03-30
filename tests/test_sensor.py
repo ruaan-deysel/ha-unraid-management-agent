@@ -39,10 +39,12 @@ from custom_components.unraid_management_agent.sensor import (
     _get_array_attrs,
     _get_array_usage,
     _get_cpu_attrs,
+    _get_cpu_power,
     _get_cpu_temperature,
     _get_cpu_usage,
     _get_docker_vdisk_attrs,
     _get_docker_vdisk_usage,
+    _get_dram_power,
     _get_flash_free_space,
     _get_flash_usage,
     _get_flash_usage_attrs,
@@ -364,6 +366,63 @@ def test_get_motherboard_temperature_with_data():
 def test_get_motherboard_temperature_none_data():
     """Test _get_motherboard_temperature with None data."""
     result = _get_motherboard_temperature(None)
+    assert result is None
+
+
+# =============================================================================
+# Value Function Tests - CPU/DRAM Power
+# =============================================================================
+
+
+def test_get_cpu_power_with_data():
+    """Test _get_cpu_power with valid data."""
+    mock_data = MagicMock(spec=UnraidData)
+    mock_data.system = MagicMock()
+    mock_data.system.cpu_power_watts = 3.43
+
+    result = _get_cpu_power(mock_data)
+    assert result == 3.4
+
+
+def test_get_cpu_power_none_data():
+    """Test _get_cpu_power with None data."""
+    result = _get_cpu_power(None)
+    assert result is None
+
+
+def test_get_cpu_power_no_value():
+    """Test _get_cpu_power with no power value."""
+    mock_data = MagicMock(spec=UnraidData)
+    mock_data.system = MagicMock()
+    mock_data.system.cpu_power_watts = None
+
+    result = _get_cpu_power(mock_data)
+    assert result is None
+
+
+def test_get_dram_power_with_data():
+    """Test _get_dram_power with valid data."""
+    mock_data = MagicMock(spec=UnraidData)
+    mock_data.system = MagicMock()
+    mock_data.system.dram_power_watts = 0.76
+
+    result = _get_dram_power(mock_data)
+    assert result == 0.8
+
+
+def test_get_dram_power_none_data():
+    """Test _get_dram_power with None data."""
+    result = _get_dram_power(None)
+    assert result is None
+
+
+def test_get_dram_power_no_value():
+    """Test _get_dram_power with no power value."""
+    mock_data = MagicMock(spec=UnraidData)
+    mock_data.system = MagicMock()
+    mock_data.system.dram_power_watts = None
+
+    result = _get_dram_power(mock_data)
     assert result is None
 
 
@@ -903,8 +962,7 @@ def test_get_last_parity_check_with_data():
     """Test _get_last_parity_check with valid data."""
     mock_data = MagicMock(spec=UnraidData)
     mock_last = MagicMock()
-    mock_last.timestamp = "2024-01-08T03:00:00+00:00"
-    mock_last.date = None
+    mock_last.date = "2024-01-08T03:00:00+00:00"
     mock_data.parity_history = MagicMock()
     mock_data.parity_history.records = [mock_last]
     mock_data.parity_history.most_recent = mock_last
@@ -1255,6 +1313,7 @@ def test_fan_sensor_with_data() -> None:
     mock_coordinator = MagicMock()
     mock_coordinator.data = MagicMock()
     mock_coordinator.data.system = MagicMock()
+    mock_coordinator.data.fan_control = None
     mock_fan = MagicMock()
     mock_fan.name = "cpu"
     mock_fan.rpm = 1500
@@ -1272,6 +1331,7 @@ def test_fan_sensor_with_dict_data() -> None:
     mock_coordinator = MagicMock()
     mock_coordinator.data = MagicMock()
     mock_coordinator.data.system = MagicMock()
+    mock_coordinator.data.fan_control = None
     mock_coordinator.data.system.fans = [{"name": "cpu", "rpm": 1200}]
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
@@ -1286,6 +1346,7 @@ def test_fan_sensor_name_not_found() -> None:
     mock_coordinator = MagicMock()
     mock_coordinator.data = MagicMock()
     mock_coordinator.data.system = MagicMock()
+    mock_coordinator.data.fan_control = None
     mock_coordinator.data.system.fans = []
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
@@ -1293,6 +1354,147 @@ def test_fan_sensor_name_not_found() -> None:
     sensor = UnraidFanSensor(mock_coordinator, mock_entry, "cpu", "cpu")
 
     assert sensor.native_value is None
+
+
+def test_fan_sensor_with_fan_control_data() -> None:
+    """Test fan sensor prefers fan_control data over system.fans."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.data.system = MagicMock()
+
+    # fan_control has detailed device info
+    mock_device = MagicMock()
+    mock_device.name = "cpu"
+    mock_device.rpm = 1800
+    mock_device.pwm_percent = 75.5
+    mock_device.mode = "auto"
+    mock_device.controllable = True
+    mock_device.id = "hwmon4_fan1"
+    mock_coordinator.data.fan_control = MagicMock()
+    mock_coordinator.data.fan_control.fans = [mock_device]
+    mock_coordinator.data.fan_control.summary = MagicMock()
+    mock_coordinator.data.fan_control.summary.failed_fans = []
+
+    # system.fans has older data
+    mock_fan = MagicMock()
+    mock_fan.name = "cpu"
+    mock_fan.rpm = 1500
+    mock_coordinator.data.system.fans = [mock_fan]
+
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidFanSensor(mock_coordinator, mock_entry, "cpu", "cpu")
+
+    # Should prefer fan_control RPM
+    assert sensor.native_value == 1800
+
+    # Should include fan control attributes
+    attrs = sensor.extra_state_attributes
+    assert attrs["pwm_percent"] == 75.5
+    assert attrs["mode"] == "auto"
+    assert attrs["controllable"] is True
+    assert attrs["fan_id"] == "hwmon4_fan1"
+    assert "failed" not in attrs
+
+
+def test_fan_sensor_with_failed_fan() -> None:
+    """Test fan sensor reports failed status from summary."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.data.system = MagicMock()
+
+    mock_device = MagicMock()
+    mock_device.name = "rear"
+    mock_device.rpm = 0
+    mock_device.pwm_percent = 0.0
+    mock_device.mode = "off"
+    mock_device.controllable = True
+    mock_device.id = "hwmon4_fan3"
+    mock_coordinator.data.fan_control = MagicMock()
+    mock_coordinator.data.fan_control.fans = [mock_device]
+    mock_coordinator.data.fan_control.summary = MagicMock()
+    mock_coordinator.data.fan_control.summary.failed_fans = ["hwmon4_fan3"]
+
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidFanSensor(mock_coordinator, mock_entry, "rear", "rear")
+
+    attrs = sensor.extra_state_attributes
+    assert attrs["failed"] is True
+
+
+def test_fan_sensor_fan_control_no_match() -> None:
+    """Test fan sensor falls back to system.fans when fan_control has no match."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.data.system = MagicMock()
+
+    # fan_control has a different fan (no name or index match)
+    mock_device = MagicMock()
+    mock_device.name = "other_fan"
+    mock_device.hwmon_index = 99
+    mock_coordinator.data.fan_control = MagicMock()
+    mock_coordinator.data.fan_control.fans = [mock_device]
+    mock_coordinator.data.fan_control.summary = None
+
+    # system.fans has our fan
+    mock_fan = MagicMock()
+    mock_fan.name = "cpu"
+    mock_fan.rpm = 1200
+    mock_coordinator.data.system.fans = [mock_fan]
+
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidFanSensor(mock_coordinator, mock_entry, "cpu", "cpu")
+
+    assert sensor.native_value == 1200
+
+
+def test_fan_sensor_hwmon_index_matching() -> None:
+    """Test fan sensor matches by hwmon_index when system uses chip driver names."""
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.data.system = MagicMock()
+
+    # fan_control uses hwmon-style naming
+    mock_device = MagicMock()
+    mock_device.name = "Fan 1"
+    mock_device.hwmon_index = 1
+    mock_device.rpm = 972
+    mock_device.pwm_percent = 100.0
+    mock_device.mode = "off"
+    mock_device.controllable = True
+    mock_device.id = "hwmon4_fan1"
+    mock_coordinator.data.fan_control = MagicMock()
+    mock_coordinator.data.fan_control.fans = [mock_device]
+    mock_coordinator.data.fan_control.summary = MagicMock()
+    mock_coordinator.data.fan_control.summary.failed_fans = []
+
+    # system.fans uses chip driver naming
+    mock_fan = MagicMock()
+    mock_fan.name = "nct6793_fan1"
+    mock_fan.rpm = 970
+    mock_coordinator.data.system.fans = [mock_fan]
+
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    sensor = UnraidFanSensor(
+        mock_coordinator, mock_entry, "nct6793_fan1", "nct6793_fan1"
+    )
+
+    # Should match by hwmon_index and prefer fan_control RPM
+    assert sensor.native_value == 972
+
+    # Should include fan control attributes
+    attrs = sensor.extra_state_attributes
+    assert attrs["pwm_percent"] == 100.0
+    assert attrs["mode"] == "off"
+    assert attrs["controllable"] is True
+    assert attrs["fan_id"] == "hwmon4_fan1"
 
 
 # =============================================================================
@@ -1516,7 +1718,8 @@ def test_network_rx_sensor_handle_update_uses_restored_context() -> None:
     )
 
     with patch(
-        "custom_components.unraid_management_agent.sensor.time.time", return_value=160.0
+        "custom_components.unraid_management_agent.sensor.dt_util.utcnow",
+        return_value=MagicMock(timestamp=MagicMock(return_value=160.0)),
     ):
         sensor._handle_coordinator_update()
 
@@ -1549,7 +1752,8 @@ def test_network_rx_sensor_handle_update_resets_on_reboot() -> None:
     )
 
     with patch(
-        "custom_components.unraid_management_agent.sensor.time.time", return_value=160.0
+        "custom_components.unraid_management_agent.sensor.dt_util.utcnow",
+        return_value=MagicMock(timestamp=MagicMock(return_value=160.0)),
     ):
         sensor._handle_coordinator_update()
 
@@ -1809,7 +2013,6 @@ def test_share_usage_sensor_extra_attrs_with_cache() -> None:
     mock_share.use_cache = "prefer"
     mock_share.cache_pool = "cache"
     mock_share.mover_action = "cache_to_array"
-    mock_share.split_level = "1"
     mock_coordinator.data.shares = [mock_share]
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
@@ -1821,7 +2024,6 @@ def test_share_usage_sensor_extra_attrs_with_cache() -> None:
     assert attrs["use_cache"] == "prefer"
     assert attrs["cache_pool"] == "cache"
     assert attrs["mover_action"] == "cache_to_array"
-    assert attrs["split_level"] == "1"
 
 
 def test_share_usage_sensor_extra_attrs_no_cache() -> None:
@@ -1837,7 +2039,6 @@ def test_share_usage_sensor_extra_attrs_no_cache() -> None:
     mock_share.use_cache = None
     mock_share.cache_pool = None
     mock_share.mover_action = None
-    mock_share.split_level = None
     mock_coordinator.data.shares = [mock_share]
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
@@ -1849,7 +2050,6 @@ def test_share_usage_sensor_extra_attrs_no_cache() -> None:
     assert "use_cache" not in attrs
     assert "cache_pool" not in attrs
     assert "mover_action" not in attrs
-    assert "split_level" not in attrs
 
 
 def test_share_usage_sensor_extra_attrs_partial_cache() -> None:
@@ -1865,7 +2065,6 @@ def test_share_usage_sensor_extra_attrs_partial_cache() -> None:
     mock_share.use_cache = "yes"
     mock_share.cache_pool = "cache"
     mock_share.mover_action = None  # No mover action
-    mock_share.split_level = "0"
     mock_coordinator.data.shares = [mock_share]
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
@@ -1877,7 +2076,6 @@ def test_share_usage_sensor_extra_attrs_partial_cache() -> None:
     assert attrs["use_cache"] == "yes"
     assert attrs["cache_pool"] == "cache"
     assert "mover_action" not in attrs
-    assert attrs["split_level"] == "0"
 
 
 # =============================================================================
@@ -2004,7 +2202,7 @@ def test_get_last_parity_check_attrs_with_records() -> None:
     mock_record = MagicMock()
     mock_record.errors = 5
     mock_record.duration_seconds = 3600
-    mock_record.result = "passed"
+    mock_record.status = "passed"
     mock_history = MagicMock()
     mock_history.records = [mock_record]
     mock_history.most_recent = mock_record
@@ -2017,7 +2215,7 @@ def test_get_last_parity_check_attrs_with_records() -> None:
 
 
 def test_get_last_parity_check_attrs_duration_via_duration() -> None:
-    """Test _get_last_parity_check_attrs with duration field."""
+    """Test _get_last_parity_check_attrs with no duration."""
     from custom_components.unraid_management_agent.sensor import (
         _get_last_parity_check_attrs,
     )
@@ -2026,8 +2224,6 @@ def test_get_last_parity_check_attrs_duration_via_duration() -> None:
     mock_record = MagicMock()
     mock_record.errors = None
     mock_record.duration_seconds = None
-    mock_record.duration = 7200
-    mock_record.result = None
     mock_record.status = "complete"
     mock_history = MagicMock()
     mock_history.records = [mock_record]
@@ -2035,7 +2231,7 @@ def test_get_last_parity_check_attrs_duration_via_duration() -> None:
     data.parity_history = mock_history
 
     attrs = _get_last_parity_check_attrs(data)
-    assert "last_duration" in attrs
+    assert "last_duration" not in attrs
     assert attrs["result"] == "complete"
 
 
@@ -2464,7 +2660,7 @@ def test_disk_usage_sensor_extra_attributes() -> None:
     mock_disk.name = "WDC Red 4TB"
     mock_disk.role = "data"
     mock_disk.status = "DISK_OK"
-    mock_disk.total_bytes = 4000000000000
+    mock_disk.size_bytes = 4000000000000
     mock_disk.used_bytes = 2000000000000
     mock_disk.free_bytes = 2000000000000
     mock_disk.temperature = 35
@@ -2642,6 +2838,7 @@ def test_disk_temperature_sensor_unique_id() -> None:
     """Test disk temperature sensor unique_id."""
     mock_coordinator = MagicMock()
     mock_coordinator.data = None
+    mock_coordinator.config_entry.entry_id = "test_entry"
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
@@ -3302,7 +3499,7 @@ def test_get_last_parity_check_datetime() -> None:
     mock_history = MagicMock()
     expected_time = datetime(2024, 1, 8, 3, 0, 0, tzinfo=UTC)
     mock_record = MagicMock()
-    mock_record.timestamp = "2024-01-08T03:00:00+00:00"
+    mock_record.date = "2024-01-08T03:00:00+00:00"
     mock_history.records = [mock_record]
     mock_history.most_recent = mock_record
     data.parity_history = mock_history
@@ -3320,8 +3517,7 @@ def test_get_last_parity_check_timestamp() -> None:
     data = UnraidData()
     mock_history = MagicMock()
     mock_record = MagicMock()
-    mock_record.timestamp = "1704686400"  # Unix timestamp as string
-    mock_record.date = None
+    mock_record.date = "1704686400"  # Unix timestamp as string
     mock_history.records = [mock_record]
     mock_history.most_recent = mock_record
     data.parity_history = mock_history
@@ -3342,7 +3538,6 @@ def test_get_last_parity_check_date_field() -> None:
     mock_history = MagicMock()
     expected_time = datetime(2024, 1, 8, 3, 0, 0, tzinfo=UTC)
     mock_record = MagicMock()
-    mock_record.timestamp = None
     mock_record.date = "2024-01-08T03:00:00+00:00"
     mock_history.records = [mock_record]
     mock_history.most_recent = mock_record
@@ -3387,7 +3582,7 @@ def test_get_last_parity_check_attrs_full() -> None:
     mock_record = MagicMock()
     mock_record.errors = 0
     mock_record.duration_seconds = 3600
-    mock_record.result = "completed"
+    mock_record.status = "completed"
     mock_history.records = [mock_record]
     mock_history.most_recent = mock_record
     data.parity_history = mock_history
@@ -3415,27 +3610,21 @@ def test_get_last_parity_check_unsorted_records() -> None:
 
     # Create records in non-chronological order (simulating UMA API behavior)
     old_record = MagicMock()
-    old_record.timestamp = None
     old_record.date = "2024-11-30T00:30:26Z"  # Oldest
     old_record.errors = 100
     old_record.duration_seconds = 3600
-    old_record.result = None
     old_record.status = "errors"
 
     middle_record = MagicMock()
-    middle_record.timestamp = None
     middle_record.date = "2025-01-14T09:54:42Z"  # Middle
     middle_record.errors = 0
     middle_record.duration_seconds = 7200
-    middle_record.result = None
     middle_record.status = "OK"
 
     newest_record = MagicMock()
-    newest_record.timestamp = None
     newest_record.date = "2026-01-13T15:16:43Z"  # Newest (but last in list)
     newest_record.errors = 0
     newest_record.duration_seconds = 27
-    newest_record.result = None
     newest_record.status = "Canceled"
 
     # Records are in arbitrary order with oldest first
@@ -4235,6 +4424,7 @@ class SimpleData:
         self.network = None
         self.zfs_pools = None
         self.system = None
+        self.fan_control = None
 
 
 def test_share_usage_sensor_get_share_no_shares() -> None:
@@ -4299,11 +4489,13 @@ def test_fan_sensor_no_system() -> None:
 
     sensor = object.__new__(UnraidFanSensor)
     sensor._fan_name = "Fan 1"
-    sensor._fan_index = 0
+    sensor._normalized_name = "Fan 1"
+    sensor._original_fan_name = "Fan 1"
     sensor.coordinator = MagicMock()
 
     data = SimpleData()
     data.system = None
+    data.fan_control = None
     sensor.coordinator.data = data
 
     result = sensor.native_value
@@ -4427,10 +4619,10 @@ def test_ups_energy_sensor_update_energy_subsequent_reading() -> None:
     sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
 
     # Simulate two readings 30 minutes apart using wall-clock timestamps
-    with patch("custom_components.unraid_management_agent.sensor.time") as mock_time:
-        mock_time.time.return_value = 0.0
+    with patch("custom_components.unraid_management_agent.sensor.dt_util") as mock_dt:
+        mock_dt.utcnow.return_value.timestamp.return_value = 0.0
         sensor._update_energy()  # First reading at t=0
-        mock_time.time.return_value = 1800.0  # 30 minutes later
+        mock_dt.utcnow.return_value.timestamp.return_value = 1800.0  # 30 minutes later
         sensor._update_energy()  # Second reading at t=1800
 
     # Energy integrator: 100W * 1800s = 50 Wh; native_value = total_energy + 50/1000
@@ -4472,10 +4664,10 @@ def test_ups_energy_sensor_update_energy_long_gap() -> None:
     sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
 
     # Simulate two readings with a long gap (2 hours apart)
-    with patch("custom_components.unraid_management_agent.sensor.time") as mock_time:
-        mock_time.time.return_value = 0.0
+    with patch("custom_components.unraid_management_agent.sensor.dt_util") as mock_dt:
+        mock_dt.utcnow.return_value.timestamp.return_value = 0.0
         sensor._update_energy()  # First reading at t=0
-        mock_time.time.return_value = 7200.0  # 2 hours later
+        mock_dt.utcnow.return_value.timestamp.return_value = 7200.0  # 2 hours later
         sensor._update_energy()  # Second reading at t=7200
 
     # Energy should not increment for gaps > 1 hour (stale threshold)
@@ -4632,7 +4824,8 @@ def test_ups_energy_sensor_update_energy_resets_on_reboot() -> None:
     )
 
     with patch(
-        "custom_components.unraid_management_agent.sensor.time.time", return_value=160.0
+        "custom_components.unraid_management_agent.sensor.dt_util.utcnow",
+        return_value=MagicMock(timestamp=MagicMock(return_value=160.0)),
     ):
         sensor._update_energy()
 
@@ -4871,10 +5064,10 @@ def test_gpu_energy_sensor_update_energy_subsequent_reading() -> None:
     sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
 
     # Simulate two readings 30 minutes apart using wall-clock timestamps
-    with patch("custom_components.unraid_management_agent.sensor.time") as mock_time:
-        mock_time.time.return_value = 0.0
+    with patch("custom_components.unraid_management_agent.sensor.dt_util") as mock_dt:
+        mock_dt.utcnow.return_value.timestamp.return_value = 0.0
         sensor._update_energy()  # First reading at t=0
-        mock_time.time.return_value = 1800.0  # 30 minutes later
+        mock_dt.utcnow.return_value.timestamp.return_value = 1800.0  # 30 minutes later
         sensor._update_energy()  # Second reading at t=1800
 
     # Energy integrator: 200W * 1800s = 100 Wh; native_value = total_energy + 100/1000
@@ -4918,10 +5111,10 @@ def test_gpu_energy_sensor_update_energy_long_gap() -> None:
     sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
 
     # Simulate two readings with a long gap (2 hours apart)
-    with patch("custom_components.unraid_management_agent.sensor.time") as mock_time:
-        mock_time.time.return_value = 0.0
+    with patch("custom_components.unraid_management_agent.sensor.dt_util") as mock_dt:
+        mock_dt.utcnow.return_value.timestamp.return_value = 0.0
         sensor._update_energy()  # First reading at t=0
-        mock_time.time.return_value = 7200.0  # 2 hours later
+        mock_dt.utcnow.return_value.timestamp.return_value = 7200.0  # 2 hours later
         sensor._update_energy()  # Second reading at t=7200
 
     # Energy should not increment for gaps > 1 hour (stale threshold)

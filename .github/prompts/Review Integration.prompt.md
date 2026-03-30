@@ -1,12 +1,14 @@
 ---
 agent: "agent"
-tools: ["search/codebase", "search", "runCommands"]
+tools: ["search/codebase", "edit", "search", "execute/runInTerminal", "execute/getTerminalOutput"]
 description: "Comprehensive quality review of integration code and configuration"
 ---
 
 # Review Integration
 
 Your goal is to perform a comprehensive quality review of this Home Assistant integration, identifying issues and suggesting improvements.
+Treat the official Quality Scale rules as mandatory review criteria:
+<https://developers.home-assistant.io/docs/core/integration-quality-scale/rules>
 
 If not provided, ask for:
 
@@ -32,6 +34,7 @@ Report any errors found. Fix critical issues before proceeding.
 
 **Coordinator Pattern:**
 
+- [ ] Entities → Coordinator → API Client pattern followed (no layer skipping)
 - [ ] All API calls go through coordinator
 - [ ] Coordinator has proper error handling (individual + outer try/except)
 - [ ] Update interval is 30 seconds (fixed)

@@ -1,5 +1,7 @@
 """Constants for the Unraid Management Agent integration."""
 
+from __future__ import annotations
+
 from typing import Final
 
 # Integration domain

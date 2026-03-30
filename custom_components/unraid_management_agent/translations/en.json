@@ -60,8 +60,29 @@
       "motherboard_temperature": {
         "name": "Motherboard Temperature"
       },
+      "cpu_power": {
+        "name": "CPU Power"
+      },
+      "dram_power": {
+        "name": "DRAM Power"
+      },
       "uptime": {
         "name": "Uptime"
+      },
+      "chipset_temperature": {
+        "name": "Chipset Temperature"
+      },
+      "cpu_governor": {
+        "name": "CPU Governor"
+      },
+      "cpu_frequency": {
+        "name": "CPU Frequency"
+      },
+      "docker_cpu_usage": {
+        "name": "Docker CPU Usage"
+      },
+      "docker_memory_usage": {
+        "name": "Docker Memory Usage"
       },
       "system_status": {
         "name": "System Status"
@@ -135,6 +156,24 @@
       "zfs_arc_hit_ratio": {
         "name": "ZFS ARC Hit Ratio"
       },
+      "fan": {
+        "name": "Fan {name}"
+      },
+      "network_rx": {
+        "name": "Network {interface} RX"
+      },
+      "network_tx": {
+        "name": "Network {interface} TX"
+      },
+      "disk_usage": {
+        "name": "Disk {disk_name} Usage"
+      },
+      "disk_health": {
+        "name": "Disk {disk_name} Health"
+      },
+      "disk_temperature": {
+        "name": "Disk {disk_name} Temperature"
+      },
       "disk_smart_errors": {
         "name": "Disk {disk_name} SMART Errors"
       },
@@ -143,6 +182,39 @@
       },
       "disk_write_bytes": {
         "name": "Disk {disk_name} Write"
+      },
+      "share_usage": {
+        "name": "Share {share_name} Usage"
+      },
+      "zfs_pool_usage": {
+        "name": "ZFS Pool {pool_name} Usage"
+      },
+      "zfs_pool_health": {
+        "name": "ZFS Pool {pool_name} Health"
+      },
+      "container_cpu": {
+        "name": "{container_name} CPU"
+      },
+      "container_memory": {
+        "name": "{container_name} Memory"
+      },
+      "container_memory_percent": {
+        "name": "{container_name} Memory %"
+      },
+      "registration_type": {
+        "name": "Registration Type"
+      },
+      "registration_state": {
+        "name": "Registration State"
+      },
+      "notifications_unread_info": {
+        "name": "Notifications Unread Info"
+      },
+      "notifications_unread_warning": {
+        "name": "Notifications Unread Warning"
+      },
+      "notifications_unread_alert": {
+        "name": "Notifications Unread Alert"
       }
     },
     "binary_sensor": {
@@ -175,6 +247,9 @@
       },
       "parity_check_scheduled": {
         "name": "Parity Check Scheduled"
+      },
+      "network_service": {
+        "name": "{service_name} Service"
       }
     },
     "switch": {
@@ -183,6 +258,9 @@
       },
       "vm": {
         "name": "VM {name}"
+      },
+      "disk_spin": {
+        "name": "Disk {disk_name} Spin"
       }
     },
     "button": {
@@ -197,6 +275,30 @@
       },
       "parity_check_stop": {
         "name": "Stop Parity Check"
+      },
+      "parity_check_pause": {
+        "name": "Pause Parity Check"
+      },
+      "parity_check_resume": {
+        "name": "Resume Parity Check"
+      },
+      "archive_all_notifications": {
+        "name": "Archive All Notifications"
+      },
+      "container_restart": {
+        "name": "Restart {container_name}"
+      },
+      "vm_force_stop": {
+        "name": "Force Stop {vm_name}"
+      },
+      "vm_restart_button": {
+        "name": "Restart {vm_name}"
+      },
+      "vm_pause": {
+        "name": "Pause {vm_name}"
+      },
+      "vm_resume": {
+        "name": "Resume {vm_name}"
       },
       "user_script": {
         "name": "User Script {script_name}"
@@ -227,6 +329,27 @@
     },
     "vm_stop_error": {
       "message": "Failed to stop VM: {name}"
+    },
+    "container_restart_error": {
+      "message": "Failed to restart container: {container_name}"
+    },
+    "vm_force_stop_error": {
+      "message": "Failed to force stop VM: {vm_name}"
+    },
+    "vm_restart_error": {
+      "message": "Failed to restart VM: {vm_name}"
+    },
+    "vm_pause_error": {
+      "message": "Failed to pause VM: {vm_name}"
+    },
+    "vm_resume_error": {
+      "message": "Failed to resume VM: {vm_name}"
+    },
+    "disk_spin_up_error": {
+      "message": "Failed to spin up disk: {disk_name}"
+    },
+    "disk_spin_down_error": {
+      "message": "Failed to spin down disk: {disk_name}"
     }
   },
   "services": {

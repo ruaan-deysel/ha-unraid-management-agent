@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from homeassistant.components.sensor import SensorEntityDescription
 from homeassistant.const import CONF_HOST
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityDescription
@@ -15,7 +14,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN, MANUFACTURER
 
 if TYPE_CHECKING:
-    from .coordinator import UnraidData, UnraidDataUpdateCoordinator
+    from .coordinator import UnraidDataUpdateCoordinator
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -24,16 +23,6 @@ class UnraidEntityDescription(EntityDescription):
 
     available_fn: Callable[[UnraidDataUpdateCoordinator], bool] = lambda _: True
     supported_fn: Callable[[UnraidDataUpdateCoordinator], bool] = lambda _: True
-
-
-@dataclass(frozen=True, kw_only=True)
-class UnraidSensorEntityDescription(SensorEntityDescription):
-    """Description for Unraid sensor entities with value_fn pattern."""
-
-    value_fn: Callable[[UnraidData], Any] = lambda _: None
-    extra_state_attributes_fn: Callable[[UnraidData], dict[str, Any]] | None = None
-    available_fn: Callable[[UnraidData], bool] = lambda data: data is not None
-    supported_fn: Callable[[UnraidData], bool] = lambda _: True
 
 
 class UnraidBaseEntity(CoordinatorEntity["UnraidDataUpdateCoordinator"]):
@@ -115,5 +104,4 @@ __all__ = [
     "UnraidBaseEntity",
     "UnraidEntity",
     "UnraidEntityDescription",
-    "UnraidSensorEntityDescription",
 ]

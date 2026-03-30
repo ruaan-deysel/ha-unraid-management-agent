@@ -91,6 +91,36 @@ class FanInfo(BaseModel):
         return self.name
 
 
+class TemperatureInfo(BaseModel):
+    """Individual temperature sensor reading."""
+
+    name: str | None = Field(None, description="Sensor name")
+    value_celsius: CoercedFloat = Field(None, description="Temperature in Celsius")
+    sensor_type: str | None = Field(
+        None, description="Sensor type (cpu, chipset, other)"
+    )
+    source: str | None = Field(None, description="Sensor source")
+
+    model_config = {"frozen": True, "extra": "allow"}
+
+
+class CpuPowerState(BaseModel):
+    """CPU power state and frequency information."""
+
+    governor: str | None = Field(None, description="CPU frequency governor")
+    available_governors: list[str] | None = Field(
+        None, description="Available frequency governors"
+    )
+    driver: str | None = Field(None, description="CPU frequency driver")
+    min_freq_mhz: CoercedFloat = Field(None, description="Minimum CPU frequency in MHz")
+    max_freq_mhz: CoercedFloat = Field(None, description="Maximum CPU frequency in MHz")
+    current_freq_mhz: CoercedFloat = Field(
+        None, description="Current CPU frequency in MHz"
+    )
+
+    model_config = {"frozen": True, "extra": "allow"}
+
+
 class SystemInfo(BaseModel):
     """System information response from the Unraid server."""
 
@@ -151,6 +181,20 @@ class SystemInfo(BaseModel):
         None, description="Motherboard temperature in Celsius"
     )
     parity_check_speed: str | None = Field(None, description="Parity check speed")
+
+    # CPU Power State
+    cpu_power_state: CpuPowerState | None = Field(
+        None, description="CPU frequency governor and power state"
+    )
+
+    # Temperature sensors
+    temperatures: list[TemperatureInfo] | None = Field(
+        None, description="All temperature sensor readings"
+    )
+
+    # Computed memory fields from API
+    ram_used_mb: CoercedFloat = Field(None, description="Used RAM in MB")
+    ram_total_mb: CoercedFloat = Field(None, description="Total RAM in MB")
 
     timestamp: str | None = Field(None, description="Data collection timestamp")
 
@@ -231,6 +275,16 @@ class SystemInfo(BaseModel):
         if self.uptime_seconds is None:
             return None
         return (self.uptime_seconds % 3600) // 60
+
+    @property
+    def chipset_temp_celsius(self) -> float | None:
+        """Return chipset temperature from the temperatures array."""
+        if not self.temperatures:
+            return None
+        for temp in self.temperatures:
+            if temp.sensor_type == "chipset":
+                return temp.value_celsius
+        return None
 
 
 ArrayState = Literal["STARTED", "STOPPED", "STARTING", "STOPPING", "Started", "Stopped"]
@@ -433,10 +487,12 @@ class DiskInfo(BaseModel):
     temp_warning: CoercedInt = Field(
         None,
         description="Per-disk warning temperature threshold (null = use global default)",
+        validation_alias=AliasChoices("temp_warning", "temp_warning_celsius"),
     )
     temp_critical: CoercedInt = Field(
         None,
         description="Per-disk critical temperature threshold (null = use global default)",
+        validation_alias=AliasChoices("temp_critical", "temp_critical_celsius"),
     )
     spin_state: str | None = Field(
         None, description="Disk spin state (active, standby, unknown)"
@@ -945,6 +1001,7 @@ class GPUInfo(BaseModel):
     pci_id: str | None = Field(None, description="PCI device ID")
     name: str | None = Field(None, description="GPU name")
     vendor: str | None = Field(None, description="GPU vendor")
+    uuid: str | None = Field(None, description="GPU UUID")
     driver_version: str | None = Field(None, description="GPU driver version")
     utilization_gpu_percent: CoercedFloat = Field(
         None, description="GPU utilization percentage"
@@ -963,6 +1020,11 @@ class GPUInfo(BaseModel):
         None, description="CPU temperature in Celsius"
     )
     power_draw_watts: CoercedFloat = Field(None, description="Power draw in watts")
+    fan_speed_percent: CoercedFloat = Field(
+        None, description="Fan speed percentage (0-100)"
+    )
+    fan_rpm: CoercedInt = Field(None, description="Fan speed in RPM")
+    fan_max_rpm: CoercedInt = Field(None, description="Maximum fan RPM")
     timestamp: str | None = Field(None, description="Data collection timestamp")
 
     model_config = {"frozen": True, "extra": "allow"}
@@ -2551,5 +2613,114 @@ class HealthCheckHistoryResponse(BaseModel):
     events: list[HealthCheckEvent] | None = Field(
         None, description="Health check events"
     )
+
+    model_config = {"frozen": True, "extra": "allow"}
+
+
+# ── Fan control models ──────────────────────────────────────────────────
+
+
+class FanDevice(BaseModel):
+    """A single fan device with status and control info."""
+
+    id: str | None = Field(None, description="Fan device ID (e.g. hwmon4_fan1)")
+    name: str | None = Field(None, description="Human-readable fan name")
+    rpm: CoercedInt = Field(None, description="Current fan speed in RPM")
+    pwm_value: CoercedInt = Field(None, description="Current PWM value (0-255)")
+    pwm_percent: CoercedFloat = Field(
+        None, description="Current PWM percentage (0-100)"
+    )
+    mode: str | None = Field(None, description="Fan control mode (off, manual, auto)")
+    controllable: bool | None = Field(
+        None, description="Whether fan speed is controllable"
+    )
+    hwmon_path: str | None = Field(None, description="sysfs hwmon path")
+    hwmon_index: CoercedInt = Field(None, description="hwmon fan index")
+
+    model_config = {"frozen": True, "extra": "allow"}
+
+
+class FanCurvePoint(BaseModel):
+    """A point on a fan speed curve."""
+
+    temp_celsius: CoercedFloat = Field(None, description="Temperature in Celsius")
+    speed_percent: CoercedFloat = Field(
+        None, description="Fan speed percentage (0-100)"
+    )
+
+    model_config = {"frozen": True, "extra": "allow"}
+
+
+class FanProfile(BaseModel):
+    """A fan speed profile with a temperature curve."""
+
+    name: str | None = Field(None, description="Profile name")
+    description: str | None = Field(None, description="Profile description")
+    curve_points: list[FanCurvePoint] | None = Field(
+        None, description="Temperature-to-speed curve points"
+    )
+    built_in: bool | None = Field(
+        None, description="Whether this is a built-in profile"
+    )
+
+    model_config = {"frozen": True, "extra": "allow"}
+
+
+class FanSafetyConfig(BaseModel):
+    """Fan safety limits."""
+
+    min_speed_percent: CoercedFloat = Field(
+        None, description="Minimum allowed fan speed percentage"
+    )
+    critical_temp_celsius: CoercedFloat = Field(
+        None, description="Critical temperature triggering full speed"
+    )
+    failure_rpm_threshold: CoercedInt = Field(
+        None, description="RPM below which a fan is considered failed"
+    )
+
+    model_config = {"frozen": True, "extra": "allow"}
+
+
+class FanControlConfig(BaseModel):
+    """Fan control configuration."""
+
+    enabled: bool | None = Field(None, description="Whether fan control is enabled")
+    control_enabled: bool | None = Field(
+        None, description="Whether active fan speed control is enabled"
+    )
+    control_method: str | None = Field(None, description="Control method (hwmon, ipmi)")
+    poll_interval_seconds: CoercedInt = Field(
+        None, description="Fan polling interval in seconds"
+    )
+    safety: FanSafetyConfig | None = Field(None, description="Safety configuration")
+
+    model_config = {"frozen": True, "extra": "allow"}
+
+
+class FanControlSummary(BaseModel):
+    """Summary of fan status."""
+
+    total_fans: CoercedInt = Field(None, description="Total number of fans detected")
+    controllable_fans: CoercedInt = Field(
+        None, description="Number of controllable fans"
+    )
+    failed_fans: list[str] | None = Field(None, description="List of failed fan IDs")
+
+    model_config = {"frozen": True, "extra": "allow"}
+
+
+class FanControlStatus(BaseModel):
+    """Full fan control status response (GET /fans)."""
+
+    fans: list[FanDevice] | None = Field(None, description="List of fan devices")
+    profiles: list[FanProfile] | None = Field(
+        None, description="Available fan profiles"
+    )
+    config: FanControlConfig | None = Field(
+        None, description="Fan control configuration"
+    )
+    summary: FanControlSummary | None = Field(None, description="Fan status summary")
+    timestamp: str | None = Field(None, description="Data collection timestamp")
 
     model_config = {"frozen": True, "extra": "allow"}

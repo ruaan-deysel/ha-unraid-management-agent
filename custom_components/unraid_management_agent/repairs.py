@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant import data_entry_flow
 from homeassistant.components.repairs import RepairsFlow
@@ -11,6 +11,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 
 from .const import DOMAIN
+
+if TYPE_CHECKING:
+    from .coordinator import UnraidDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -56,12 +59,13 @@ class ConnectionIssueRepairFlow(RepairsFlow):
             ir.async_delete_issue(self.hass, DOMAIN, self.issue_id)
             return self.async_create_entry(title="", data={})
 
+        data = self.data or {}
         return self.async_show_form(
             step_id="init",
             description_placeholders={
-                "error": self.data.get("error", "Unknown error"),
-                "host": self.data.get("host", "Unknown"),
-                "port": str(self.data.get("port", "Unknown")),
+                "error": str(data.get("error", "Unknown error")),
+                "host": str(data.get("host", "Unknown")),
+                "port": str(data.get("port", "Unknown")),
             },
         )
 
@@ -90,13 +94,14 @@ class DiskHealthRepairFlow(RepairsFlow):
             ir.async_delete_issue(self.hass, DOMAIN, self.issue_id)
             return self.async_create_entry(title="", data={})
 
+        data = self.data or {}
         return self.async_show_form(
             step_id="init",
             description_placeholders={
-                "disk_name": self.data.get("disk_name", "Unknown"),
-                "smart_status": self.data.get("smart_status", "Unknown"),
-                "smart_errors": str(self.data.get("smart_errors", 0)),
-                "temperature": str(self.data.get("temperature", "Unknown")),
+                "disk_name": str(data.get("disk_name", "Unknown")),
+                "smart_status": str(data.get("smart_status", "Unknown")),
+                "smart_errors": str(data.get("smart_errors", 0)),
+                "temperature": str(data.get("temperature", "Unknown")),
             },
         )
 
@@ -125,12 +130,13 @@ class ArrayIssueRepairFlow(RepairsFlow):
             ir.async_delete_issue(self.hass, DOMAIN, self.issue_id)
             return self.async_create_entry(title="", data={})
 
+        data = self.data or {}
         return self.async_show_form(
             step_id="init",
             description_placeholders={
-                "array_state": self.data.get("array_state", "Unknown"),
-                "issue_description": self.data.get(
-                    "issue_description", "Unknown issue"
+                "array_state": str(data.get("array_state", "Unknown")),
+                "issue_description": str(
+                    data.get("issue_description", "Unknown issue")
                 ),
             },
         )
@@ -160,17 +166,20 @@ class ParityCheckRepairFlow(RepairsFlow):
             ir.async_delete_issue(self.hass, DOMAIN, self.issue_id)
             return self.async_create_entry(title="", data={})
 
+        data = self.data or {}
         return self.async_show_form(
             step_id="init",
             description_placeholders={
-                "parity_status": self.data.get("parity_status", "Unknown"),
-                "sync_percent": str(self.data.get("sync_percent", 0)),
-                "errors_found": str(self.data.get("errors_found", 0)),
+                "parity_status": str(data.get("parity_status", "Unknown")),
+                "sync_percent": str(data.get("sync_percent", 0)),
+                "errors_found": str(data.get("errors_found", 0)),
             },
         )
 
 
-async def async_check_and_create_issues(hass: HomeAssistant, coordinator) -> None:
+async def async_check_and_create_issues(
+    hass: HomeAssistant, coordinator: UnraidDataUpdateCoordinator
+) -> None:
     """Check for issues and create repair flows if needed."""
     entry_id = coordinator.config_entry.entry_id
 
@@ -302,7 +311,9 @@ async def async_check_and_create_issues(hass: HomeAssistant, coordinator) -> Non
             severity=ir.IssueSeverity.ERROR,
             translation_key="array_parity_invalid",
             translation_placeholders={
-                "array_state": array_data.state if array_data else "Unknown",
+                "array_state": str(array_data.state)
+                if array_data and array_data.state
+                else "Unknown",
             },
         )
     else:

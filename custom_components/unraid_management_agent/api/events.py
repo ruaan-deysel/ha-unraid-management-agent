@@ -32,6 +32,7 @@ from .models import (
     CollectorDetails,
     ContainerInfo,
     DiskInfo,
+    FanControlStatus,
     GPUInfo,
     HardwareFullInfo,
     NetworkInterface,
@@ -190,6 +191,13 @@ class NotificationsResponseEvent(WebSocketEvent):
     data: NotificationsResponse
 
 
+class FanControlUpdateEvent(WebSocketEvent):
+    """Fan control status update event."""
+
+    event_type: EventType = EventType.FAN_CONTROL_UPDATE
+    data: FanControlStatus
+
+
 class UnknownEvent(WebSocketEvent):
     """Unknown event type - data structure not recognized."""
 
@@ -233,8 +241,8 @@ def identify_event_type(data: Any) -> EventType | None:
         if "image" in first_item:
             return EventType.CONTAINER_LIST_UPDATE
 
-        # VM list: has 'cpu_count' and 'memory_bytes'
-        if "cpu_count" in first_item and "memory_bytes" in first_item:
+        # VM list: has 'cpu_count' and 'memory_allocated_bytes'
+        if "cpu_count" in first_item and "memory_allocated_bytes" in first_item:
             return EventType.VM_LIST_UPDATE
 
         # Network list: has 'mac_address' and 'ip_address'
@@ -249,8 +257,8 @@ def identify_event_type(data: Any) -> EventType | None:
         ):
             return EventType.SHARE_LIST_UPDATE
 
-        # GPU list: has 'vendor' and 'utilization_percent'
-        if "vendor" in first_item and "utilization_percent" in first_item:
+        # GPU list: has 'vendor' and 'utilization_gpu_percent'
+        if "vendor" in first_item and "utilization_gpu_percent" in first_item:
             return EventType.GPU_UPDATE
 
         # Notification list: has 'importance' and 'subject'
@@ -303,6 +311,10 @@ def identify_event_type(data: Any) -> EventType | None:
         # Notifications response: has 'overview' key (and optionally 'notifications')
         if "overview" in data and ("notifications" in data or "timestamp" in data):
             return EventType.NOTIFICATIONS_RESPONSE
+
+        # Fan control status: has 'fans' and 'config' keys
+        if "fans" in data and "config" in data:
+            return EventType.FAN_CONTROL_UPDATE
 
         return None
 
@@ -402,6 +414,9 @@ def parse_event(data: Any) -> WebSocketEvent:
             return NotificationsResponseEvent(
                 data=NotificationsResponse.model_validate(data)
             )
+
+        case EventType.FAN_CONTROL_UPDATE:
+            return FanControlUpdateEvent(data=FanControlStatus.model_validate(data))
 
         case _:
             return UnknownEvent(data=data)  # type: ignore[unreachable]

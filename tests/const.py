@@ -337,3 +337,34 @@ MOCK_ARRAY_DATA = {
     "parity_valid": True,
     "sync_percent": 0,
 }
+
+
+def mock_shares() -> list[MagicMock]:
+    """Create mock ShareInfo Pydantic models."""
+    share = MagicMock()
+    share.name = "appdata"
+    share.total_bytes = 1000000000000
+    share.used_bytes = 500000000000
+    share.free_bytes = 500000000000
+    share.computed_used_percent = 50.0
+    share.include_disks = "disk1,disk2"
+    share.exclude_disks = ""
+    share.use_cache = "prefer"
+    share.floor = "0"
+    share.split_level = None
+    return [share]
+
+
+def mock_zfs_pools() -> list[MagicMock]:
+    """Create mock ZFSPool Pydantic models."""
+    pool = MagicMock()
+    pool.name = "zfs_pool"
+    pool.state = "ONLINE"
+    pool.health = "ONLINE"
+    pool.size_bytes = 2000000000000
+    pool.total_bytes = 2000000000000
+    pool.used_bytes = 800000000000
+    pool.free_bytes = 1200000000000
+    pool.computed_used_percent = 40.0
+    pool.fragmentation_percent = 5
+    return [pool]

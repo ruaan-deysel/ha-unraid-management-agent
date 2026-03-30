@@ -15,6 +15,7 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.util import slugify
 
 from . import UnraidConfigEntry, UnraidDataUpdateCoordinator
 from .const import ATTR_PARITY_CHECK_STATUS
@@ -401,6 +402,34 @@ async def async_setup_entry(
                     UnraidNetworkInterfaceBinarySensor(coordinator, interface_name)
                 )
 
+    # Network service binary sensors
+    if data and data.network_services:
+        # Iterate over known service fields on NetworkServicesStatus
+        service_fields = (
+            "smb",
+            "nfs",
+            "afp",
+            "ftp",
+            "ssh",
+            "telnet",
+            "avahi",
+            "netbios",
+            "wsd",
+            "wireguard",
+            "upnp",
+            "ntp",
+            "syslog",
+        )
+        for service_key in service_fields:
+            service_info = getattr(data.network_services, service_key, None)
+            if service_info is not None:
+                service_name = getattr(service_info, "name", None) or service_key
+                entities.append(
+                    UnraidNetworkServiceBinarySensor(
+                        coordinator, service_key, service_name
+                    )
+                )
+
     _LOGGER.debug("Adding %d Unraid binary sensor entities", len(entities))
     async_add_entities(entities)
 
@@ -462,3 +491,57 @@ class UnraidNetworkInterfaceBinarySensor(UnraidBaseEntity, BinarySensorEntity):
                 state = getattr(interface, "state", "down")
                 return state == "up"
         return False
+
+
+class UnraidNetworkServiceBinarySensor(UnraidBaseEntity, BinarySensorEntity):
+    """Network service running binary sensor."""
+
+    _attr_device_class = BinarySensorDeviceClass.RUNNING
+    _attr_icon = "mdi:server-network"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        service_key: str,
+        service_name: str,
+    ) -> None:
+        """Initialize the network service binary sensor."""
+        self._service_key = service_key
+        self._service_name = service_name
+        safe_key = slugify(service_key)
+        super().__init__(coordinator, f"network_service_{safe_key}")
+        self._attr_translation_key = "network_service"
+        self._attr_translation_placeholders = {"service_name": service_name}
+
+    def _get_service_info(self) -> Any | None:
+        """Get the service info from coordinator data."""
+        data = self.coordinator.data
+        if not data or not data.network_services:
+            return None
+        return getattr(data.network_services, self._service_key, None)
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        return super().available and self._get_service_info() is not None
+
+    @property
+    def is_on(self) -> bool:
+        """Return true if the service is running."""
+        service_info = self._get_service_info()
+        if service_info is None:
+            return False
+        return getattr(service_info, "running", False) is True
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        service_info = self._get_service_info()
+        if service_info is None:
+            return {}
+        return {
+            "enabled": getattr(service_info, "enabled", None),
+            "port": getattr(service_info, "port", None),
+        }

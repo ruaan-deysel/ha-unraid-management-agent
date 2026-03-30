@@ -22,9 +22,11 @@ from .const import (
     mock_disks,
     mock_gpu_list,
     mock_network_interfaces,
+    mock_shares,
     mock_system_info,
     mock_ups_info,
     mock_vms,
+    mock_zfs_pools,
 )
 
 pytest_plugins = "pytest_homeassistant_custom_component"
@@ -66,11 +68,11 @@ def mock_async_unraid_client() -> Generator[MagicMock]:
         client.list_network_interfaces = AsyncMock(
             return_value=mock_network_interfaces()
         )
-        client.list_shares = AsyncMock(return_value=[])
+        client.list_shares = AsyncMock(return_value=mock_shares())
         client.list_notifications = AsyncMock(return_value=[])
         client.get_notification_overview = AsyncMock(return_value=None)
         client.list_user_scripts = AsyncMock(return_value=[])
-        client.list_zfs_pools = AsyncMock(return_value=[])
+        client.list_zfs_pools = AsyncMock(return_value=mock_zfs_pools())
         client.list_zfs_datasets = AsyncMock(return_value=[])
         client.list_zfs_snapshots = AsyncMock(return_value=[])
         client.get_zfs_arc_stats = AsyncMock(return_value=None)
@@ -197,10 +199,10 @@ def mock_unraid_data() -> UnraidData:
         ups=mock_ups_info(),
         gpu=mock_gpu_list(),
         network=mock_network_interfaces(),
-        shares=[],
+        shares=mock_shares(),
         notifications=[],
         user_scripts=[],
-        zfs_pools=[],
+        zfs_pools=mock_zfs_pools(),
         zfs_datasets=[],
         zfs_snapshots=[],
         zfs_arc=None,

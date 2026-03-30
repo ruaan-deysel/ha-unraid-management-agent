@@ -13,8 +13,26 @@
       "motherboard_temperature": {
         "default": "mdi:thermometer"
       },
+      "chipset_temperature": {
+        "default": "mdi:thermometer"
+      },
+      "cpu_power": {
+        "default": "mdi:flash"
+      },
+      "dram_power": {
+        "default": "mdi:flash"
+      },
+      "cpu_governor": {
+        "default": "mdi:gauge"
+      },
+      "cpu_frequency": {
+        "default": "mdi:sine-wave"
+      },
       "uptime": {
         "default": "mdi:clock-outline"
+      },
+      "system_status": {
+        "default": "mdi:server"
       },
       "fan": {
         "default": "mdi:fan"
@@ -23,7 +41,7 @@
         "default": "mdi:harddisk"
       },
       "parity_progress": {
-        "default": "mdi:shield-check"
+        "default": "mdi:sync"
       },
       "disk_usage": {
         "default": "mdi:harddisk"
@@ -31,11 +49,29 @@
       "disk_health": {
         "default": "mdi:harddisk"
       },
+      "disk_temperature": {
+        "default": "mdi:thermometer"
+      },
+      "disk_smart_errors": {
+        "default": "mdi:harddisk-alert"
+      },
+      "disk_read_bytes": {
+        "default": "mdi:harddisk-plus"
+      },
+      "disk_write_bytes": {
+        "default": "mdi:harddisk-plus"
+      },
       "docker_vdisk_usage": {
         "default": "mdi:docker"
       },
+      "docker_cpu_usage": {
+        "default": "mdi:docker"
+      },
+      "docker_memory_usage": {
+        "default": "mdi:docker"
+      },
       "log_filesystem_usage": {
-        "default": "mdi:harddisk"
+        "default": "mdi:file-document"
       },
       "share_usage": {
         "default": "mdi:folder-network"
@@ -69,10 +105,10 @@
         }
       },
       "ups_load": {
-        "default": "mdi:battery"
+        "default": "mdi:gauge"
       },
       "ups_runtime": {
-        "default": "mdi:battery"
+        "default": "mdi:timer"
       },
       "ups_power": {
         "default": "mdi:flash"
@@ -81,31 +117,67 @@
         "default": "mdi:lightning-bolt"
       },
       "network_rx": {
-        "default": "mdi:ethernet"
+        "default": "mdi:download-network"
       },
       "network_tx": {
-        "default": "mdi:ethernet"
+        "default": "mdi:upload-network"
       },
       "zfs_pool_usage": {
-        "default": "mdi:database-outline"
+        "default": "mdi:database"
       },
       "zfs_pool_health": {
-        "default": "mdi:database-outline"
+        "default": "mdi:database-check"
       },
       "zfs_arc_hit_ratio": {
-        "default": "mdi:memory-arrow-down"
+        "default": "mdi:memory"
+      },
+      "flash_usage": {
+        "default": "mdi:usb-flash-drive"
+      },
+      "flash_free_space": {
+        "default": "mdi:usb-flash-drive-outline"
+      },
+      "plugins": {
+        "default": "mdi:puzzle"
+      },
+      "latest_version": {
+        "default": "mdi:update"
+      },
+      "plugins_with_updates": {
+        "default": "mdi:puzzle-plus"
+      },
+      "next_parity_check": {
+        "default": "mdi:calendar-clock"
+      },
+      "last_parity_check": {
+        "default": "mdi:calendar-check"
       },
       "notifications": {
-        "default": "mdi:bell-alert"
+        "default": "mdi:bell"
       },
-      "disk_smart_errors": {
-        "default": "mdi:harddisk-alert"
+      "notifications_unread_info": {
+        "default": "mdi:information"
       },
-      "disk_read_bytes": {
-        "default": "mdi:harddisk-plus"
+      "notifications_unread_warning": {
+        "default": "mdi:alert"
       },
-      "disk_write_bytes": {
-        "default": "mdi:harddisk-plus"
+      "notifications_unread_alert": {
+        "default": "mdi:alert-circle"
+      },
+      "container_cpu": {
+        "default": "mdi:chip"
+      },
+      "container_memory": {
+        "default": "mdi:memory"
+      },
+      "container_memory_percent": {
+        "default": "mdi:memory"
+      },
+      "registration_type": {
+        "default": "mdi:license"
+      },
+      "registration_state": {
+        "default": "mdi:shield-key"
       }
     },
     "binary_sensor": {
@@ -144,12 +216,31 @@
           "off": "mdi:ethernet-off"
         }
       },
+      "network_service": {
+        "default": "mdi:server-network",
+        "state": {
+          "on": "mdi:server-network",
+          "off": "mdi:server-network-off"
+        }
+      },
       "zfs_available": {
         "default": "mdi:database",
         "state": {
           "on": "mdi:database-check",
           "off": "mdi:database-off"
         }
+      },
+      "update_available": {
+        "default": "mdi:update"
+      },
+      "flash_healthy": {
+        "default": "mdi:usb-flash-drive"
+      },
+      "mover_running": {
+        "default": "mdi:transfer"
+      },
+      "parity_check_scheduled": {
+        "default": "mdi:calendar-check"
       }
     },
     "switch": {
@@ -166,6 +257,13 @@
           "on": "mdi:desktop-tower",
           "off": "mdi:desktop-tower"
         }
+      },
+      "disk_spin": {
+        "default": "mdi:harddisk",
+        "state": {
+          "on": "mdi:harddisk",
+          "off": "mdi:harddisk-remove"
+        }
       }
     },
     "button": {
@@ -181,8 +279,38 @@
       "parity_check_stop": {
         "default": "mdi:shield-check"
       },
+      "parity_check_pause": {
+        "default": "mdi:pause-circle"
+      },
+      "parity_check_resume": {
+        "default": "mdi:play-circle"
+      },
+      "archive_all_notifications": {
+        "default": "mdi:archive-arrow-down"
+      },
+      "system_shutdown": {
+        "default": "mdi:power"
+      },
+      "system_reboot": {
+        "default": "mdi:restart"
+      },
       "user_script": {
         "default": "mdi:script-text"
+      },
+      "container_restart": {
+        "default": "mdi:restart"
+      },
+      "vm_force_stop": {
+        "default": "mdi:stop"
+      },
+      "vm_restart_button": {
+        "default": "mdi:restart"
+      },
+      "vm_pause": {
+        "default": "mdi:pause"
+      },
+      "vm_resume": {
+        "default": "mdi:play"
       }
     }
   },

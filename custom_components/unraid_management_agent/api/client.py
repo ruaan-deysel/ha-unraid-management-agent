@@ -35,6 +35,7 @@ from .models import (
     DiskInfo,
     DiskSettings,
     DockerSettings,
+    FanControlStatus,
     FlashDriveInfo,
     GPUInfo,
     HardwareFullInfo,
@@ -183,6 +184,7 @@ class UnraidClient:
         endpoint: str,
         data: dict[str, Any] | None = None,
         params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
     ) -> Any:
         """
         Make an async request to the API.
@@ -192,6 +194,7 @@ class UnraidClient:
             endpoint: API endpoint path
             data: Request body data
             params: Query parameters
+            json: JSON body data (alias for data)
 
         Returns:
             Response data
@@ -213,7 +216,7 @@ class UnraidClient:
             async with session.request(
                 method=method,
                 url=url,
-                json=data,
+                json=json if json is not None else data,
                 params=params,
             ) as response:
                 # Handle successful responses
@@ -1229,7 +1232,7 @@ class UnraidClient:
             Success response
 
         """
-        data = await self._request("POST", "/notifications/archive-all")
+        data = await self._request("POST", "/notifications/archive/all")
         return ActionResponse.model_validate(data)
 
     # Unassigned devices endpoints
@@ -2200,3 +2203,126 @@ class UnraidClient:
         """
         data = await self._request("POST", f"/healthchecks/{check_id}/run")
         return HealthCheckStatus.model_validate(data)
+
+    # Fan control endpoints
+
+    async def get_fan_status(self) -> FanControlStatus:
+        """
+        Get full fan control status including fans, profiles, and config.
+
+        Returns:
+            Fan control status with fans, profiles, config, and summary
+
+        """
+        data = await self._request("GET", "/fans")
+        return FanControlStatus.model_validate(data)
+
+    async def set_fan_speed(self, fan_id: str, speed_percent: int) -> ActionResponse:
+        """
+        Set a specific fan's speed manually.
+
+        Args:
+            fan_id: Fan device ID (e.g. "hwmon4_fan1")
+            speed_percent: Target speed percentage (0-100)
+
+        Returns:
+            Success response
+
+        """
+        data = await self._request(
+            "POST",
+            "/fans/speed",
+            json={"fan_id": fan_id, "speed_percent": speed_percent},
+        )
+        return ActionResponse.model_validate(data)
+
+    async def set_fan_mode(self, fan_id: str, mode: str) -> ActionResponse:
+        """
+        Set a fan's control mode.
+
+        Args:
+            fan_id: Fan device ID
+            mode: Control mode ("off", "manual", "auto")
+
+        Returns:
+            Success response
+
+        """
+        data = await self._request(
+            "POST",
+            "/fans/mode",
+            json={"fan_id": fan_id, "mode": mode},
+        )
+        return ActionResponse.model_validate(data)
+
+    async def set_fan_profile(self, profile_name: str) -> ActionResponse:
+        """
+        Activate a fan profile for auto mode.
+
+        Args:
+            profile_name: Name of the profile to activate
+
+        Returns:
+            Success response
+
+        """
+        data = await self._request(
+            "POST",
+            "/fans/profile",
+            json={"profile_name": profile_name},
+        )
+        return ActionResponse.model_validate(data)
+
+    async def create_fan_profile(
+        self,
+        name: str,
+        description: str,
+        curve_points: list[dict[str, float]],
+    ) -> ActionResponse:
+        """
+        Create a custom fan profile.
+
+        Args:
+            name: Profile name
+            description: Profile description
+            curve_points: List of {"temp_celsius": float, "speed_percent": float}
+
+        Returns:
+            Success response
+
+        """
+        data = await self._request(
+            "POST",
+            "/fans/profile/create",
+            json={
+                "name": name,
+                "description": description,
+                "curve_points": curve_points,
+            },
+        )
+        return ActionResponse.model_validate(data)
+
+    async def restore_fan_defaults(self) -> ActionResponse:
+        """
+        Restore all fans to default (uncontrolled) state.
+
+        Returns:
+            Success response
+
+        """
+        data = await self._request("POST", "/fans/defaults")
+        return ActionResponse.model_validate(data)
+
+    async def update_fan_config(self, config: dict[str, Any]) -> ActionResponse:
+        """
+        Update fan control configuration.
+
+        Args:
+            config: Configuration fields to update
+
+        Returns:
+            Success response
+
+        """
+        data = await self._request("PUT", "/fans/config", json=config)
+        return ActionResponse.model_validate(data)

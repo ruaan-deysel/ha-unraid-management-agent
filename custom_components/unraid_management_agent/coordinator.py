@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -22,15 +24,18 @@ from .api.models import (
     DiskInfo,
     DiskSettings,
     DockerSettings,
+    FanControlStatus,
     FlashDriveInfo,
     GPUInfo,
     MoverSettings,
     NetworkInterface,
+    NetworkServicesStatus,
     NotificationOverview,
     NotificationsResponse,
     ParityHistory,
     ParitySchedule,
     PluginList,
+    RegistrationInfo,
     ShareInfo,
     SystemInfo,
     UpdateStatus,
@@ -73,6 +78,7 @@ class UnraidData:
     zfs_arc: ZFSArcStats | None = None
     collectors: CollectorStatus | None = None
     # New data for enhanced features
+    fan_control: FanControlStatus | None = None
     disk_settings: DiskSettings | None = None
     mover_settings: MoverSettings | None = None
     parity_schedule: ParitySchedule | None = None
@@ -82,6 +88,8 @@ class UnraidData:
     update_status: UpdateStatus | None = None
     docker_settings: DockerSettings | None = None
     vm_settings: VMSettings | None = None
+    registration: RegistrationInfo | None = None
+    network_services: NetworkServicesStatus | None = None
 
 
 @dataclass
@@ -116,7 +124,7 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
         self._unavailable_logged = False
         self._pending_system_action: str | None = None
         self._pending_system_action_message: str | None = None
-        self._pending_system_action_requested_at = None
+        self._pending_system_action_requested_at: datetime | None = None
         self._pending_system_action_disconnected = False
 
         super().__init__(
@@ -154,7 +162,7 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
         return self._pending_system_action_message
 
     @property
-    def pending_system_action_requested_at(self):
+    def pending_system_action_requested_at(self) -> datetime | None:
         """Return when the current pending system action was requested."""
         return self._pending_system_action_requested_at
 
@@ -267,6 +275,21 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
             return True
         return getattr(self.data.vm_settings, "enabled", True)
 
+    async def _fetch[T](
+        self,
+        label: str,
+        coro_fn: Callable[[], Coroutine[Any, Any, T]],
+        *,
+        suppress_404: bool = False,
+    ) -> T | None:
+        """Fetch data from a single API endpoint, returning *None* on failure."""
+        try:
+            return await coro_fn()
+        except Exception as err:
+            if not (suppress_404 and "404" in str(err)):
+                _LOGGER.debug("Error fetching %s: %s", label, err)
+            return None
+
     async def _async_update_data(self) -> UnraidData:
         """
         Fetch data from API endpoint.
@@ -279,203 +302,91 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
         return empty results for disabled collectors.
         """
         try:
-            # Fetch all data - each method returns typed Pydantic models
-            system: SystemInfo | None = None
-            array: ArrayStatus | None = None
-            disks: list[DiskInfo] = []
-            containers: list[ContainerInfo] = []
-            vms: list[VMInfo] = []
-            ups: UPSInfo | None = None
-            gpu: list[GPUInfo] = []
-            network: list[NetworkInterface] = []
-            shares: list[ShareInfo] = []
-            notifications: NotificationsResponse | None = None
-            notification_overview: NotificationOverview | None = None
-            user_scripts: list[UserScript] = []
-            zfs_pools: list[ZFSPool] = []
-            zfs_datasets: list[ZFSDataset] = []
-            zfs_snapshots: list[ZFSSnapshot] = []
-            zfs_arc: ZFSArcStats | None = None
+            # Fetch all data concurrently - each method returns typed Pydantic models
+            # Fetch all data concurrently - each method returns typed Pydantic models
+            results: list[Any] = await asyncio.gather(
+                self._fetch("system info", self.client.get_system_info),
+                self._fetch("array status", self.client.get_array_status),
+                self._fetch("disks", self.client.list_disks),
+                self._fetch("containers", self.client.list_containers),
+                self._fetch("VMs", self.client.list_vms),
+                self._fetch("UPS status", self.client.get_ups_info),
+                self._fetch("GPU metrics", self.client.list_gpus, suppress_404=True),
+                self._fetch("network interfaces", self.client.list_network_interfaces),
+                self._fetch("shares", self.client.list_shares),
+                self._fetch("notifications", self.client.list_notifications),
+                self._fetch(
+                    "notification overview", self.client.get_notification_overview
+                ),
+                self._fetch("user scripts", self.client.list_user_scripts),
+                self._fetch("ZFS pools", self.client.list_zfs_pools),
+                self._fetch("ZFS datasets", self.client.list_zfs_datasets),
+                self._fetch("ZFS snapshots", self.client.list_zfs_snapshots),
+                self._fetch(
+                    "ZFS ARC stats", self.client.get_zfs_arc_stats, suppress_404=True
+                ),
+                self._fetch("collectors status", self.client.get_collectors_status),
+                self._fetch(
+                    "fan control status", self.client.get_fan_status, suppress_404=True
+                ),
+                self._fetch("disk settings", self.client.get_disk_settings),
+                self._fetch("mover settings", self.client.get_mover_settings),
+                self._fetch("parity schedule", self.client.get_parity_schedule),
+                self._fetch("parity history", self.client.get_parity_history),
+                self._fetch("flash info", self.client.get_flash_info),
+                self._fetch("plugins", self.client.list_plugins),
+                self._fetch("update status", self.client.get_update_status),
+                self._fetch("docker settings", self.client.get_docker_settings),
+                self._fetch("VM settings", self.client.get_vm_settings),
+                self._fetch("registration info", self.client.get_registration_info),
+                self._fetch("network services", self.client.get_network_services),
+            )
 
-            # Fetch system info
-            try:
-                system = await self.client.get_system_info()
-            except Exception as err:
-                _LOGGER.debug("Error fetching system info: %s", err)
+            # Unpack results with proper types (gather loses individual type info)
+            system: SystemInfo | None = results[0]
+            array: ArrayStatus | None = results[1]
+            disks: list[DiskInfo] = results[2] or []
+            containers: list[ContainerInfo] = results[3] or []
+            vms: list[VMInfo] = results[4] or []
+            ups: UPSInfo | None = results[5]
+            gpu: list[GPUInfo] = results[6] or []
+            network: list[NetworkInterface] = results[7] or []
+            shares: list[ShareInfo] = results[8] or []
+            notifications: NotificationsResponse | None = results[9]
+            notification_overview: NotificationOverview | None = results[10]
+            user_scripts: list[UserScript] = results[11] or []
+            zfs_pools: list[ZFSPool] = results[12] or []
+            zfs_datasets: list[ZFSDataset] = results[13] or []
+            zfs_snapshots: list[ZFSSnapshot] = results[14] or []
+            zfs_arc: ZFSArcStats | None = results[15]
+            collectors: CollectorStatus | None = results[16]
+            fan_control: FanControlStatus | None = results[17]
+            disk_settings: DiskSettings | None = results[18]
+            mover_settings: MoverSettings | None = results[19]
+            parity_schedule: ParitySchedule | None = results[20]
+            parity_history: ParityHistory | None = results[21]
+            flash_info: FlashDriveInfo | None = results[22]
+            plugins: PluginList | None = results[23]
+            update_status: UpdateStatus | None = results[24]
+            docker_settings: DockerSettings | None = results[25]
+            vm_settings: VMSettings | None = results[26]
+            registration: RegistrationInfo | None = results[27]
+            network_services: NetworkServicesStatus | None = results[28]
 
-            # Fetch array status
-            try:
-                array = await self.client.get_array_status()
-            except Exception as err:
-                _LOGGER.debug("Error fetching array status: %s", err)
-
-            # Fetch disks
-            try:
-                disks = await self.client.list_disks()
-            except Exception as err:
-                _LOGGER.debug("Error fetching disks: %s", err)
-
-            # Fetch containers
-            try:
-                containers = await self.client.list_containers()
-            except Exception as err:
-                _LOGGER.debug("Error fetching containers: %s", err)
-
-            # Fetch VMs
-            try:
-                vms = await self.client.list_vms()
-            except Exception as err:
-                _LOGGER.debug("Error fetching VMs: %s", err)
-
-            # Fetch UPS status
-            try:
-                ups = await self.client.get_ups_info()
-            except Exception as err:
-                _LOGGER.debug("Error fetching UPS status: %s", err)
-
-            # Fetch GPU metrics
-            try:
-                gpu = await self.client.list_gpus()
-            except Exception as err:
-                if "404" not in str(err):
-                    _LOGGER.debug("Error fetching GPU metrics: %s", err)
-
-            # Fetch network interfaces
-            try:
-                network = await self.client.list_network_interfaces()
-            except Exception as err:
-                _LOGGER.debug("Error fetching network interfaces: %s", err)
-
-            # Fetch shares
-            try:
-                shares = await self.client.list_shares()
-            except Exception as err:
-                _LOGGER.debug("Error fetching shares: %s", err)
-
-            # Fetch notifications
-            try:
-                notifications = await self.client.list_notifications()
-            except Exception as err:
-                _LOGGER.debug("Error fetching notifications: %s", err)
-
+            # Merge notification overview into notifications response
             if isinstance(notifications, list):
                 notifications = NotificationsResponse(notifications=notifications)
-
-            try:
-                notification_overview = await self.client.get_notification_overview()
-            except Exception as err:
-                _LOGGER.debug("Error fetching notification overview: %s", err)
-
             if notification_overview is not None:
                 if notifications is None:
                     notifications = NotificationsResponse(
-                        overview=notification_overview
+                        overview=notification_overview,
+                        notifications=None,
+                        timestamp=None,
                     )
                 else:
                     notifications = notifications.model_copy(
                         update={"overview": notification_overview}
                     )
-
-            # Fetch user scripts
-            try:
-                user_scripts = await self.client.list_user_scripts()
-            except Exception as err:
-                _LOGGER.debug("Error fetching user scripts: %s", err)
-
-            # Fetch ZFS pools
-            try:
-                zfs_pools = await self.client.list_zfs_pools()
-            except Exception as err:
-                _LOGGER.debug("Error fetching ZFS pools: %s", err)
-
-            # Fetch ZFS datasets
-            try:
-                zfs_datasets = await self.client.list_zfs_datasets()
-            except Exception as err:
-                _LOGGER.debug("Error fetching ZFS datasets: %s", err)
-
-            # Fetch ZFS snapshots
-            try:
-                zfs_snapshots = await self.client.list_zfs_snapshots()
-            except Exception as err:
-                _LOGGER.debug("Error fetching ZFS snapshots: %s", err)
-
-            # Fetch ZFS ARC stats
-            try:
-                zfs_arc = await self.client.get_zfs_arc_stats()
-            except Exception as err:
-                if "404" not in str(err):
-                    _LOGGER.debug("Error fetching ZFS ARC stats: %s", err)
-
-            # Fetch collectors status (for filtering entities)
-            collectors: CollectorStatus | None = None
-            try:
-                collectors = await self.client.get_collectors_status()
-            except Exception as err:
-                _LOGGER.debug("Error fetching collectors status: %s", err)
-
-            # Fetch disk settings (for temperature thresholds)
-            disk_settings: DiskSettings | None = None
-            try:
-                disk_settings = await self.client.get_disk_settings()
-            except Exception as err:
-                _LOGGER.debug("Error fetching disk settings: %s", err)
-
-            # Fetch mover settings
-            mover_settings: MoverSettings | None = None
-            try:
-                mover_settings = await self.client.get_mover_settings()
-            except Exception as err:
-                _LOGGER.debug("Error fetching mover settings: %s", err)
-
-            # Fetch parity schedule
-            parity_schedule: ParitySchedule | None = None
-            try:
-                parity_schedule = await self.client.get_parity_schedule()
-            except Exception as err:
-                _LOGGER.debug("Error fetching parity schedule: %s", err)
-
-            # Fetch parity history
-            parity_history: ParityHistory | None = None
-            try:
-                parity_history = await self.client.get_parity_history()
-            except Exception as err:
-                _LOGGER.debug("Error fetching parity history: %s", err)
-
-            # Fetch flash drive info
-            flash_info: FlashDriveInfo | None = None
-            try:
-                flash_info = await self.client.get_flash_info()
-            except Exception as err:
-                _LOGGER.debug("Error fetching flash info: %s", err)
-
-            # Fetch plugins list
-            plugins: PluginList | None = None
-            try:
-                plugins = await self.client.list_plugins()
-            except Exception as err:
-                _LOGGER.debug("Error fetching plugins: %s", err)
-
-            # Fetch update status
-            update_status: UpdateStatus | None = None
-            try:
-                update_status = await self.client.get_update_status()
-            except Exception as err:
-                _LOGGER.debug("Error fetching update status: %s", err)
-
-            # Fetch docker settings (for conditional entity creation)
-            docker_settings: DockerSettings | None = None
-            try:
-                docker_settings = await self.client.get_docker_settings()
-            except Exception as err:
-                _LOGGER.debug("Error fetching docker settings: %s", err)
-
-            # Fetch VM settings (for conditional entity creation)
-            vm_settings: VMSettings | None = None
-            try:
-                vm_settings = await self.client.get_vm_settings()
-            except Exception as err:
-                _LOGGER.debug("Error fetching VM settings: %s", err)
 
             # Log recovery if we were previously unavailable
             if self._unavailable_logged:
@@ -510,6 +421,7 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
                 zfs_snapshots=zfs_snapshots,
                 zfs_arc=zfs_arc,
                 collectors=collectors,
+                fan_control=fan_control,
                 disk_settings=disk_settings,
                 mover_settings=mover_settings,
                 parity_schedule=parity_schedule,
@@ -519,6 +431,8 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
                 update_status=update_status,
                 docker_settings=docker_settings,
                 vm_settings=vm_settings,
+                registration=registration,
+                network_services=network_services,
             )
 
             # Check for issues and create repair flows
@@ -581,7 +495,9 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
                 )
             else:
                 self.data.notifications = NotificationsResponse(
-                    notifications=event.data
+                    notifications=event.data,
+                    overview=None,
+                    timestamp=None,
                 )
         elif event.event_type == EventType.NOTIFICATIONS_RESPONSE:
             # Full notifications response with overview and counts
@@ -609,6 +525,8 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
         elif event.event_type == EventType.COLLECTOR_STATE_CHANGE:
             # Collector state changes update the collectors status
             self.data.collectors = event.data
+        elif event.event_type == EventType.FAN_CONTROL_UPDATE:
+            self.data.fan_control = event.data
 
         # Notify listeners of data update without resetting the polling timer.
         # Using async_set_updated_data would cancel and reschedule the poll
