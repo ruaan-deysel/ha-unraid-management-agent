@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2026.3.2] - 2026-03-30
+
+### Added
+
+- **Entity Parity Expansion**: Added a broad set of entities to align coverage with ha-unraid feature expectations.
+  - New system sensors: `sensor.{hostname}_chipset_temperature`, `sensor.{hostname}_cpu_governor`, `sensor.{hostname}_cpu_frequency`
+  - New aggregate Docker sensors: `sensor.{hostname}_docker_cpu_usage`, `sensor.{hostname}_docker_memory_usage`
+  - New registration sensors: `sensor.{hostname}_registration_type`, `sensor.{hostname}_registration_state`
+  - New notification severity sensors: `sensor.{hostname}_notifications_unread_info`, `sensor.{hostname}_notifications_unread_warning`, `sensor.{hostname}_notifications_unread_alert`
+  - New flash/plugin/parity schedule sensors: `flash_usage`, `flash_free_space`, `plugins`, `latest_version`, `plugins_with_updates`, `next_parity_check`, `last_parity_check`
+  - New per-container metrics (disabled by default): `container_cpu`, `container_memory`, `container_memory_percent`
+
+- **Control Entities**: Added additional action/control entities for operational parity.
+  - New buttons: system shutdown/reboot, parity check pause/resume, archive-all-notifications, container restart, VM force stop/restart/pause/resume
+  - New switch: per-disk spin up/down control (`disk_spin`)
+  - New binary sensors: network service status entities (SMB/NFS/AFP/FTP/SSH/Telnet/Avahi/NetBIOS/WSD/WireGuard/UPnP/NTP)
+
+- **API Model Coverage**: Extended typed API models for richer system telemetry.
+  - Added `CpuPowerState` and `TemperatureInfo` models
+  - Added `cpu_power_state` and `temperatures` fields to `SystemInfo`
+  - Added `chipset_temp_celsius` convenience property on `SystemInfo`
+
+### Changed
+
+- **Coordinator Data Structure**: Refactored coordinator state handling around the structured `UnraidData` dataclass for clearer typed access across platforms.
+
+- **Service and Platform Wiring**: Simplified service registration/handling in integration setup and aligned platform setup with newly exposed API data.
+
+- **Icons Coverage**: Expanded `icons.json` to cover newly added entities and aligned icon mappings with implemented translation/entity keys.
+
+- **Translations**: Updated `strings.json` and `translations/en.json` with all newly added entity names and keys.
+
+### Fixed
+
+- **Container Sensor Placeholder Mismatch**: Fixed translation placeholder mismatch in container metric sensors (`container_name` placeholder), removing startup warnings and restoring correct translated names.
+
+- **Invalid MDI Icon Reference**: Replaced invalid icon `mdi:harddisk-alert` with valid `mdi:alert-circle-outline` for SMART error sensors and icon metadata.
+
+- **Type-Check Cleanliness**: Removed stale/unused `type: ignore` comments surfaced by mypy during hook validation.
+
+### Removed
+
+- Removed vendored API `_version.py` module as part of API package alignment cleanup.
+
 ## [2026.3.1] - 2026-03-14
 
 ### Fixed
