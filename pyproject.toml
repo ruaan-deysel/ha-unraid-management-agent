@@ -31,7 +31,7 @@ dev = [
     "mypy>=1.0.0",
     "pyright>=1.1.0",
     "pre-commit>=4.5.1",
-    "codespell>=2.4.0",
+    "codespell>=2.4.2",
     "bandit[toml]>=1.9.4",
 ]
 test = [
