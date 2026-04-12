@@ -35,7 +35,7 @@ dev = [
     "bandit[toml]>=1.9.4",
 ]
 test = [
-    "pytest>=8.0.0",
+    "pytest>=9.0.3",
     "pytest-asyncio>=0.23.0",
     "pytest-homeassistant-custom-component>=0.13.322",
     "pytest-cov>=4.0.0",
