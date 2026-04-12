@@ -1,0 +1,92 @@
+name: Labels
+
+permissions: {}
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/labels.yml
+      - .github/workflows/labeler.yml
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - edited
+
+jobs:
+  sync-labels:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Sync repository labels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Ensure PyYAML is available (not guaranteed on ubuntu-latest)
+          python3 -m pip install --quiet pyyaml
+
+          # Parse labels.yml and sync to repository
+          # First, get existing labels
+          existing=$(gh label list --json name --jq '.[].name' --limit 200)
+
+          # Track which labels we define
+          defined_labels=""
+
+          # Read labels from config and create/update them
+          python3 -c "
+          import yaml, sys
+          with open('.github/labels.yml') as f:
+              labels = yaml.safe_load(f)
+          for label in labels:
+              name = label['name']
+              color = label.get('color', 'ededed')
+              desc = label.get('description', '')
+              print(f'{name}\t{color}\t{desc}')
+          " | while IFS=$'\t' read -r name color desc; do
+            defined_labels="${defined_labels}${name}\n"
+            if echo "$existing" | grep -qx "$name"; then
+              gh label edit "$name" --color "$color" --description "$desc" 2>/dev/null || true
+            else
+              gh label create "$name" --color "$color" --description "$desc" 2>/dev/null || true
+            fi
+          done
+
+          # Delete labels not in config
+          python3 -c "
+          import yaml
+          with open('.github/labels.yml') as f:
+              labels = yaml.safe_load(f)
+          for label in labels:
+              print(label['name'])
+          " > /tmp/defined_labels.txt
+
+          echo "$existing" | while read -r name; do
+            if [ -n "$name" ] && ! grep -qx "$name" /tmp/defined_labels.txt; then
+              echo "Deleting label: $name"
+              gh label delete "$name" --yes 2>/dev/null || true
+            fi
+          done
+
+  label-pull-requests:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Apply pull request labels
+        uses: actions/labeler@634933edcd8ababfe52f92936142cc22ac488b1b # v6.0.1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          configuration-path: .github/labeler.yml
+          sync-labels: true
