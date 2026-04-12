@@ -572,7 +572,8 @@ class DiskInfo(BaseModel):
 
         Uses multiple heuristics:
         - Device path contains 'nvme'
-        - Model name contains 'ssd' or 'nvme'
+        - Model name contains 'ssd', 'nvme', or 'solid state'
+        - Model name starts with known SSD product prefixes (e.g. WD 'WDS')
         - SMART attribute 'rotation_rate' is '0' (Solid State Device)
 
         Returns:
@@ -588,8 +589,15 @@ class DiskInfo(BaseModel):
         if self.device and "nvme" in self.device.lower():
             return True
         # Check model name
-        if self.model and any(kw in self.model.lower() for kw in ("ssd", "nvme")):
-            return True
+        if self.model:
+            model_lower = self.model.lower()
+            if any(kw in model_lower for kw in ("ssd", "nvme", "solid state")):
+                return True
+            # WDC WDS* — Western Digital Solid State product line
+            # Split model to check individual words for SSD prefixes
+            model_words = model_lower.split()
+            if any(word.startswith("wds") for word in model_words):
+                return True
         # Check SMART rotation rate attribute
         if self.smart_attributes:
             rotation = self.smart_attributes.get("rotation_rate")
@@ -682,7 +690,8 @@ class DiskInfo(BaseModel):
 
         Returns:
             'critical', 'warning', or 'normal' based on current temperature.
-            Returns 'normal' if temperature or thresholds are unavailable.
+            Returns 'normal' if temperature or thresholds are unavailable,
+            or if the disk is in standby (temperature readings are unreliable).
 
         Example:
             >>> disk = DiskInfo(temperature_celsius=55.0, temp_critical=50)
@@ -690,7 +699,11 @@ class DiskInfo(BaseModel):
             'critical'
 
         """
-        if self.temperature_celsius is None:
+        if self.temperature_celsius is None or self.temperature_celsius <= 0:
+            return "normal"
+
+        # Standby disks report unreliable temperature readings
+        if self.is_standby:
             return "normal"
 
         warning, critical = self.get_temp_thresholds(settings)
