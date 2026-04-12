@@ -131,7 +131,7 @@ class UnraidRateSensorExtraStoredData(SensorExtraStoredData):
                 if restored.get("last_uptime_seconds") is not None
                 else None
             )
-        except TypeError, ValueError:
+        except (TypeError, ValueError):  # fmt: skip
             return None
 
         return cls(
@@ -184,7 +184,7 @@ class UnraidEnergySensorExtraStoredData(SensorExtraStoredData):
                 if restored.get("last_uptime_seconds") is not None
                 else None
             )
-        except TypeError, ValueError:
+        except (TypeError, ValueError):  # fmt: skip
             return None
 
         return cls(
@@ -207,7 +207,7 @@ def _get_system_uptime_seconds(data: UnraidData | None) -> int | None:
 
     try:
         return int(uptime_seconds)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):  # fmt: skip
         return None
 
 
@@ -1744,7 +1744,7 @@ class UnraidNetworkSensorBase(UnraidBaseEntity, RestoreEntity, SensorEntity):
 
         try:
             restored_rate = float(restored.native_value)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):  # fmt: skip
             restored_rate = 0.0
 
         self._rate_calculator.restore_state(
@@ -2627,7 +2627,7 @@ class UnraidUPSEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
         ) is not None and last_state.state not in (None, "unknown", "unavailable"):
             try:
                 self._total_energy = float(last_state.state)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):  # fmt: skip
                 self._total_energy = 0.0
 
         if (extra_data := await self.async_get_last_extra_data()) is None:
@@ -2640,7 +2640,7 @@ class UnraidUPSEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
         if self._total_energy == 0.0:
             try:
                 self._total_energy = float(restored.native_value)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):  # fmt: skip
                 pass
 
         self._last_power = restored.last_power_watts
@@ -2769,7 +2769,7 @@ class UnraidGPUEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
         ) is not None and last_state.state not in (None, "unknown", "unavailable"):
             try:
                 self._total_energy = float(last_state.state)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):  # fmt: skip
                 self._total_energy = 0.0
 
         if (extra_data := await self.async_get_last_extra_data()) is None:
@@ -2782,7 +2782,7 @@ class UnraidGPUEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
         if self._total_energy == 0.0:
             try:
                 self._total_energy = float(restored.native_value)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):  # fmt: skip
                 pass
 
         self._last_power = restored.last_power_watts

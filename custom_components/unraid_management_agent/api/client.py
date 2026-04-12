@@ -230,6 +230,11 @@ class UnraidClient:
 
         last_err: UnraidRateLimitError | None = None
         for attempt in range(_MAX_RETRIES + 1):
+            # backoff_delay is set when a 429 is received and we should retry.
+            # The sleep is performed AFTER releasing the semaphore so concurrent
+            # requests waiting to acquire the semaphore are not stalled during
+            # the backoff wait.
+            backoff_delay: float | None = None
             async with self._semaphore:
                 try:
                     async with session.request(
@@ -265,45 +270,51 @@ class UnraidClient:
                                     attempt + 1,
                                     _MAX_RETRIES,
                                 )
-                                await asyncio.sleep(delay)
-                                continue
-                            raise last_err
+                                # Mark for backoff sleep outside semaphore scope.
+                                backoff_delay = delay
+                            else:
+                                raise last_err
 
-                        # Handle other error responses
-                        try:
-                            error_data = await response.json()
-                            error_message = error_data.get("message", "Unknown error")
-                            error_code = error_data.get("error_code", "UNKNOWN_ERROR")
-                        except ValueError, aiohttp.ContentTypeError:
-                            error_message = (
-                                await response.text() or f"HTTP {response.status}"
-                            )
-                            error_code = "UNKNOWN_ERROR"
+                        else:
+                            # Handle other error responses
+                            try:
+                                error_data = await response.json()
+                                error_message = error_data.get(
+                                    "message", "Unknown error"
+                                )
+                                error_code = error_data.get(
+                                    "error_code", "UNKNOWN_ERROR"
+                                )
+                            except (ValueError, aiohttp.ContentTypeError):  # fmt: skip
+                                error_message = (
+                                    await response.text() or f"HTTP {response.status}"
+                                )
+                                error_code = "UNKNOWN_ERROR"
 
-                        # Raise specific exceptions based on status code
-                        if response.status == 404:
-                            raise UnraidNotFoundError(
+                            # Raise specific exceptions based on status code
+                            if response.status == 404:
+                                raise UnraidNotFoundError(
+                                    error_message,
+                                    error_code=error_code,
+                                    status_code=404,
+                                )
+                            if response.status == 409:
+                                raise UnraidConflictError(
+                                    error_message,
+                                    error_code=error_code,
+                                    status_code=409,
+                                )
+                            if response.status == 400:
+                                raise UnraidValidationError(
+                                    error_message,
+                                    error_code=error_code,
+                                    status_code=400,
+                                )
+                            raise UnraidAPIError(
                                 error_message,
                                 error_code=error_code,
-                                status_code=404,
+                                status_code=response.status,
                             )
-                        if response.status == 409:
-                            raise UnraidConflictError(
-                                error_message,
-                                error_code=error_code,
-                                status_code=409,
-                            )
-                        if response.status == 400:
-                            raise UnraidValidationError(
-                                error_message,
-                                error_code=error_code,
-                                status_code=400,
-                            )
-                        raise UnraidAPIError(
-                            error_message,
-                            error_code=error_code,
-                            status_code=response.status,
-                        )
 
                 except aiohttp.ClientError as e:
                     raise UnraidConnectionError(
@@ -311,6 +322,10 @@ class UnraidClient:
                     ) from e
                 except TimeoutError as e:
                     raise UnraidConnectionError(f"Request to {url} timed out") from e
+
+            # Semaphore released - now sleep so other requests can proceed.
+            if backoff_delay is not None:
+                await asyncio.sleep(backoff_delay)
 
         # Should not be reached, but satisfy type checker
         raise last_err or UnraidRateLimitError()

@@ -218,7 +218,7 @@ class SystemInfo(BaseModel):
                     if len(per_core) > core_count:
                         data = dict(data)
                         data["cpu_cores"] = len(per_core)
-                except ValueError, TypeError:
+                except (ValueError, TypeError):  # fmt: skip
                     pass
         return data
 
