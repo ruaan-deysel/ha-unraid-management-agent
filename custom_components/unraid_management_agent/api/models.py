@@ -548,12 +548,35 @@ class DiskInfo(BaseModel):
         return None
 
     @property
-    def is_physical(self) -> bool:
+    def is_flash(self) -> bool:
         """
-        Check if this is a physical disk (not a virtual disk).
+        Check if this disk is the Unraid USB flash boot device.
+
+        The flash boot device is always named 'flash' in Unraid. It has its
+        own dedicated API endpoint and entity types (FlashDriveInfo), so it
+        should be excluded from normal disk processing.
 
         Returns:
-            True if the disk role is not docker_vdisk or log.
+            True if the disk name is 'flash'.
+
+        Example:
+            >>> disk = DiskInfo(name="flash", role="unknown")
+            >>> disk.is_flash
+            True
+
+        """
+        return self.name is not None and self.name.lower() == "flash"
+
+    @property
+    def is_physical(self) -> bool:
+        """
+        Check if this is a physical disk (not a virtual or flash disk).
+
+        Excludes virtual disks (docker_vdisk, log) and the USB flash boot
+        device, which has its own dedicated model and entities.
+
+        Returns:
+            True if the disk is a real physical storage disk.
 
         Example:
             >>> disk = DiskInfo(role="data")
@@ -561,6 +584,8 @@ class DiskInfo(BaseModel):
             True
 
         """
+        if self.is_flash:
+            return False
         if self.role is None:
             return True
         return self.role.lower() not in ("docker_vdisk", "log")
