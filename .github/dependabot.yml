@@ -1,0 +1,54 @@
+version: 2
+updates:
+  # Update pip dependencies in requirements.txt
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: daily
+      time: "03:00"
+    open-pull-requests-limit: 10
+    reviewers:
+      - ruaan-deysel
+    labels:
+      - dependencies
+      - python
+    allow:
+      - dependency-type: all
+    commit-message:
+      prefix: "chore(deps):"
+      include: "scope"
+    pull-request-branch-name:
+      separator: "/"
+
+  # Update GitHub Actions
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: daily
+      time: "03:00"
+    open-pull-requests-limit: 5
+    reviewers:
+      - ruaan-deysel
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: "chore(ci):"
+      include: "scope"
+
+  # Monitor Python version requirements
+  - package-ecosystem: python
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "03:00"
+    open-pull-requests-limit: 3
+    reviewers:
+      - ruaan-deysel
+    labels:
+      - dependencies
+      - python
+    commit-message:
+      prefix: "chore(python):"
+      include: "scope"

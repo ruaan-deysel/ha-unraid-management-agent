@@ -28,5 +28,18 @@ class UnraidConflictError(UnraidAPIError):
     """Exception raised when there's a resource conflict (409)."""
 
 
+class UnraidRateLimitError(UnraidAPIError):
+    """Exception raised when rate limited by the API (429)."""
+
+    def __init__(
+        self,
+        message: str = "Too Many Requests",
+        retry_after: float | None = None,
+        **kwargs: object,
+    ):
+        super().__init__(message, error_code="RATE_LIMITED", status_code=429)
+        self.retry_after = retry_after
+
+
 class UnraidValidationError(UnraidAPIError):
     """Exception raised when request validation fails (400)."""

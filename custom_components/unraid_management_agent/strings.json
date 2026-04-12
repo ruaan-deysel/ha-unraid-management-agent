@@ -93,20 +93,17 @@
       "parity_progress": {
         "name": "Parity Check Progress"
       },
-      "gpu_name": {
-        "name": "GPU Name"
-      },
       "gpu_utilization": {
-        "name": "GPU Utilization"
+        "name": "GPU {gpu_name} Utilization"
       },
       "gpu_temperature": {
-        "name": "GPU Temperature"
+        "name": "GPU {gpu_name} Temperature"
       },
       "gpu_power": {
-        "name": "GPU Power"
+        "name": "GPU {gpu_name} Power"
       },
       "gpu_energy": {
-        "name": "GPU Energy"
+        "name": "GPU {gpu_name} Energy"
       },
       "ups_battery": {
         "name": "UPS Battery"

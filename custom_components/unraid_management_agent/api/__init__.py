@@ -52,6 +52,7 @@ from .exceptions import (
     UnraidConflictError,
     UnraidConnectionError,
     UnraidNotFoundError,
+    UnraidRateLimitError,
     UnraidValidationError,
 )
 from .formatting import (
@@ -321,6 +322,7 @@ __all__ = [
     "UnraidConnectionError",
     "UnraidMCPClient",
     "UnraidNotFoundError",
+    "UnraidRateLimitError",
     "UnraidValidationError",
     "UnraidWebSocketClient",
     "UpdateStatus",

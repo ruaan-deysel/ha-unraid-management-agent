@@ -275,3 +275,116 @@ async def test_migrate_legacy_vm_unique_id_handles_registry_update_error(
         "switch.cube_vm_home_assistant_old",
         new_unique_id=f"{mock_config_entry.entry_id}_vm_windows_server_2016",
     )
+
+
+async def test_migrate_legacy_gpu_unique_ids(
+    hass: HomeAssistant,
+    mock_config_entry,
+) -> None:
+    """Test legacy single-GPU unique IDs are migrated to index 0 IDs."""
+    coordinator = MagicMock()
+    gpu0 = MagicMock()
+    gpu0.index = 0
+    coordinator.data = UnraidData(gpu=[gpu0])
+
+    source_entries = [
+        MagicMock(
+            domain="sensor",
+            unique_id=f"{mock_config_entry.entry_id}_gpu_utilization",
+            entity_id="sensor.unraid_test_gpu_utilization",
+        ),
+        MagicMock(
+            domain="sensor",
+            unique_id=f"{mock_config_entry.entry_id}_gpu_temperature",
+            entity_id="sensor.unraid_test_gpu_temperature",
+        ),
+        MagicMock(
+            domain="sensor",
+            unique_id=f"{mock_config_entry.entry_id}_gpu_power",
+            entity_id="sensor.unraid_test_gpu_power",
+        ),
+        MagicMock(
+            domain="sensor",
+            unique_id=f"{mock_config_entry.entry_id}_gpu_energy",
+            entity_id="sensor.unraid_test_gpu_energy",
+        ),
+    ]
+    registry = MagicMock()
+
+    with (
+        patch(
+            "custom_components.unraid_management_agent.er.async_get",
+            return_value=registry,
+        ),
+        patch(
+            "custom_components.unraid_management_agent.er.async_entries_for_config_entry",
+            return_value=source_entries,
+        ),
+    ):
+        await _async_migrate_legacy_entity_unique_ids(
+            hass, mock_config_entry, coordinator
+        )
+
+    expected_calls = [
+        (
+            ("sensor.unraid_test_gpu_utilization",),
+            {"new_unique_id": f"{mock_config_entry.entry_id}_gpu_0_utilization"},
+        ),
+        (
+            ("sensor.unraid_test_gpu_temperature",),
+            {"new_unique_id": f"{mock_config_entry.entry_id}_gpu_0_temperature"},
+        ),
+        (
+            ("sensor.unraid_test_gpu_power",),
+            {"new_unique_id": f"{mock_config_entry.entry_id}_gpu_0_power"},
+        ),
+        (
+            ("sensor.unraid_test_gpu_energy",),
+            {"new_unique_id": f"{mock_config_entry.entry_id}_gpu_0_energy"},
+        ),
+    ]
+    assert registry.async_update_entity.call_count == 4
+    for args, kwargs in expected_calls:
+        assert any(
+            call.args == args and call.kwargs == kwargs
+            for call in registry.async_update_entity.call_args_list
+        )
+
+
+async def test_migrate_legacy_gpu_unique_ids_skips_when_target_exists(
+    hass: HomeAssistant,
+    mock_config_entry,
+) -> None:
+    """Test GPU migration is skipped when indexed target unique ID already exists."""
+    coordinator = MagicMock()
+    gpu0 = MagicMock()
+    gpu0.index = 0
+    coordinator.data = UnraidData(gpu=[gpu0])
+
+    source_entry = MagicMock(
+        domain="sensor",
+        unique_id=f"{mock_config_entry.entry_id}_gpu_utilization",
+        entity_id="sensor.unraid_test_gpu_utilization",
+    )
+    target_entry = MagicMock(
+        domain="sensor",
+        unique_id=f"{mock_config_entry.entry_id}_gpu_0_utilization",
+        entity_id="sensor.unraid_test_gpu_0_utilization",
+    )
+    registry = MagicMock()
+
+    with (
+        patch(
+            "custom_components.unraid_management_agent.er.async_get",
+            return_value=registry,
+        ),
+        patch(
+            "custom_components.unraid_management_agent.er.async_entries_for_config_entry",
+            return_value=[source_entry, target_entry],
+        ),
+    ):
+        await _async_migrate_legacy_entity_unique_ids(
+            hass, mock_config_entry, coordinator
+        )
+
+    assert registry.async_update_entity.call_count == 0

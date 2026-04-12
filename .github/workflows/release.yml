@@ -5,13 +5,14 @@ on:
     tags:
       - "v*"
 
-permissions:
-  contents: write
+permissions: {}
 
 jobs:
   release:
     name: Build and Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
@@ -165,16 +166,22 @@ jobs:
           cat build/RELEASE_NOTES.md
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: v${{ steps.version.outputs.version }}
-          body_path: build/RELEASE_NOTES.md
-          files: |
-            build/unraid_management_agent-${{ steps.version.outputs.version }}.zip
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          PACKAGE_FILE="build/unraid_management_agent-${VERSION}.zip"
+          PRERELEASE_FLAG=""
+          if [ "${{ steps.version.outputs.prerelease }}" == "true" ]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+
+          gh release create "v${VERSION}" \
+            --title "v${VERSION}" \
+            --notes-file build/RELEASE_NOTES.md \
+            ${PRERELEASE_FLAG} \
+            "${PACKAGE_FILE}" \
             build/SHA256SUM
-          prerelease: ${{ steps.version.outputs.prerelease }}
-          draft: false
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Release Summary
         run: |

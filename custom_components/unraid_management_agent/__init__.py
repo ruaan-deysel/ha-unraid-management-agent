@@ -209,6 +209,32 @@ async def _async_migrate_legacy_entity_unique_ids(
                 f"fan {legacy_fan_name}",
             )
 
+    # GPU sensors migrated from single-GPU IDs to per-GPU indexed IDs.
+    migrate(
+        "sensor",
+        f"{entry.entry_id}_gpu_utilization",
+        f"{entry.entry_id}_gpu_0_utilization",
+        "GPU utilization",
+    )
+    migrate(
+        "sensor",
+        f"{entry.entry_id}_gpu_temperature",
+        f"{entry.entry_id}_gpu_0_temperature",
+        "GPU temperature",
+    )
+    migrate(
+        "sensor",
+        f"{entry.entry_id}_gpu_power",
+        f"{entry.entry_id}_gpu_0_power",
+        "GPU power",
+    )
+    migrate(
+        "sensor",
+        f"{entry.entry_id}_gpu_energy",
+        f"{entry.entry_id}_gpu_0_energy",
+        "GPU energy",
+    )
+
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,

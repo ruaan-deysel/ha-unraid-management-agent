@@ -1,11 +1,17 @@
 name: HACS Action
 
-permissions:
-  contents: read
+permissions: {}
 
 on:
   push:
+    branches:
+      - main
+      - "enhancement/**"
+      - "feature/**"
+      - "fix/**"
   pull_request:
+    branches:
+      - main
   schedule:
     - cron: "0 0 * * *"
 
@@ -13,8 +19,10 @@ jobs:
   hacs:
     name: HACS Action
     runs-on: "ubuntu-latest"
+    permissions:
+      contents: read
     steps:
       - name: HACS Action
-        uses: "hacs/action@main"
+        uses: "hacs/action@dcb30e72781db3f207d5236b861172774ab0b485" # main
         with:
           category: "integration"
