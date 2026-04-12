@@ -31,6 +31,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Ensure PyYAML is available (not guaranteed on ubuntu-latest)
+          python3 -m pip install --quiet pyyaml
+
           # Parse labels.yml and sync to repository
           # First, get existing labels
           existing=$(gh label list --json name --jq '.[].name' --limit 200)

@@ -3192,8 +3192,10 @@ async def async_setup_entry(
 
     # GPU sensors - only if gpu collector is enabled
     if coordinator.is_collector_enabled("gpu") and data and data.gpu:
-        for gpu in data.gpu:
-            gpu_index = gpu.index
+        for loop_idx, gpu in enumerate(data.gpu):
+            # Prefer the API-provided index; fall back to the loop position so
+            # unique IDs are never "gpu_None_*" (which would cause collisions).
+            gpu_index = gpu.index if gpu.index is not None else loop_idx
             gpu_name = gpu.name or f"GPU {gpu_index}"
             entities.extend(
                 [

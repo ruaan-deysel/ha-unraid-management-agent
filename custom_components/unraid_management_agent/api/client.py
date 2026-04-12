@@ -245,11 +245,15 @@ class UnraidClient:
                         # Handle 429 rate limit - retry with backoff
                         if response.status == 429:
                             retry_after = response.headers.get("Retry-After")
-                            delay = (
-                                float(retry_after)
-                                if retry_after
-                                else _RETRY_BASE_DELAY * (2**attempt)
-                            )
+                            delay: float = _RETRY_BASE_DELAY * (2**attempt)
+                            if retry_after:
+                                try:
+                                    delay = float(retry_after)
+                                except ValueError:
+                                    # Retry-After may be an HTTP-date; fall back to
+                                    # exponential backoff when it cannot be parsed as
+                                    # a plain number of seconds.
+                                    pass
                             last_err = UnraidRateLimitError(
                                 retry_after=delay,
                             )

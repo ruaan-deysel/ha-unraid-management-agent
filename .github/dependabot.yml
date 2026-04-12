@@ -35,20 +35,3 @@ updates:
     commit-message:
       prefix: "chore(ci):"
       include: "scope"
-
-  # Monitor Python version requirements
-  - package-ecosystem: python
-    directory: "/"
-    schedule:
-      interval: weekly
-      day: monday
-      time: "03:00"
-    open-pull-requests-limit: 3
-    reviewers:
-      - ruaan-deysel
-    labels:
-      - dependencies
-      - python
-    commit-message:
-      prefix: "chore(python):"
-      include: "scope"
