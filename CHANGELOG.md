@@ -9,6 +9,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2026.4.0] - 2026-04-12
 
+### Added
+
+- **Multi-GPU Entity Migration**: Added automatic entity registry migration for multi-GPU support (#46)
+  - Migrates legacy single-GPU unique IDs (`gpu_utilization` → `gpu_0_utilization`, etc.) to indexed format
+  - Preserves existing entity IDs and history for users upgrading from single-GPU to multi-GPU setups
+
+- **API Rate Limiting**: Added client-side rate limiting and retry logic for UMA API requests
+  - `asyncio.Semaphore(10)` limits concurrent API requests to prevent server overload
+  - Automatic retry with exponential backoff on HTTP 429 (Too Many Requests) responses
+  - New `UnraidRateLimitError` exception type for rate limit handling
+
+- **Dependabot Configuration**: Added automated dependency update monitoring
+  - Configured for pip (Python dependencies) and GitHub Actions workflows
+  - Weekly update schedule with appropriate labels and reviewers
+
+### Changed
+
+- **GitHub Actions Hardening**: Replaced third-party actions with native GitHub CLI equivalents and improved security posture
+  - Replaced `softprops/action-gh-release` with native `gh release create` CLI
+  - Replaced `EndBug/label-sync` with native `gh label` CLI and `python3` YAML parser
+  - Pinned all GitHub Actions to commit SHA for supply-chain security
+  - Set `permissions: {}` at workflow level with explicit job-level permissions (least privilege)
+  - Scoped push triggers to `main`, `enhancement/**`, `feature/**`, `fix/**` branches
+
+- **Dependencies Updated**: Bumped project dependencies to latest versions
+  - Updated `pyproject.toml` and `requirements.txt` dependency pins
+
+- **Development Scripts**: Updated bootstrap and test scripts for latest Home Assistant version
+
+### Removed
+
+- **Dead GPU Code**: Removed unused single-GPU sensor code replaced by per-GPU sensor classes
+  - Removed `GPU_SENSOR_DESCRIPTIONS` tuple and `_get_gpu_utilization`, `_get_gpu_attrs`, `_get_gpu_temperature`, `_get_gpu_power` value functions
+  - Removed orphaned `gpu_name` translation key from `strings.json` and `translations/en.json`
+  - Cleaned up corresponding test references
+
+### Fixed
+
+- **Unused Type Ignore**: Removed stale `# type: ignore[unreachable]` comment flagged by mypy
+
 ## [2026.3.2] - 2026-03-30
 
 ### Added
