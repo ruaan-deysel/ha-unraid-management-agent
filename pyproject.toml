@@ -30,7 +30,7 @@ dev = [
     "ruff>=0.15.0",
     "mypy>=1.0.0",
     "pyright>=1.1.0",
-    "pre-commit>=3.0.0",
+    "pre-commit>=4.5.1",
     "codespell>=2.4.0",
     "bandit[toml]>=1.8.0",
 ]
