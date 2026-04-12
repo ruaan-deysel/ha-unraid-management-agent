@@ -131,7 +131,7 @@ class UnraidRateSensorExtraStoredData(SensorExtraStoredData):
                 if restored.get("last_uptime_seconds") is not None
                 else None
             )
-        except TypeError, ValueError:
+        except (TypeError, ValueError):  # fmt: skip
             return None
 
         return cls(
@@ -184,7 +184,7 @@ class UnraidEnergySensorExtraStoredData(SensorExtraStoredData):
                 if restored.get("last_uptime_seconds") is not None
                 else None
             )
-        except TypeError, ValueError:
+        except (TypeError, ValueError):  # fmt: skip
             return None
 
         return cls(
@@ -207,7 +207,7 @@ def _get_system_uptime_seconds(data: UnraidData | None) -> int | None:
 
     try:
         return int(uptime_seconds)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):  # fmt: skip
         return None
 
 
@@ -557,44 +557,6 @@ def _get_parity_attrs(data: UnraidData) -> dict[str, Any]:
 
 
 # =============================================================================
-# Value Functions for GPU Sensors
-# =============================================================================
-
-
-def _get_gpu_utilization(data: UnraidData) -> float | None:
-    """Get GPU utilization from coordinator data."""
-    if data and data.gpu and len(data.gpu) > 0:
-        return data.gpu[0].utilization_gpu_percent
-    return None
-
-
-def _get_gpu_attrs(data: UnraidData) -> dict[str, Any]:
-    """Get GPU extra state attributes."""
-    if not data or not data.gpu or len(data.gpu) == 0:
-        return {}
-
-    gpu = data.gpu[0]
-    attrs: dict[str, Any] = {}
-    _add_attr_if_set(attrs, ATTR_GPU_NAME, gpu.name)
-    _add_attr_if_set(attrs, ATTR_GPU_DRIVER_VERSION, gpu.driver_version)
-    return attrs
-
-
-def _get_gpu_temperature(data: UnraidData) -> float | None:
-    """Get GPU temperature from coordinator data."""
-    if data and data.gpu and len(data.gpu) > 0:
-        return data.gpu[0].gpu_temperature
-    return None
-
-
-def _get_gpu_power(data: UnraidData) -> float | None:
-    """Get GPU power from coordinator data."""
-    if data and data.gpu and len(data.gpu) > 0:
-        return data.gpu[0].power_draw_watts
-    return None
-
-
-# =============================================================================
 # Value Functions for UPS Sensors
 # =============================================================================
 
@@ -788,7 +750,7 @@ def _get_plugins_with_updates(data: UnraidData) -> int | None:
     if data and data.plugins:
         updates = data.plugins.plugins_with_updates
         if updates is not None:
-            return len(updates) if isinstance(updates, list) else updates  # type: ignore[unreachable]
+            return len(updates) if isinstance(updates, list) else updates
         plugins_list = data.plugins.plugins or []
         if plugins_list:
             return sum(1 for p in plugins_list if p.update_available)
@@ -1275,51 +1237,6 @@ ARRAY_SENSOR_DESCRIPTIONS: tuple[UnraidSensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=_get_parity_progress,
         extra_state_attributes_fn=_get_parity_attrs,
-    ),
-)
-
-
-# =============================================================================
-# Sensor Entity Descriptions - GPU Sensors
-# =============================================================================
-
-GPU_SENSOR_DESCRIPTIONS: tuple[UnraidSensorEntityDescription, ...] = (
-    UnraidSensorEntityDescription(
-        key="gpu_utilization",
-        translation_key="gpu_utilization",
-        native_unit_of_measurement=PERCENTAGE,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:expansion-card",
-        suggested_display_precision=1,
-        value_fn=_get_gpu_utilization,
-        extra_state_attributes_fn=_get_gpu_attrs,
-    ),
-    UnraidSensorEntityDescription(
-        key="gpu_temperature",
-        translation_key="gpu_temperature",
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        device_class=SensorDeviceClass.TEMPERATURE,
-        state_class=SensorStateClass.MEASUREMENT,
-        suggested_display_precision=1,
-        value_fn=_get_gpu_temperature,
-    ),
-    UnraidSensorEntityDescription(
-        key="gpu_power",
-        translation_key="gpu_power",
-        native_unit_of_measurement=UnitOfPower.WATT,
-        device_class=SensorDeviceClass.POWER,
-        state_class=SensorStateClass.MEASUREMENT,
-        suggested_display_precision=1,
-        value_fn=_get_gpu_power,
-    ),
-    UnraidSensorEntityDescription(
-        key="gpu_energy",
-        translation_key="gpu_energy",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
-        suggested_display_precision=3,
-        value_fn=lambda _: None,  # Handled by specialized entity class
     ),
 )
 
@@ -1827,7 +1744,7 @@ class UnraidNetworkSensorBase(UnraidBaseEntity, RestoreEntity, SensorEntity):
 
         try:
             restored_rate = float(restored.native_value)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):  # fmt: skip
             restored_rate = 0.0
 
         self._rate_calculator.restore_state(
@@ -2528,11 +2445,142 @@ class UnraidZFSPoolHealthSensor(UnraidZFSPoolSensorBase):
 
         attrs = {"pool_name": self._pool_name}
 
-        errors = pool.errors
+        errors = getattr(pool, "errors", None)
         if errors is not None:
             attrs["errors"] = errors
 
         return attrs
+
+
+# =============================================================================
+# GPU Metric Sensors
+# =============================================================================
+
+
+class UnraidGPUSensorBase(UnraidBaseEntity, SensorEntity):
+    """Base class for per-GPU sensors."""
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        entry: UnraidConfigEntry,
+        gpu_index: int,
+        gpu_name: str,
+        sensor_type: str,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, f"gpu_{gpu_index}_{sensor_type}")
+        self._gpu_index = gpu_index
+        self._gpu_name = gpu_name
+
+    def _find_gpu(self) -> Any | None:
+        """Find a GPU by its stable index."""
+        data = self.coordinator.data
+        if not data or not data.gpu:
+            return None
+        return next((gpu for gpu in data.gpu if gpu.index == self._gpu_index), None)
+
+
+class UnraidGPUUtilizationSensor(UnraidGPUSensorBase):
+    """Per-GPU utilization sensor."""
+
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:expansion-card"
+    _attr_suggested_display_precision = 1
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        entry: UnraidConfigEntry,
+        gpu_index: int,
+        gpu_name: str,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry, gpu_index, gpu_name, "utilization")
+        self._attr_translation_key = "gpu_utilization"
+        self._attr_translation_placeholders = {"gpu_name": gpu_name}
+
+    @property
+    def native_value(self) -> float | None:
+        """Return GPU utilization percentage."""
+        gpu = self._find_gpu()
+        if not gpu:
+            return None
+        result: float | None = gpu.utilization_gpu_percent
+        return result
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra attributes."""
+        gpu = self._find_gpu()
+        if not gpu:
+            return {}
+
+        attrs: dict[str, Any] = {}
+        _add_attr_if_set(attrs, ATTR_GPU_NAME, gpu.name)
+        _add_attr_if_set(attrs, ATTR_GPU_DRIVER_VERSION, gpu.driver_version)
+        return attrs
+
+
+class UnraidGPUTemperatureSensor(UnraidGPUSensorBase):
+    """Per-GPU temperature sensor."""
+
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 1
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        entry: UnraidConfigEntry,
+        gpu_index: int,
+        gpu_name: str,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry, gpu_index, gpu_name, "temperature")
+        self._attr_translation_key = "gpu_temperature"
+        self._attr_translation_placeholders = {"gpu_name": gpu_name}
+
+    @property
+    def native_value(self) -> float | None:
+        """Return GPU temperature in Celsius."""
+        gpu = self._find_gpu()
+        if not gpu:
+            return None
+        result: float | None = gpu.gpu_temperature
+        return result
+
+
+class UnraidGPUPowerSensor(UnraidGPUSensorBase):
+    """Per-GPU power draw sensor."""
+
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 1
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        entry: UnraidConfigEntry,
+        gpu_index: int,
+        gpu_name: str,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry, gpu_index, gpu_name, "power")
+        self._attr_translation_key = "gpu_power"
+        self._attr_translation_placeholders = {"gpu_name": gpu_name}
+
+    @property
+    def native_value(self) -> float | None:
+        """Return GPU power draw in watts."""
+        gpu = self._find_gpu()
+        if not gpu:
+            return None
+        result: float | None = gpu.power_draw_watts
+        return result
 
 
 # =============================================================================
@@ -2579,7 +2627,7 @@ class UnraidUPSEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
         ) is not None and last_state.state not in (None, "unknown", "unavailable"):
             try:
                 self._total_energy = float(last_state.state)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):  # fmt: skip
                 self._total_energy = 0.0
 
         if (extra_data := await self.async_get_last_extra_data()) is None:
@@ -2592,7 +2640,7 @@ class UnraidUPSEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
         if self._total_energy == 0.0:
             try:
                 self._total_energy = float(restored.native_value)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):  # fmt: skip
                 pass
 
         self._last_power = restored.last_power_watts
@@ -2688,14 +2736,26 @@ class UnraidGPUEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
         self,
         coordinator: UnraidDataUpdateCoordinator,
         entry: UnraidConfigEntry,
+        gpu_index: int,
+        gpu_name: str,
     ) -> None:
         """Initialize the GPU energy sensor."""
-        super().__init__(coordinator, "gpu_energy")
+        super().__init__(coordinator, f"gpu_{gpu_index}_energy")
+        self._gpu_index = gpu_index
+        self._gpu_name = gpu_name
         self._attr_translation_key = "gpu_energy"
+        self._attr_translation_placeholders = {"gpu_name": gpu_name}
         self._energy_integrator = EnergyIntegrator()
         self._total_energy: float = 0.0
         self._last_power: float | None = None
         self._last_uptime_seconds: int | None = None
+
+    def _find_gpu(self) -> Any | None:
+        """Find a GPU by its stable index."""
+        data = self.coordinator.data
+        if not data or not data.gpu:
+            return None
+        return next((gpu for gpu in data.gpu if gpu.index == self._gpu_index), None)
 
     async def async_added_to_hass(self) -> None:
         """Restore previous state when added to hass."""
@@ -2709,7 +2769,7 @@ class UnraidGPUEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
         ) is not None and last_state.state not in (None, "unknown", "unavailable"):
             try:
                 self._total_energy = float(last_state.state)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):  # fmt: skip
                 self._total_energy = 0.0
 
         if (extra_data := await self.async_get_last_extra_data()) is None:
@@ -2722,7 +2782,7 @@ class UnraidGPUEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
         if self._total_energy == 0.0:
             try:
                 self._total_energy = float(restored.native_value)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):  # fmt: skip
                 pass
 
         self._last_power = restored.last_power_watts
@@ -2751,14 +2811,14 @@ class UnraidGPUEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
 
     def _update_energy(self) -> None:
         """Calculate and update energy based on current power reading."""
-        if not self.coordinator.data or not self.coordinator.data.gpu:
+        if not self.coordinator.data:
             return
 
-        gpu_list = self.coordinator.data.gpu
-        if not gpu_list or len(gpu_list) == 0:
+        gpu = self._find_gpu()
+        if gpu is None:
             return
 
-        current_power = gpu_list[0].power_draw_watts
+        current_power = gpu.power_draw_watts
 
         if current_power is None or current_power < 0:
             return
@@ -2786,8 +2846,7 @@ class UnraidGPUEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
             return False
         if not self.coordinator.data:
             return False
-        gpu = self.coordinator.data.gpu
-        return gpu is not None and len(gpu) > 0
+        return self._find_gpu() is not None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -2796,6 +2855,11 @@ class UnraidGPUEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
 
         if self._last_power is not None:
             attrs["current_power_watts"] = self._last_power
+
+        gpu = self._find_gpu()
+        if gpu is not None:
+            _add_attr_if_set(attrs, ATTR_GPU_NAME, gpu.name)
+            _add_attr_if_set(attrs, ATTR_GPU_DRIVER_VERSION, gpu.driver_version)
 
         return attrs
 
@@ -3128,14 +3192,19 @@ async def async_setup_entry(
 
     # GPU sensors - only if gpu collector is enabled
     if coordinator.is_collector_enabled("gpu") and data and data.gpu:
-        for description in GPU_SENSOR_DESCRIPTIONS:
-            # Skip gpu_energy - it uses a specialized entity class
-            if description.key == "gpu_energy":
-                continue
-            entities.append(UnraidSensorEntity(coordinator, description))
-
-        # Add GPU Energy sensor (uses specialized class for state restoration)
-        entities.append(UnraidGPUEnergySensor(coordinator, entry))
+        for loop_idx, gpu in enumerate(data.gpu):
+            # Prefer the API-provided index; fall back to the loop position so
+            # unique IDs are never "gpu_None_*" (which would cause collisions).
+            gpu_index = gpu.index if gpu.index is not None else loop_idx
+            gpu_name = gpu.name or f"GPU {gpu_index}"
+            entities.extend(
+                [
+                    UnraidGPUUtilizationSensor(coordinator, entry, gpu_index, gpu_name),
+                    UnraidGPUTemperatureSensor(coordinator, entry, gpu_index, gpu_name),
+                    UnraidGPUPowerSensor(coordinator, entry, gpu_index, gpu_name),
+                    UnraidGPUEnergySensor(coordinator, entry, gpu_index, gpu_name),
+                ]
+            )
 
     # UPS sensors - only if ups collector is enabled
     if (

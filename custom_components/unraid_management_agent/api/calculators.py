@@ -252,7 +252,7 @@ def parse_timestamp(value: str) -> datetime | None:
         # Could be milliseconds
         if 946684800000 <= ts <= 4102444800000:
             return datetime.fromtimestamp(ts / 1000)  # noqa: DTZ006
-    except ValueError, OSError, OverflowError:
+    except (ValueError, OSError, OverflowError):  # fmt: skip
         pass
 
     return None

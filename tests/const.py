@@ -207,15 +207,29 @@ def mock_vms() -> list[MagicMock]:
 
 def mock_gpu_list() -> list[MagicMock]:
     """Create mock GPUInfo Pydantic models."""
-    gpu = MagicMock()
-    gpu.name = "NVIDIA GeForce RTX 3080"
-    gpu.driver_version = "535.86.05"
-    gpu.utilization_gpu_percent = 45
-    gpu.temperature_celsius = 65
-    gpu.gpu_temperature = 65
-    gpu.cpu_temperature_celsius = 50  # Fallback for iGPUs
-    gpu.power_draw_watts = 220.5
-    return [gpu]
+    intel_gpu = MagicMock()
+    intel_gpu.index = 0
+    intel_gpu.name = "Intel UHD Graphics 630"
+    intel_gpu.vendor = "intel"
+    intel_gpu.driver_version = "i915"
+    intel_gpu.utilization_gpu_percent = 15
+    intel_gpu.temperature_celsius = 50
+    intel_gpu.gpu_temperature = 50
+    intel_gpu.cpu_temperature_celsius = 50
+    intel_gpu.power_draw_watts = 21.2
+
+    nvidia_gpu = MagicMock()
+    nvidia_gpu.index = 1
+    nvidia_gpu.name = "NVIDIA GeForce RTX 3080"
+    nvidia_gpu.vendor = "nvidia"
+    nvidia_gpu.driver_version = "535.86.05"
+    nvidia_gpu.utilization_gpu_percent = 45
+    nvidia_gpu.temperature_celsius = 65
+    nvidia_gpu.gpu_temperature = 65
+    nvidia_gpu.cpu_temperature_celsius = 50
+    nvidia_gpu.power_draw_watts = 220.5
+
+    return [intel_gpu, nvidia_gpu]
 
 
 def mock_network_interfaces() -> list[MagicMock]:

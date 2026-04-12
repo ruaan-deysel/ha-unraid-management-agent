@@ -14,7 +14,6 @@ from custom_components.unraid_management_agent.coordinator import UnraidData
 from custom_components.unraid_management_agent.sensor import (
     ARRAY_SENSOR_DESCRIPTIONS,
     FLASH_SENSOR_DESCRIPTIONS,
-    GPU_SENSOR_DESCRIPTIONS,
     PLUGIN_SENSOR_DESCRIPTIONS,
     # Description tuples
     SYSTEM_SENSOR_DESCRIPTIONS,
@@ -26,6 +25,9 @@ from custom_components.unraid_management_agent.sensor import (
     UnraidEnergySensorExtraStoredData,
     UnraidFanSensor,
     UnraidGPUEnergySensor,
+    UnraidGPUPowerSensor,
+    UnraidGPUTemperatureSensor,
+    UnraidGPUUtilizationSensor,
     UnraidNetworkRXSensor,
     UnraidNetworkTXSensor,
     UnraidRateSensorExtraStoredData,
@@ -48,10 +50,6 @@ from custom_components.unraid_management_agent.sensor import (
     _get_flash_free_space,
     _get_flash_usage,
     _get_flash_usage_attrs,
-    _get_gpu_attrs,
-    _get_gpu_power,
-    _get_gpu_temperature,
-    _get_gpu_utilization,
     _get_last_parity_check,
     _get_last_parity_errors,
     _get_latest_version,
@@ -107,6 +105,31 @@ async def test_sensor_setup(
     ]
 
     assert len(sensor_entities) > 0
+
+
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class",
+    "mock_unraid_websocket_client_class",
+)
+async def test_multi_gpu_sensors_created(
+    hass: HomeAssistant,
+    mock_config_entry,
+) -> None:
+    """Test per-GPU sensors are created for all detected GPUs."""
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    for entity_id in (
+        "sensor.unraid_test_gpu_intel_uhd_graphics_630_utilization",
+        "sensor.unraid_test_gpu_intel_uhd_graphics_630_temperature",
+        "sensor.unraid_test_gpu_intel_uhd_graphics_630_power",
+        "sensor.unraid_test_gpu_intel_uhd_graphics_630_energy",
+        "sensor.unraid_test_gpu_nvidia_geforce_rtx_3080_utilization",
+        "sensor.unraid_test_gpu_nvidia_geforce_rtx_3080_temperature",
+        "sensor.unraid_test_gpu_nvidia_geforce_rtx_3080_power",
+        "sensor.unraid_test_gpu_nvidia_geforce_rtx_3080_energy",
+    ):
+        assert hass.states.get(entity_id) is not None
 
 
 @pytest.mark.usefixtures(
@@ -591,78 +614,6 @@ def test_get_parity_attrs_none_data():
     """Test _get_parity_attrs with None data."""
     attrs = _get_parity_attrs(None)
     assert attrs == {}
-
-
-# =============================================================================
-# Value Function Tests - GPU
-# =============================================================================
-
-
-def test_get_gpu_utilization_with_data():
-    """Test _get_gpu_utilization with valid data."""
-    mock_data = MagicMock(spec=UnraidData)
-    mock_data.gpu = [MagicMock()]
-    mock_data.gpu[0].utilization_gpu_percent = 85.0
-
-    result = _get_gpu_utilization(mock_data)
-    assert result == 85.0
-
-
-def test_get_gpu_utilization_empty_list():
-    """Test _get_gpu_utilization with empty GPU list."""
-    mock_data = MagicMock(spec=UnraidData)
-    mock_data.gpu = []
-
-    result = _get_gpu_utilization(mock_data)
-    assert result is None
-
-
-def test_get_gpu_utilization_none_data():
-    """Test _get_gpu_utilization with None data."""
-    result = _get_gpu_utilization(None)
-    assert result is None
-
-
-def test_get_gpu_attrs_with_data():
-    """Test _get_gpu_attrs with valid data."""
-    mock_data = MagicMock(spec=UnraidData)
-    mock_data.gpu = [MagicMock()]
-    mock_data.gpu[0].name = "NVIDIA RTX 3080"
-    mock_data.gpu[0].driver_version = "535.104.05"
-
-    attrs = _get_gpu_attrs(mock_data)
-    assert attrs["gpu_name"] == "NVIDIA RTX 3080"
-    assert attrs["gpu_driver_version"] == "535.104.05"
-
-
-def test_get_gpu_temperature_with_data():
-    """Test _get_gpu_temperature with valid data."""
-    mock_data = MagicMock(spec=UnraidData)
-    mock_data.gpu = [MagicMock()]
-    mock_data.gpu[0].gpu_temperature = 65.0
-
-    result = _get_gpu_temperature(mock_data)
-    assert result == 65.0
-
-
-def test_get_gpu_temperature_fallback():
-    """Test _get_gpu_temperature fallback to cpu_temperature_celsius."""
-    mock_data = MagicMock(spec=UnraidData)
-    mock_data.gpu = [MagicMock()]
-    mock_data.gpu[0].gpu_temperature = 55.0
-
-    result = _get_gpu_temperature(mock_data)
-    assert result == 55.0
-
-
-def test_get_gpu_power_with_data():
-    """Test _get_gpu_power with valid data."""
-    mock_data = MagicMock(spec=UnraidData)
-    mock_data.gpu = [MagicMock()]
-    mock_data.gpu[0].power_draw_watts = 250.5
-
-    result = _get_gpu_power(mock_data)
-    assert result == 250.5
 
 
 # =============================================================================
@@ -1241,8 +1192,6 @@ def test_entity_description_pattern():
     assert array_desc.native_unit_of_measurement == PERCENTAGE
 
     # Verify GPU descriptions
-    assert len(GPU_SENSOR_DESCRIPTIONS) > 0
-
     # Verify UPS descriptions
     assert len(UPS_SENSOR_DESCRIPTIONS) > 0
 
@@ -3023,80 +2972,6 @@ def test_get_parity_attrs_no_array() -> None:
     data = UnraidData()
     data.array = None
     assert _get_parity_attrs(data) == {}
-
-
-def test_get_gpu_utilization_no_data() -> None:
-    """Test _get_gpu_utilization with no data."""
-    from custom_components.unraid_management_agent.sensor import _get_gpu_utilization
-
-    assert _get_gpu_utilization(None) is None
-
-
-def test_get_gpu_utilization_empty_gpu_list() -> None:
-    """Test _get_gpu_utilization with empty GPU list."""
-    from custom_components.unraid_management_agent.sensor import _get_gpu_utilization
-
-    data = UnraidData()
-    data.gpu = []
-
-    assert _get_gpu_utilization(data) is None
-
-
-def test_get_gpu_attrs_no_data() -> None:
-    """Test _get_gpu_attrs with no data."""
-    from custom_components.unraid_management_agent.sensor import _get_gpu_attrs
-
-    assert _get_gpu_attrs(None) == {}
-
-
-def test_get_gpu_attrs_empty_gpu_list() -> None:
-    """Test _get_gpu_attrs with empty GPU list."""
-    from custom_components.unraid_management_agent.sensor import _get_gpu_attrs
-
-    data = UnraidData()
-    data.gpu = []
-
-    assert _get_gpu_attrs(data) == {}
-
-
-def test_get_gpu_temperature_with_valid_temp() -> None:
-    """Test _get_gpu_temperature with valid temperature."""
-    from custom_components.unraid_management_agent.sensor import _get_gpu_temperature
-
-    data = UnraidData()
-    mock_gpu = MagicMock()
-    mock_gpu.gpu_temperature = 65.0
-    data.gpu = [mock_gpu]
-
-    assert _get_gpu_temperature(data) == 65.0
-
-
-def test_get_gpu_temperature_zero_temp_uses_cpu() -> None:
-    """Test _get_gpu_temperature falls back to CPU temp when GPU temp is 0."""
-    from custom_components.unraid_management_agent.sensor import _get_gpu_temperature
-
-    data = UnraidData()
-    mock_gpu = MagicMock()
-    mock_gpu.gpu_temperature = 0
-    data.gpu = [mock_gpu]
-
-    # Source code returns getattr(gpu[0], "gpu_temperature", None) directly
-    # 0 is still returned as-is
-    assert _get_gpu_temperature(data) == 0
-
-
-def test_get_gpu_temperature_no_data() -> None:
-    """Test _get_gpu_temperature with no data."""
-    from custom_components.unraid_management_agent.sensor import _get_gpu_temperature
-
-    assert _get_gpu_temperature(None) is None
-
-
-def test_get_gpu_power_no_data() -> None:
-    """Test _get_gpu_power with no data."""
-    from custom_components.unraid_management_agent.sensor import _get_gpu_power
-
-    assert _get_gpu_power(None) is None
 
 
 def test_get_ups_battery_attrs_full() -> None:
@@ -4960,10 +4835,11 @@ def test_gpu_energy_sensor_initialization() -> None:
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry, 0, "GPU 0")
 
     assert sensor._total_energy == 0.0
     assert sensor._last_power is None
+    assert sensor._attr_translation_placeholders == {"gpu_name": "GPU 0"}
     assert sensor._attr_translation_key == "gpu_energy"
 
 
@@ -4976,7 +4852,7 @@ def test_gpu_energy_sensor_native_value() -> None:
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry, 0, "GPU 0")
     sensor._total_energy = 1.2345
 
     assert sensor.native_value == 1.234  # Rounded to 3 decimal places
@@ -4991,7 +4867,7 @@ def test_gpu_energy_sensor_update_energy_no_data() -> None:
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry, 0, "GPU 0")
     sensor._update_energy()
 
     assert sensor._total_energy == 0.0
@@ -5007,7 +4883,7 @@ def test_gpu_energy_sensor_update_energy_no_gpu() -> None:
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry, 0, "GPU 0")
     sensor._update_energy()
 
     assert sensor._total_energy == 0.0
@@ -5023,7 +4899,7 @@ def test_gpu_energy_sensor_update_energy_empty_gpu_list() -> None:
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry, 0, "GPU 0")
     sensor._update_energy()
 
     assert sensor._total_energy == 0.0
@@ -5034,6 +4910,7 @@ def test_gpu_energy_sensor_update_energy_first_reading() -> None:
     mock_coordinator = MagicMock()
     mock_coordinator.data = MagicMock()
     mock_gpu = MagicMock()
+    mock_gpu.index = 0
     mock_gpu.power_draw_watts = 220.5
     mock_coordinator.data.gpu = [mock_gpu]
     mock_coordinator.config_entry = MagicMock()
@@ -5041,7 +4918,7 @@ def test_gpu_energy_sensor_update_energy_first_reading() -> None:
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry, 0, "GPU 0")
     sensor._update_energy()
 
     # First reading should only set last_power, no energy increment
@@ -5054,6 +4931,7 @@ def test_gpu_energy_sensor_update_energy_subsequent_reading() -> None:
     mock_coordinator = MagicMock()
     mock_coordinator.data = MagicMock()
     mock_gpu = MagicMock()
+    mock_gpu.index = 0
     mock_gpu.power_draw_watts = 200.0
     mock_coordinator.data.gpu = [mock_gpu]
     mock_coordinator.config_entry = MagicMock()
@@ -5061,7 +4939,7 @@ def test_gpu_energy_sensor_update_energy_subsequent_reading() -> None:
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry, 0, "GPU 0")
 
     # Simulate two readings 30 minutes apart using wall-clock timestamps
     with patch("custom_components.unraid_management_agent.sensor.dt_util") as mock_dt:
@@ -5079,6 +4957,7 @@ def test_gpu_energy_sensor_update_energy_negative_power() -> None:
     mock_coordinator = MagicMock()
     mock_coordinator.data = MagicMock()
     mock_gpu = MagicMock()
+    mock_gpu.index = 0
     mock_gpu.power_draw_watts = -50.0
     mock_coordinator.data.gpu = [mock_gpu]
     mock_coordinator.config_entry = MagicMock()
@@ -5086,7 +4965,7 @@ def test_gpu_energy_sensor_update_energy_negative_power() -> None:
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry, 0, "GPU 0")
     sensor._last_power = 200.0
     sensor._total_energy = 1.0
 
@@ -5101,6 +4980,7 @@ def test_gpu_energy_sensor_update_energy_long_gap() -> None:
     mock_coordinator = MagicMock()
     mock_coordinator.data = MagicMock()
     mock_gpu = MagicMock()
+    mock_gpu.index = 0
     mock_gpu.power_draw_watts = 200.0
     mock_coordinator.data.gpu = [mock_gpu]
     mock_coordinator.config_entry = MagicMock()
@@ -5108,7 +4988,7 @@ def test_gpu_energy_sensor_update_energy_long_gap() -> None:
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry, 0, "GPU 0")
 
     # Simulate two readings with a long gap (2 hours apart)
     with patch("custom_components.unraid_management_agent.sensor.dt_util") as mock_dt:
@@ -5126,13 +5006,15 @@ def test_gpu_energy_sensor_available_true() -> None:
     mock_coordinator = MagicMock()
     mock_coordinator.last_update_success = True
     mock_coordinator.data = MagicMock()
-    mock_coordinator.data.gpu = [MagicMock()]
+    gpu = MagicMock()
+    gpu.index = 0
+    mock_coordinator.data.gpu = [gpu]
     mock_coordinator.config_entry = MagicMock()
     mock_coordinator.config_entry.entry_id = "test_entry"
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry, 0, "GPU 0")
 
     assert sensor.available is True
 
@@ -5142,13 +5024,15 @@ def test_gpu_energy_sensor_available_false_no_update_success() -> None:
     mock_coordinator = MagicMock()
     mock_coordinator.last_update_success = False
     mock_coordinator.data = MagicMock()
-    mock_coordinator.data.gpu = [MagicMock()]
+    gpu = MagicMock()
+    gpu.index = 0
+    mock_coordinator.data.gpu = [gpu]
     mock_coordinator.config_entry = MagicMock()
     mock_coordinator.config_entry.entry_id = "test_entry"
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry, 0, "GPU 0")
 
     assert sensor.available is False
 
@@ -5163,7 +5047,7 @@ def test_gpu_energy_sensor_available_false_no_data() -> None:
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry, 0, "GPU 0")
 
     assert sensor.available is False
 
@@ -5179,7 +5063,7 @@ def test_gpu_energy_sensor_available_false_no_gpu() -> None:
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry, 0, "GPU 0")
 
     assert sensor.available is False
 
@@ -5195,7 +5079,7 @@ def test_gpu_energy_sensor_available_false_empty_gpu_list() -> None:
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry, 0, "GPU 0")
 
     assert sensor.available is False
 
@@ -5209,7 +5093,7 @@ def test_gpu_energy_sensor_extra_state_attributes() -> None:
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry, 0, "GPU 0")
     sensor._last_power = 220.5
 
     attrs = sensor.extra_state_attributes
@@ -5226,7 +5110,7 @@ def test_gpu_energy_sensor_extra_state_attributes_empty() -> None:
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry, 0, "GPU 0")
 
     attrs = sensor.extra_state_attributes
 
@@ -5243,7 +5127,7 @@ async def test_gpu_energy_sensor_restore_energy_state() -> None:
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
-    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry)
+    sensor = UnraidGPUEnergySensor(mock_coordinator, mock_entry, 0, "GPU 0")
     sensor.async_get_last_state = AsyncMock(return_value=MagicMock(state="2.5"))
     sensor.async_get_last_extra_data = AsyncMock(
         return_value=UnraidEnergySensorExtraStoredData(
@@ -5262,3 +5146,54 @@ async def test_gpu_energy_sensor_restore_energy_state() -> None:
     assert sensor._energy_integrator.last_power_watts == 220.0
     assert sensor._energy_integrator.last_timestamp == 2000.0
     assert sensor._last_uptime_seconds == 800
+
+
+def test_gpu_sensor_classes_find_and_read_values() -> None:
+    """Test per-GPU sensor classes resolve values by GPU index."""
+    mock_coordinator = MagicMock()
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+
+    gpu0 = MagicMock()
+    gpu0.index = 0
+    gpu0.name = "Intel UHD Graphics 630"
+    gpu0.driver_version = "i915"
+    gpu0.utilization_gpu_percent = 15
+    gpu0.gpu_temperature = 50
+    gpu0.power_draw_watts = 21.2
+
+    gpu1 = MagicMock()
+    gpu1.index = 1
+    gpu1.name = "NVIDIA GeForce RTX 3080"
+    gpu1.driver_version = "535.86.05"
+    gpu1.utilization_gpu_percent = 45
+    gpu1.gpu_temperature = 65
+    gpu1.power_draw_watts = 220.5
+
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.data.gpu = [gpu0, gpu1]
+
+    utilization = UnraidGPUUtilizationSensor(mock_coordinator, mock_entry, 1, gpu1.name)
+    temperature = UnraidGPUTemperatureSensor(mock_coordinator, mock_entry, 1, gpu1.name)
+    power = UnraidGPUPowerSensor(mock_coordinator, mock_entry, 1, gpu1.name)
+
+    assert utilization.native_value == 45
+    assert temperature.native_value == 65
+    assert power.native_value == 220.5
+
+
+def test_gpu_sensor_classes_missing_index_return_none() -> None:
+    """Test per-GPU sensor classes return None when index cannot be found."""
+    mock_coordinator = MagicMock()
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+    mock_coordinator.data = MagicMock()
+    mock_coordinator.data.gpu = []
+
+    utilization = UnraidGPUUtilizationSensor(mock_coordinator, mock_entry, 42, "GPU 42")
+    temperature = UnraidGPUTemperatureSensor(mock_coordinator, mock_entry, 42, "GPU 42")
+    power = UnraidGPUPowerSensor(mock_coordinator, mock_entry, 42, "GPU 42")
+
+    assert utilization.native_value is None
+    assert temperature.native_value is None
+    assert power.native_value is None

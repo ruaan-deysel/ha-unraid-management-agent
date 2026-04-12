@@ -218,7 +218,7 @@ class SystemInfo(BaseModel):
                     if len(per_core) > core_count:
                         data = dict(data)
                         data["cpu_cores"] = len(per_core)
-                except ValueError, TypeError:
+                except (ValueError, TypeError):  # fmt: skip
                     pass
         return data
 
@@ -548,12 +548,35 @@ class DiskInfo(BaseModel):
         return None
 
     @property
-    def is_physical(self) -> bool:
+    def is_flash(self) -> bool:
         """
-        Check if this is a physical disk (not a virtual disk).
+        Check if this disk is the Unraid USB flash boot device.
+
+        The flash boot device is always named 'flash' in Unraid. It has its
+        own dedicated API endpoint and entity types (FlashDriveInfo), so it
+        should be excluded from normal disk processing.
 
         Returns:
-            True if the disk role is not docker_vdisk or log.
+            True if the disk name is 'flash'.
+
+        Example:
+            >>> disk = DiskInfo(name="flash", role="unknown")
+            >>> disk.is_flash
+            True
+
+        """
+        return self.name is not None and self.name.lower() == "flash"
+
+    @property
+    def is_physical(self) -> bool:
+        """
+        Check if this is a physical disk (not a virtual or flash disk).
+
+        Excludes virtual disks (docker_vdisk, log) and the USB flash boot
+        device, which has its own dedicated model and entities.
+
+        Returns:
+            True if the disk is a real physical storage disk.
 
         Example:
             >>> disk = DiskInfo(role="data")
@@ -561,6 +584,8 @@ class DiskInfo(BaseModel):
             True
 
         """
+        if self.is_flash:
+            return False
         if self.role is None:
             return True
         return self.role.lower() not in ("docker_vdisk", "log")
@@ -572,7 +597,8 @@ class DiskInfo(BaseModel):
 
         Uses multiple heuristics:
         - Device path contains 'nvme'
-        - Model name contains 'ssd' or 'nvme'
+        - Model name contains 'ssd', 'nvme', or 'solid state'
+        - Model name starts with known SSD product prefixes (e.g. WD 'WDS')
         - SMART attribute 'rotation_rate' is '0' (Solid State Device)
 
         Returns:
@@ -588,8 +614,15 @@ class DiskInfo(BaseModel):
         if self.device and "nvme" in self.device.lower():
             return True
         # Check model name
-        if self.model and any(kw in self.model.lower() for kw in ("ssd", "nvme")):
-            return True
+        if self.model:
+            model_lower = self.model.lower()
+            if any(kw in model_lower for kw in ("ssd", "nvme", "solid state")):
+                return True
+            # WDC WDS* — Western Digital Solid State product line
+            # Split model to check individual words for SSD prefixes
+            model_words = model_lower.split()
+            if any(word.startswith("wds") for word in model_words):
+                return True
         # Check SMART rotation rate attribute
         if self.smart_attributes:
             rotation = self.smart_attributes.get("rotation_rate")
@@ -682,7 +715,8 @@ class DiskInfo(BaseModel):
 
         Returns:
             'critical', 'warning', or 'normal' based on current temperature.
-            Returns 'normal' if temperature or thresholds are unavailable.
+            Returns 'normal' if temperature or thresholds are unavailable,
+            or if the disk is in standby (temperature readings are unreliable).
 
         Example:
             >>> disk = DiskInfo(temperature_celsius=55.0, temp_critical=50)
@@ -690,7 +724,11 @@ class DiskInfo(BaseModel):
             'critical'
 
         """
-        if self.temperature_celsius is None:
+        if self.temperature_celsius is None or self.temperature_celsius <= 0:
+            return "normal"
+
+        # Standby disks report unreliable temperature readings
+        if self.is_standby:
             return "normal"
 
         warning, critical = self.get_temp_thresholds(settings)

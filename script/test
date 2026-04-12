@@ -27,8 +27,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
 TEST_PYTHON_VERSION="3.14.2"
-TEST_HOME_ASSISTANT_VERSION="2026.2.3"
-TEST_PLUGIN_VERSION="0.13.316"
+TEST_HOME_ASSISTANT_VERSION="2026.4.1"
+TEST_PLUGIN_VERSION="0.13.322"
 
 # shellcheck source=script/.lib/output.sh
 source "$SCRIPT_DIR/.lib/output.sh"
@@ -63,8 +63,8 @@ elif [[ ! -x "$TEST_VENV_PATH/bin/python3" || "$CURRENT_TEST_PYTHON" != "3.14" ]
     uv venv --seed --python "$TEST_PYTHON_VERSION" "$TEST_VENV_PATH"
 fi
 
-# pytest-homeassistant-custom-component has not released HA 2026.3.0 support yet,
-# so tests run in a dedicated compatible environment until upstream catches up.
+# Tests run in a dedicated environment pinned to the version required by
+# pytest-homeassistant-custom-component to ensure compatibility.
 # shellcheck source=/dev/null
 source "$TEST_VENV_PATH/bin/activate"
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urljoin
 
@@ -10,6 +12,7 @@ from .exceptions import (
     UnraidConflictError,
     UnraidConnectionError,
     UnraidNotFoundError,
+    UnraidRateLimitError,
     UnraidValidationError,
 )
 from .models import (
@@ -93,6 +96,13 @@ from .models import (
 if TYPE_CHECKING:
     import aiohttp
 
+_LOGGER = logging.getLogger(__name__)
+
+# Rate-limit retry configuration
+_MAX_RETRIES: int = 3
+_RETRY_BASE_DELAY: float = 1.0  # seconds, doubles each retry
+_DEFAULT_CONCURRENCY: int = 10  # max simultaneous API requests
+
 
 class UnraidClient:
     """
@@ -129,6 +139,7 @@ class UnraidClient:
         verify_ssl: bool = True,
         use_https: bool = False,
         session: aiohttp.ClientSession | None = None,
+        max_concurrency: int = _DEFAULT_CONCURRENCY,
     ):
         self.host = host
         self.port = port
@@ -140,6 +151,7 @@ class UnraidClient:
 
         self._session: aiohttp.ClientSession | None = session
         self._owns_session = session is None
+        self._semaphore = asyncio.Semaphore(max_concurrency)
 
     async def _ensure_session(self) -> aiohttp.ClientSession:
         """Ensure a session exists, creating one if necessary."""
@@ -187,7 +199,10 @@ class UnraidClient:
         json: dict[str, Any] | None = None,
     ) -> Any:
         """
-        Make an async request to the API.
+        Make an async request to the API with rate-limit handling.
+
+        Uses a semaphore to limit concurrent requests and retries on
+        HTTP 429 (Too Many Requests) with exponential backoff.
 
         Args:
             method: HTTP method (GET, POST, etc.)
@@ -204,6 +219,7 @@ class UnraidClient:
             UnraidNotFoundError: If the resource is not found
             UnraidConflictError: If there's a resource conflict
             UnraidValidationError: If request validation fails
+            UnraidRateLimitError: If rate limited after all retries exhausted
             UnraidAPIError: For other API errors
 
         """
@@ -212,51 +228,107 @@ class UnraidClient:
         url = urljoin(self.base_url + "/", endpoint.lstrip("/"))
         session = await self._ensure_session()
 
-        try:
-            async with session.request(
-                method=method,
-                url=url,
-                json=json if json is not None else data,
-                params=params,
-            ) as response:
-                # Handle successful responses
-                if response.status == 200:
-                    return await response.json()
-
-                # Handle error responses
+        last_err: UnraidRateLimitError | None = None
+        for attempt in range(_MAX_RETRIES + 1):
+            # backoff_delay is set when a 429 is received and we should retry.
+            # The sleep is performed AFTER releasing the semaphore so concurrent
+            # requests waiting to acquire the semaphore are not stalled during
+            # the backoff wait.
+            backoff_delay: float | None = None
+            async with self._semaphore:
                 try:
-                    error_data = await response.json()
-                    error_message = error_data.get("message", "Unknown error")
-                    error_code = error_data.get("error_code", "UNKNOWN_ERROR")
-                except ValueError, aiohttp.ContentTypeError:
-                    error_message = await response.text() or f"HTTP {response.status}"
-                    error_code = "UNKNOWN_ERROR"
+                    async with session.request(
+                        method=method,
+                        url=url,
+                        json=json if json is not None else data,
+                        params=params,
+                    ) as response:
+                        # Handle successful responses
+                        if response.status == 200:
+                            return await response.json()
 
-                # Raise specific exceptions based on status code
-                if response.status == 404:
-                    raise UnraidNotFoundError(
-                        error_message, error_code=error_code, status_code=404
-                    )
-                if response.status == 409:
-                    raise UnraidConflictError(
-                        error_message, error_code=error_code, status_code=409
-                    )
-                if response.status == 400:
-                    raise UnraidValidationError(
-                        error_message, error_code=error_code, status_code=400
-                    )
-                raise UnraidAPIError(
-                    error_message,
-                    error_code=error_code,
-                    status_code=response.status,
-                )
+                        # Handle 429 rate limit - retry with backoff
+                        if response.status == 429:
+                            retry_after = response.headers.get("Retry-After")
+                            delay: float = _RETRY_BASE_DELAY * (2**attempt)
+                            if retry_after:
+                                try:
+                                    delay = float(retry_after)
+                                except ValueError:
+                                    # Retry-After may be an HTTP-date; fall back to
+                                    # exponential backoff when it cannot be parsed as
+                                    # a plain number of seconds.
+                                    pass
+                            last_err = UnraidRateLimitError(
+                                retry_after=delay,
+                            )
+                            if attempt < _MAX_RETRIES:
+                                _LOGGER.debug(
+                                    "Rate limited on %s, retrying in %.1fs (attempt %d/%d)",
+                                    endpoint,
+                                    delay,
+                                    attempt + 1,
+                                    _MAX_RETRIES,
+                                )
+                                # Mark for backoff sleep outside semaphore scope.
+                                backoff_delay = delay
+                            else:
+                                raise last_err
 
-        except aiohttp.ClientError as e:
-            raise UnraidConnectionError(
-                f"Unable to connect to Unraid API at {url}: {e!s}"
-            ) from e
-        except TimeoutError as e:
-            raise UnraidConnectionError(f"Request to {url} timed out") from e
+                        else:
+                            # Handle other error responses
+                            try:
+                                error_data = await response.json()
+                                error_message = error_data.get(
+                                    "message", "Unknown error"
+                                )
+                                error_code = error_data.get(
+                                    "error_code", "UNKNOWN_ERROR"
+                                )
+                            except (ValueError, aiohttp.ContentTypeError):  # fmt: skip
+                                error_message = (
+                                    await response.text() or f"HTTP {response.status}"
+                                )
+                                error_code = "UNKNOWN_ERROR"
+
+                            # Raise specific exceptions based on status code
+                            if response.status == 404:
+                                raise UnraidNotFoundError(
+                                    error_message,
+                                    error_code=error_code,
+                                    status_code=404,
+                                )
+                            if response.status == 409:
+                                raise UnraidConflictError(
+                                    error_message,
+                                    error_code=error_code,
+                                    status_code=409,
+                                )
+                            if response.status == 400:
+                                raise UnraidValidationError(
+                                    error_message,
+                                    error_code=error_code,
+                                    status_code=400,
+                                )
+                            raise UnraidAPIError(
+                                error_message,
+                                error_code=error_code,
+                                status_code=response.status,
+                            )
+
+                except aiohttp.ClientError as e:
+                    raise UnraidConnectionError(
+                        f"Unable to connect to Unraid API at {url}: {e!s}"
+                    ) from e
+                except TimeoutError as e:
+                    raise UnraidConnectionError(f"Request to {url} timed out") from e
+
+            # Semaphore released - now sleep so other requests can proceed.
+            if backoff_delay is not None:
+                await asyncio.sleep(backoff_delay)
+
+        # Should not be reached, but satisfy type checker
+        raise last_err or UnraidRateLimitError()
 
     async def _request_text(self, method: str, endpoint: str) -> str:
         """
@@ -280,17 +352,18 @@ class UnraidClient:
         session = await self._ensure_session()
 
         try:
-            async with session.request(method=method, url=url) as response:
-                if response.status == 200:
-                    text: str = await response.text()
-                    return text
+            async with self._semaphore:
+                async with session.request(method=method, url=url) as response:
+                    if response.status == 200:
+                        text: str = await response.text()
+                        return text
 
-                error_message = await response.text() or f"HTTP {response.status}"
-                raise UnraidAPIError(
-                    error_message,
-                    error_code="REQUEST_FAILED",
-                    status_code=response.status,
-                )
+                    error_message = await response.text() or f"HTTP {response.status}"
+                    raise UnraidAPIError(
+                        error_message,
+                        error_code="REQUEST_FAILED",
+                        status_code=response.status,
+                    )
         except aiohttp.ClientError as e:
             raise UnraidConnectionError(
                 f"Unable to connect to Unraid API at {url}: {e!s}"
