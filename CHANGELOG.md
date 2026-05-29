@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2026.6.0] - 2026-05-29
+
+### Added
+
+- **Swap Memory Sensors** (#45): Exposes swap space metrics from the UMA API
+  - `sensor.swap_usage` — swap usage percentage (shown only when swap is configured)
+  - `sensor.swappiness` — kernel swappiness value (diagnostic)
+  - Both include attributes for total/used/free bytes and swappiness level
+
+- **Notification Event Entity** (#77): New HA `event` entity for Unraid notifications
+  - `event.notification` fires whenever a new Unraid notification arrives
+  - Event types: `info`, `warning`, `alert`
+  - Attributes include notification ID, subject, description, importance, and timestamp
+  - Enables automations triggered by Unraid server notifications
+
+- **Fan Speed Control** (#78): New `number` entities for PWM fan speed control
+  - One entity per controllable fan (e.g., `number.cube_fan_fan_1_speed`)
+  - Slider range 0–100% maps to PWM percentage
+  - Available only when fan is controllable; uses the `/fans/speed` UMA API endpoint
+  - Entity is available for all fans with `controllable: true` from the fans endpoint
+
+### Fixed
+
+- **Parity Date Sensors Wrong Values** (#68): `sensor.last_parity_check` now correctly
+  shows the most recent check instead of the oldest one. The UMA API returns history
+  sorted oldest-first; `ParityHistory.most_recent` now selects by maximum date.
+
+- **Phantom Disk High Temperature Warnings** (#69): Disk temperature warnings are now
+  suppressed for all non-active spin states (`standby`, `idle`, `unknown`), not just
+  `standby`. This prevents spurious repair issues during disk spin-down transitions
+  when the API briefly shows an active temperature with a transitional spin state.
+
 ## [2026.4.0] - 2026-04-12
 
 ### Added

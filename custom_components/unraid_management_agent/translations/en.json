@@ -78,6 +78,12 @@
       "cpu_frequency": {
         "name": "CPU Frequency"
       },
+      "swap_usage": {
+        "name": "Swap Usage"
+      },
+      "swappiness": {
+        "name": "Swappiness"
+      },
       "docker_cpu_usage": {
         "name": "Docker CPU Usage"
       },
@@ -260,6 +266,25 @@
         "name": "Disk {disk_name} Spin"
       }
     },
+    "number": {
+      "fan_speed": {
+        "name": "Fan {name} Speed"
+      }
+    },
+    "event": {
+      "notification_event": {
+        "name": "Notification",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "info": "Info",
+              "warning": "Warning",
+              "alert": "Alert"
+            }
+          }
+        }
+      }
+    },
     "button": {
       "array_start": {
         "name": "Start Array"
@@ -347,6 +372,9 @@
     },
     "disk_spin_down_error": {
       "message": "Failed to spin down disk: {disk_name}"
+    },
+    "fan_speed_set_failed": {
+      "message": "Failed to set fan speed"
     }
   },
   "services": {

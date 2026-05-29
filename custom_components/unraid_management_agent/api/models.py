@@ -727,8 +727,9 @@ class DiskInfo(BaseModel):
         if self.temperature_celsius is None or self.temperature_celsius <= 0:
             return "normal"
 
-        # Standby disks report unreliable temperature readings
-        if self.is_standby:
+        # Non-active disks (standby, idle, unknown) report unreliable or stale
+        # temperature readings, especially during spin-down transitions.
+        if self.spin_state is not None and self.spin_state.lower() != "active":
             return "normal"
 
         warning, critical = self.get_temp_thresholds(settings)
@@ -1652,22 +1653,30 @@ class ParityHistory(BaseModel):
     @property
     def most_recent(self) -> ParityCheckRecord | None:
         """
-        Get the most recent parity check record.
+        Get the most recent parity check record by date.
+
+        The UMA API returns records in chronological order (oldest first).
+        This property finds the record with the latest date so the sensor
+        always reflects the last completed check rather than the first.
 
         Returns:
-            The first record in the list (most recent), or None if no records.
+            The record with the most recent date, or None if no records.
 
         Example:
             >>> history = ParityHistory(records=[
-            ...     ParityCheckRecord(action="Parity-Check", status="OK")
+            ...     ParityCheckRecord(action="Parity-Check", status="OK", date="2024-01-01T00:00:00Z"),
+            ...     ParityCheckRecord(action="Parity-Check", status="OK", date="2025-01-01T00:00:00Z"),
             ... ])
-            >>> history.most_recent.status
-            'OK'
+            >>> history.most_recent.date
+            '2025-01-01T00:00:00Z'
 
         """
-        if self.records:
-            return self.records[0]
-        return None
+        if not self.records:
+            return None
+        with_dates = [r for r in self.records if r.date]
+        if with_dates:
+            return max(with_dates, key=lambda r: r.date or "")
+        return self.records[-1]
 
 
 class ParityStatus(BaseModel):

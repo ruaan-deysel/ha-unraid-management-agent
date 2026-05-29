@@ -421,6 +421,37 @@ def _get_cpu_frequency_attrs(data: UnraidData) -> dict[str, Any]:
     return attrs
 
 
+def _get_swap_usage(data: UnraidData) -> float | None:
+    """Get swap usage percentage from coordinator data."""
+    if data and data.system and data.system.swap_usage_percent is not None:
+        return round(float(data.system.swap_usage_percent), 1)
+    return None
+
+
+def _get_swap_usage_attrs(data: UnraidData) -> dict[str, Any]:
+    """Get swap usage extra state attributes."""
+    if not data or not data.system:
+        return {}
+    attrs: dict[str, Any] = {}
+    system = data.system
+    if system.swap_total_bytes:
+        attrs["swap_total"] = format_bytes(system.swap_total_bytes)
+    if system.swap_used_bytes is not None:
+        attrs["swap_used"] = format_bytes(system.swap_used_bytes)
+    if system.swap_free_bytes is not None:
+        attrs["swap_free"] = format_bytes(system.swap_free_bytes)
+    if system.swappiness is not None:
+        attrs["swappiness"] = system.swappiness
+    return attrs
+
+
+def _get_swappiness(data: UnraidData) -> int | None:
+    """Get kernel swappiness value from coordinator data."""
+    if data and data.system and data.system.swappiness is not None:
+        return int(data.system.swappiness)
+    return None
+
+
 # =============================================================================
 # Value Functions for Docker Aggregate Sensors
 # =============================================================================
@@ -456,7 +487,7 @@ def _get_docker_memory_usage(data: UnraidData) -> float | None:
     total = 0.0
     for container in data.containers:
         mem = getattr(container, "memory_usage_bytes", None)
-        if mem is not None and mem > 0:
+        if isinstance(mem, (int, float)) and mem > 0:
             total += float(mem)
     if total > 0:
         return round(total / (1024 * 1024), 1)
@@ -479,7 +510,7 @@ def _get_docker_memory_attrs(data: UnraidData) -> dict[str, Any]:
         total_mem = 0.0
         for container in data.containers:
             mem = getattr(container, "memory_usage_bytes", None)
-            if mem is not None and mem > 0:
+            if isinstance(mem, (int, float)) and mem > 0:
                 total_mem += float(mem)
         if total_mem > 0:
             percent = (total_mem / float(data.system.ram_total_bytes)) * 100
@@ -1207,6 +1238,36 @@ SYSTEM_SENSOR_DESCRIPTIONS: tuple[UnraidSensorEntityDescription, ...] = (
             and data.system is not None
             and data.system.cpu_power_state is not None
             and data.system.cpu_power_state.current_freq_mhz is not None
+        ),
+    ),
+    UnraidSensorEntityDescription(
+        key="swap_usage",
+        translation_key="swap_usage",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:memory",
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_get_swap_usage,
+        extra_state_attributes_fn=_get_swap_usage_attrs,
+        supported_fn=lambda data: (
+            data is not None
+            and data.system is not None
+            and isinstance(data.system.swap_total_bytes, int)
+            and data.system.swap_total_bytes > 0
+        ),
+    ),
+    UnraidSensorEntityDescription(
+        key="swappiness",
+        translation_key="swappiness",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:tune",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_get_swappiness,
+        supported_fn=lambda data: (
+            data is not None
+            and data.system is not None
+            and data.system.swappiness is not None
         ),
     ),
 )
