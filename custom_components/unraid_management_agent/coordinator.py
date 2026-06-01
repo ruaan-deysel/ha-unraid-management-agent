@@ -36,8 +36,11 @@ from .api.models import (
     ParitySchedule,
     PluginList,
     RegistrationInfo,
+    RemoteShare,
     ShareInfo,
     SystemInfo,
+    UnassignedDevice,
+    UnassignedInfo,
     UpdateStatus,
     UPSInfo,
     UserScript,
@@ -90,6 +93,8 @@ class UnraidData:
     vm_settings: VMSettings | None = None
     registration: RegistrationInfo | None = None
     network_services: NetworkServicesStatus | None = None
+    unassigned_devices: list[UnassignedDevice] | None = None
+    remote_shares: list[RemoteShare] | None = None
 
 
 @dataclass
@@ -340,6 +345,11 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
                 self._fetch("VM settings", self.client.get_vm_settings),
                 self._fetch("registration info", self.client.get_registration_info),
                 self._fetch("network services", self.client.get_network_services),
+                self._fetch(
+                    "unassigned devices",
+                    self.client.get_unassigned_info,
+                    suppress_404=True,
+                ),
             )
 
             # Unpack results with proper types (gather loses individual type info)
@@ -372,6 +382,7 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
             vm_settings: VMSettings | None = results[26]
             registration: RegistrationInfo | None = results[27]
             network_services: NetworkServicesStatus | None = results[28]
+            unassigned_info: UnassignedInfo | None = results[29]
 
             # Merge notification overview into notifications response
             if isinstance(notifications, list):
@@ -433,6 +444,12 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
                 vm_settings=vm_settings,
                 registration=registration,
                 network_services=network_services,
+                unassigned_devices=list(unassigned_info.devices or [])
+                if unassigned_info
+                else None,
+                remote_shares=list(unassigned_info.remote_shares or [])
+                if unassigned_info
+                else None,
             )
 
             # Check for issues and create repair flows

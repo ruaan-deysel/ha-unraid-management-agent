@@ -402,6 +402,28 @@ async def async_setup_entry(
                     UnraidNetworkInterfaceBinarySensor(coordinator, interface_name)
                 )
 
+    # Unassigned device mounted binary sensors
+    if data and data.unassigned_devices:
+        seen_unassigned: set[str] = set()
+        for device in data.unassigned_devices:
+            device_name = getattr(device, "name", None) or getattr(
+                device, "device", None
+            )
+            if device_name and device_name not in seen_unassigned:
+                seen_unassigned.add(device_name)
+                entities.append(
+                    UnraidUnassignedDeviceBinarySensor(coordinator, device_name)
+                )
+
+    # Remote share mounted binary sensors
+    if data and data.remote_shares:
+        seen_remote_shares: set[str] = set()
+        for remote_share in data.remote_shares:
+            share_name = getattr(remote_share, "name", None)
+            if share_name and share_name not in seen_remote_shares:
+                seen_remote_shares.add(share_name)
+                entities.append(UnraidRemoteShareBinarySensor(coordinator, share_name))
+
     # Network service binary sensors
     if data and data.network_services:
         # Iterate over known service fields on NetworkServicesStatus
@@ -545,3 +567,120 @@ class UnraidNetworkServiceBinarySensor(UnraidBaseEntity, BinarySensorEntity):
             "enabled": getattr(service_info, "enabled", None),
             "port": getattr(service_info, "port", None),
         }
+
+
+class UnraidUnassignedDeviceBinarySensor(UnraidBaseEntity, BinarySensorEntity):
+    """Mounted status binary sensor for an unassigned device."""
+
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_icon = "mdi:harddisk"
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        device_name: str,
+    ) -> None:
+        """Initialize the unassigned device binary sensor."""
+        self._device_name = device_name
+        super().__init__(
+            coordinator, f"unassigned_device_{slugify(device_name)}_mounted"
+        )
+        self._attr_translation_key = "unassigned_device_mounted"
+        self._attr_translation_placeholders = {"device_name": device_name}
+
+    def _get_device(self) -> Any | None:
+        """Return the device data from coordinator."""
+        data = self.coordinator.data
+        if not data or not data.unassigned_devices:
+            return None
+        for dev in data.unassigned_devices:
+            name = getattr(dev, "name", None) or getattr(dev, "device", None)
+            if name == self._device_name:
+                return dev
+        return None
+
+    @property
+    def available(self) -> bool:
+        """Return True if the device is present in coordinator data."""
+        return super().available and self._get_device() is not None
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if the device is mounted."""
+        device = self._get_device()
+        if device is None:
+            return False
+        return getattr(device, "mounted", False) is True
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        device = self._get_device()
+        if device is None:
+            return {}
+        attrs: dict[str, Any] = {}
+        if getattr(device, "device", None):
+            attrs["device_path"] = device.device
+        if getattr(device, "filesystem", None):
+            attrs["filesystem"] = device.filesystem
+        if getattr(device, "size_bytes", None) is not None:
+            from .api.formatting import format_bytes
+
+            attrs["size"] = format_bytes(device.size_bytes)
+        return attrs
+
+
+class UnraidRemoteShareBinarySensor(UnraidBaseEntity, BinarySensorEntity):
+    """Mounted status binary sensor for a remote share."""
+
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_icon = "mdi:folder-network"
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        share_name: str,
+    ) -> None:
+        """Initialize the remote share binary sensor."""
+        self._share_name = share_name
+        super().__init__(coordinator, f"remote_share_{slugify(share_name)}_mounted")
+        self._attr_translation_key = "remote_share_mounted"
+        self._attr_translation_placeholders = {"share_name": share_name}
+
+    def _get_share(self) -> Any | None:
+        """Return the remote share data from coordinator."""
+        data = self.coordinator.data
+        if not data or not data.remote_shares:
+            return None
+        for share in data.remote_shares:
+            if getattr(share, "name", None) == self._share_name:
+                return share
+        return None
+
+    @property
+    def available(self) -> bool:
+        """Return True if the share is present in coordinator data."""
+        return super().available and self._get_share() is not None
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if the remote share is mounted."""
+        share = self._get_share()
+        if share is None:
+            return False
+        return getattr(share, "mounted", False) is True
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        share = self._get_share()
+        if share is None:
+            return {}
+        attrs: dict[str, Any] = {}
+        if getattr(share, "protocol", None):
+            attrs["protocol"] = share.protocol
+        if getattr(share, "server", None):
+            attrs["server"] = share.server
+        if getattr(share, "mount_point", None):
+            attrs["mount_point"] = share.mount_point
+        return attrs

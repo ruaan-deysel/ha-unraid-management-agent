@@ -218,6 +218,12 @@
       },
       "notifications_unread_alert": {
         "name": "Notifications Unread Alert"
+      },
+      "unassigned_device_size": {
+        "name": "Unassigned Device {device_name} Size"
+      },
+      "remote_share_usage": {
+        "name": "Remote Share {share_name} Usage"
       }
     },
     "binary_sensor": {
@@ -253,6 +259,12 @@
       },
       "network_service": {
         "name": "{service_name} Service"
+      },
+      "unassigned_device_mounted": {
+        "name": "Unassigned Device {device_name} Mounted"
+      },
+      "remote_share_mounted": {
+        "name": "Remote Share {share_name} Mounted"
       }
     },
     "switch": {
@@ -594,11 +606,11 @@
     },
     "disk_high_temperature": {
       "title": "Disk High Temperature Warning",
-      "description": "Disk **{disk_name}** temperature is {temperature}°C (warning threshold: {threshold}°C).\n\n**Recommended Actions:**\n1. Check cooling/airflow in the system\n2. Verify fan operation\n3. Consider adding additional cooling\n4. Monitor temperature trends\n\nClick Submit to acknowledge this issue."
+      "description": "Disk **{disk_name}** temperature is {temperature}\u00b0C (warning threshold: {threshold}\u00b0C).\n\n**Recommended Actions:**\n1. Check cooling/airflow in the system\n2. Verify fan operation\n3. Consider adding additional cooling\n4. Monitor temperature trends\n\nClick Submit to acknowledge this issue."
     },
     "disk_critical_temperature": {
       "title": "Disk Critical Temperature",
-      "description": "Disk **{disk_name}** temperature is {temperature}°C (critical threshold: {threshold}°C).\n\n⚠️ **URGENT - Immediate action required!**\n\n**Recommended Actions:**\n1. Consider spinning down the disk immediately\n2. Check cooling/airflow in the system urgently\n3. Verify all fans are operational\n4. Improve ventilation or add cooling\n5. Back up important data as a precaution\n\nClick Submit to acknowledge this issue."
+      "description": "Disk **{disk_name}** temperature is {temperature}\u00b0C (critical threshold: {threshold}\u00b0C).\n\n\u26a0\ufe0f **URGENT - Immediate action required!**\n\n**Recommended Actions:**\n1. Consider spinning down the disk immediately\n2. Check cooling/airflow in the system urgently\n3. Verify all fans are operational\n4. Improve ventilation or add cooling\n5. Back up important data as a precaution\n\nClick Submit to acknowledge this issue."
     },
     "array_parity_invalid": {
       "title": "Array Parity Invalid",

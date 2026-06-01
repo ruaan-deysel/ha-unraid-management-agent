@@ -20,7 +20,8 @@ cd "$SCRIPT_DIR/../.."
 source "$SCRIPT_DIR/../.lib/output.sh"
 
 PYTHON_VERSION="3.14.2"
-HOME_ASSISTANT_VERSION="2026.4.2"
+# Fallback version used when PyPI is unreachable
+HOME_ASSISTANT_VERSION="2026.5.4"
 
 log_header "Checking for uv"
 if ! command -v uv >/dev/null 2>&1; then
@@ -133,6 +134,23 @@ log_info "Using pyproject.toml extras: dev"
 uv pip install -e ".[dev]"
 
 # Keep the dev environment aligned to the intended Home Assistant release.
+log_header "Detecting latest Home Assistant version"
+DETECTED_HA=$(python3 - <<'PYEOF' 2>/dev/null
+import urllib.request, json, re, sys
+try:
+    data = json.loads(urllib.request.urlopen(
+        "https://pypi.org/pypi/homeassistant/json", timeout=10
+    ).read())
+    stable = [v for v in data["releases"] if re.match(r"^\d+\.\d+\.\d+$", v)]
+    best = max(stable, key=lambda v: tuple(int(x) for x in v.split(".")))
+    print(best)
+except Exception:
+    sys.exit(1)
+PYEOF
+) && HOME_ASSISTANT_VERSION="$DETECTED_HA" \
+  && log_info "Latest stable HA detected: ${HOME_ASSISTANT_VERSION}" \
+  || log_warning "PyPI unreachable, using fallback: Home Assistant ${HOME_ASSISTANT_VERSION}"
+
 log_header "Installing Home Assistant ${HOME_ASSISTANT_VERSION}"
 uv pip install --upgrade "homeassistant==${HOME_ASSISTANT_VERSION}"
 

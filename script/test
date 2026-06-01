@@ -27,8 +27,9 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
 TEST_PYTHON_VERSION="3.14.2"
-TEST_HOME_ASSISTANT_VERSION="2026.4.1"
-TEST_PLUGIN_VERSION="0.13.322"
+# Fallback versions used when PyPI is unreachable
+TEST_HOME_ASSISTANT_VERSION="2026.5.4"
+TEST_PLUGIN_VERSION="0.13.333"
 
 # shellcheck source=script/.lib/output.sh
 source "$SCRIPT_DIR/.lib/output.sh"
@@ -45,12 +46,50 @@ else
     TEST_VENV_PATH="$PWD/.local/ha-test-venv"
 fi
 
+log_header "Detecting latest compatible test versions"
+DETECTED_VERSIONS=$(python3 - <<'PYEOF' 2>/dev/null
+import urllib.request, json, re, sys
+try:
+    data = json.loads(urllib.request.urlopen(
+        "https://pypi.org/pypi/pytest-homeassistant-custom-component/json", timeout=10
+    ).read())
+    versions = sorted(
+        data["releases"].keys(),
+        key=lambda v: tuple(int(x) for x in re.findall(r"\d+", v)),
+        reverse=True,
+    )
+    for ver in versions[:15]:
+        try:
+            pdata = json.loads(urllib.request.urlopen(
+                f"https://pypi.org/pypi/pytest-homeassistant-custom-component/{ver}/json",
+                timeout=5,
+            ).read())
+            for req in pdata["info"].get("requires_dist") or []:
+                if req.startswith("homeassistant=="):
+                    ha_ver = req.split("==")[1]
+                    if re.match(r"^\d+\.\d+\.\d+$", ha_ver):
+                        print(f"{ver}:{ha_ver}")
+                        sys.exit(0)
+        except Exception:
+            continue
+except Exception:
+    pass
+sys.exit(1)
+PYEOF
+) && {
+    TEST_PLUGIN_VERSION="${DETECTED_VERSIONS%%:*}"
+    TEST_HOME_ASSISTANT_VERSION="${DETECTED_VERSIONS##*:}"
+    log_info "Latest stable test pair: pytest-hacs-custom-component==${TEST_PLUGIN_VERSION}, HA==${TEST_HOME_ASSISTANT_VERSION}"
+} || log_warning "PyPI unreachable, using fallbacks: HA ${TEST_HOME_ASSISTANT_VERSION}, plugin ${TEST_PLUGIN_VERSION}"
+
 log_header "Preparing isolated test environment"
 uv python install "$TEST_PYTHON_VERSION"
 
 CURRENT_TEST_PYTHON=""
+CURRENT_TEST_HA=""
 if [[ -x "$TEST_VENV_PATH/bin/python3" ]]; then
     CURRENT_TEST_PYTHON=$("$TEST_VENV_PATH/bin/python3" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || true)
+    CURRENT_TEST_HA=$("$TEST_VENV_PATH/bin/python3" -c "import homeassistant; print(homeassistant.__version__)" 2>/dev/null || true)
 fi
 
 if [[ ! -d "$TEST_VENV_PATH" ]]; then
@@ -60,6 +99,10 @@ elif [[ ! -x "$TEST_VENV_PATH/bin/python3" || "$CURRENT_TEST_PYTHON" != "3.14" ]
     log_warning "Existing test venv uses Python ${CURRENT_TEST_PYTHON:-unknown} - recreating for Python 3.14"
     rm -rf "$TEST_VENV_PATH"
     log_info "Creating test virtual environment at $TEST_VENV_PATH"
+    uv venv --seed --python "$TEST_PYTHON_VERSION" "$TEST_VENV_PATH"
+elif [[ "$CURRENT_TEST_HA" != "$TEST_HOME_ASSISTANT_VERSION" ]]; then
+    log_info "HA version changed (${CURRENT_TEST_HA:-none} → ${TEST_HOME_ASSISTANT_VERSION}) - rebuilding test venv"
+    rm -rf "$TEST_VENV_PATH"
     uv venv --seed --python "$TEST_PYTHON_VERSION" "$TEST_VENV_PATH"
 fi
 

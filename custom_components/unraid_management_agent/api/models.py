@@ -192,6 +192,15 @@ class SystemInfo(BaseModel):
         None, description="All temperature sensor readings"
     )
 
+    # Swap Memory Information
+    swap_usage_percent: CoercedFloat = Field(None, description="Swap usage percentage")
+    swap_total_bytes: CoercedInt = Field(None, description="Total swap in bytes")
+    swap_used_bytes: CoercedInt = Field(None, description="Used swap in bytes")
+    swap_free_bytes: CoercedInt = Field(None, description="Free swap in bytes")
+    swappiness: CoercedInt = Field(
+        None, description="Swappiness kernel parameter (0-100)"
+    )
+
     # Computed memory fields from API
     ram_used_mb: CoercedFloat = Field(None, description="Used RAM in MB")
     ram_total_mb: CoercedFloat = Field(None, description="Total RAM in MB")

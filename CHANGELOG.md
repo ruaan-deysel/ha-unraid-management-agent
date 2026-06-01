@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2026.6.1] - 2026-06-01
+
+### Added
+
+- **Unassigned Devices & Remote Shares** (#79): Monitoring for devices outside the array and SMB/NFS remote shares
+  - `binary_sensor.<device>_mounted` — connectivity sensor showing mounted/unmounted state per unassigned device
+  - `binary_sensor.<share>_mounted` — connectivity sensor showing mounted/unmounted state per remote share
+  - `sensor.<device>_size` — total capacity in bytes per unassigned device (with filesystem and device path attributes)
+  - `sensor.<share>_usage` — usage percentage per remote share when size data is available (disabled by default; enabled once UMA API exposes size fields for remote shares)
+  - Entities are created dynamically when the Unassigned Devices plugin is installed and its collector returns data
+  - Both entity types include deduplication guards to prevent registry collisions
+
+### Fixed
+
+- **SystemInfo model** (#45 follow-up): Added explicit `swap_usage_percent`, `swap_total_bytes`, `swap_used_bytes`, `swap_free_bytes`, and `swappiness` fields to the Pydantic model — previously these were silently accepted as extra fields but not typed
+
 ## [2026.6.0] - 2026-05-29
 
 ### Added

@@ -37,6 +37,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import dt as dt_util
+from homeassistant.util import slugify as ha_slugify
 
 from . import UnraidConfigEntry, UnraidDataUpdateCoordinator
 from .api import EnergyIntegrator, RateCalculator, parse_timestamp
@@ -3417,5 +3418,170 @@ async def async_setup_entry(
             if description.supported_fn(data):
                 entities.append(UnraidSensorEntity(coordinator, description))
 
+    # Unassigned device sensors
+    if data and data.unassigned_devices:
+        seen_unassigned: set[str] = set()
+        for device in data.unassigned_devices:
+            device_name = getattr(device, "name", None) or getattr(
+                device, "device", None
+            )
+            if device_name and device_name not in seen_unassigned:
+                seen_unassigned.add(device_name)
+                entities.append(UnraidUnassignedDeviceSensor(coordinator, device_name))
+
+    # Remote share sensors
+    if data and data.remote_shares:
+        seen_remote_shares: set[str] = set()
+        for remote_share in data.remote_shares:
+            share_name = getattr(remote_share, "name", None)
+            if share_name and share_name not in seen_remote_shares:
+                seen_remote_shares.add(share_name)
+                entities.append(UnraidRemoteShareSensor(coordinator, share_name))
+
     _LOGGER.debug("Adding %d Unraid sensor entities", len(entities))
     async_add_entities(entities)
+
+
+class UnraidUnassignedDeviceSensor(UnraidBaseEntity, SensorEntity):
+    """Size sensor for an unassigned (non-array) device."""
+
+    _attr_native_unit_of_measurement = UnitOfInformation.BYTES
+    _attr_device_class = SensorDeviceClass.DATA_SIZE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:harddisk"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_suggested_display_precision = 1
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        device_name: str,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(
+            coordinator, f"unassigned_device_{ha_slugify(device_name)}_size"
+        )
+        self._device_name = device_name
+        self._attr_translation_key = "unassigned_device_size"
+        self._attr_translation_placeholders = {"device_name": device_name}
+
+    def _get_device(self) -> Any | None:
+        """Return device data from coordinator."""
+        data = self.coordinator.data
+        if not data or not data.unassigned_devices:
+            return None
+        for dev in data.unassigned_devices:
+            name = getattr(dev, "name", None) or getattr(dev, "device", None)
+            if name == self._device_name:
+                return dev
+        return None
+
+    @property
+    def available(self) -> bool:
+        """Return True if device is present."""
+        return super().available and self._get_device() is not None
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the device size in bytes."""
+        device = self._get_device()
+        if device is None:
+            return None
+        return getattr(device, "size_bytes", None)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        device = self._get_device()
+        if device is None:
+            return {}
+        attrs: dict[str, Any] = {}
+        if getattr(device, "device", None):
+            attrs["device_path"] = device.device
+        if getattr(device, "filesystem", None):
+            attrs["filesystem"] = device.filesystem
+        mounted = getattr(device, "mounted", None)
+        if mounted is not None:
+            attrs["mounted"] = mounted
+        return attrs
+
+
+class UnraidRemoteShareSensor(UnraidBaseEntity, SensorEntity):
+    """Usage sensor for a remote (SMB/NFS) share mounted on Unraid."""
+
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:folder-network"
+    _attr_suggested_display_precision = 1
+    # Disabled by default: the current RemoteShare model has no size fields.
+    # Enable manually once the UMA API exposes used/total/free bytes for remote shares.
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        share_name: str,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, f"remote_share_{ha_slugify(share_name)}_usage")
+        self._share_name = share_name
+        self._attr_translation_key = "remote_share_usage"
+        self._attr_translation_placeholders = {"share_name": share_name}
+
+    def _get_share(self) -> Any | None:
+        """Return remote share data from coordinator."""
+        data = self.coordinator.data
+        if not data or not data.remote_shares:
+            return None
+        for share in data.remote_shares:
+            if getattr(share, "name", None) == self._share_name:
+                return share
+        return None
+
+    @property
+    def available(self) -> bool:
+        """Return True if share is present."""
+        return super().available and self._get_share() is not None
+
+    @property
+    def native_value(self) -> float | None:
+        """Return usage percentage if available."""
+        share = self._get_share()
+        if share is None:
+            return None
+        used = getattr(share, "used_bytes", None)
+        total = getattr(share, "total_bytes", None)
+        if (
+            isinstance(used, (int, float))
+            and isinstance(total, (int, float))
+            and total > 0
+        ):
+            return round(used / total * 100, 1)
+        usage_pct = getattr(share, "usage_percent", None)
+        if isinstance(usage_pct, (int, float)):
+            return round(float(usage_pct), 1)
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        share = self._get_share()
+        if share is None:
+            return {}
+        attrs: dict[str, Any] = {"share_name": self._share_name}
+        if getattr(share, "protocol", None):
+            attrs["protocol"] = share.protocol
+        if getattr(share, "server", None):
+            attrs["server"] = share.server
+        if getattr(share, "mount_point", None):
+            attrs["mount_point"] = share.mount_point
+        used = getattr(share, "used_bytes", None)
+        total = getattr(share, "total_bytes", None)
+        free = getattr(share, "free_bytes", None)
+        if isinstance(total, (int, float)) and total > 0:
+            attrs["total_size"] = format_bytes(int(total))
+        if isinstance(used, (int, float)) and used >= 0:
+            attrs["used_size"] = format_bytes(int(used))
+        if isinstance(free, (int, float)) and free >= 0:
+            attrs["free_size"] = format_bytes(int(free))
+        return attrs
