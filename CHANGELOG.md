@@ -7,8 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2026.6.2] - 2026-06-05
-
 ### Added
 
 - **Remote Share Mount/Unmount Switch** (#84): New `switch` entities to mount and unmount remote shares configured in the Unraid Unassigned Devices plugin
