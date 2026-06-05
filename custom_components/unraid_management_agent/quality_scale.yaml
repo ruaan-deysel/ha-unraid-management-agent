@@ -152,8 +152,14 @@ rules:
     status: done
     comment: repairs.py implemented for disk health and temperature issues
   stale-devices:
-    status: exempt
-    comment: Single device per entry, removed on unload
+    status: done
+    comment: >
+      cleanup.py removes stale entity registry entries for all dynamic entity
+      types (containers, VMs, disks, fans, GPUs, network interfaces, shares,
+      ZFS pools, remote shares, unassigned devices, user scripts) on every
+      successful coordinator update via an async_add_listener callback registered
+      in async_setup_entry. Guards on last_update_success prevent false removal
+      during transient server outages.
 
   # Platinum
   async-dependency:

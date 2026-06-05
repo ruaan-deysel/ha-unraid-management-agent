@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Stale Entity Cleanup**: Entity registry entries for removed dynamic items are now automatically cleaned on every successful coordinator update
+  - Covers all dynamic entity types: Docker containers, VMs, disks, fans, GPUs, network interfaces, user shares, ZFS pools, remote shares, unassigned devices, and user scripts
+  - Guarded by `coordinator.last_update_success` — entities are never removed during a transient server outage or when the coordinator has no data yet
+  - Implemented in a new `cleanup.py` module via a coordinator update listener registered in `async_setup_entry`
+  - Quality Scale: `stale-devices` rule updated from `exempt` to `done`
+
 - **Remote Share Mount/Unmount Switch** (#84): New `switch` entities to mount and unmount remote shares configured in the Unraid Unassigned Devices plugin
   - One switch per remote share; turns ON to mount, turns OFF to unmount
   - Attributes include `protocol`, `server`, and `mount_point`

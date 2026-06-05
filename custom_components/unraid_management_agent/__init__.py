@@ -9,7 +9,7 @@ from typing import Any, Final
 
 import voluptuous as vol
 from homeassistant.const import CONF_HOST, CONF_PORT, Platform
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
@@ -17,6 +17,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util import slugify
 
 from .api import UnraidClient, UnraidConnectionError, UnraidWebSocketClient
+from .cleanup import async_cleanup_stale_entities
 from .const import (
     CONF_ENABLE_WEBSOCKET,
     DEFAULT_ENABLE_WEBSOCKET,
@@ -301,8 +302,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: UnraidConfigEntry) -> bo
     if enable_websocket:
         await coordinator.async_start_websocket()
 
-    # Note: We use OptionsFlowWithReload, so no need for manual update listener
-    # The reload is handled automatically by Home Assistant
+    # Register stale entity cleanup: runs on every successful coordinator update
+    # and removes entity registry entries for items no longer returned by the API.
+    @callback
+    def _on_coordinator_update() -> None:
+        async_cleanup_stale_entities(hass, entry, coordinator)
+
+    entry.async_on_unload(coordinator.async_add_listener(_on_coordinator_update))
 
     return True
 
