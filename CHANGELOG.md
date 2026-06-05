@@ -42,7 +42,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Quality
 
 - **manifest.json**: Fixed `loggers` field to declare the full `custom_components.unraid_management_agent` namespace (previously only the API sub-logger was listed; the integration's own log messages were not surfaced via HA's logger config UI)
-- **Quality Scale**: Updated `dynamic-devices` rule from `exempt` to `done` — remote share and unassigned device entities are now dynamically registered via coordinator listener
 
 ## [2026.6.1] - 2026-06-01
 
