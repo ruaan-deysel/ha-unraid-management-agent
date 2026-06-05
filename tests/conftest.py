@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -88,6 +89,13 @@ def mock_async_unraid_client() -> Generator[MagicMock]:
         client.get_update_status = AsyncMock(return_value=None)
         client.get_docker_settings = AsyncMock(return_value=None)
         client.get_vm_settings = AsyncMock(return_value=None)
+        client.get_registration_info = AsyncMock(return_value=None)
+        client.get_network_services = AsyncMock(return_value=None)
+        client.get_unassigned_info = AsyncMock(return_value=None)
+        client.get_fan_status = AsyncMock(return_value=None)
+        client.check_all_container_updates = AsyncMock(return_value=None)
+        client.mount_remote_share = AsyncMock(return_value=None)
+        client.unmount_remote_share = AsyncMock(return_value=None)
 
         # Mock control methods
         client.start_array = AsyncMock(return_value=True)
@@ -153,11 +161,23 @@ def mock_unraid_client_class(
 def mock_unraid_websocket_client_class(
     mock_websocket_client: MagicMock,
 ) -> Generator[MagicMock]:
-    """Patch UnraidWebSocketClient to return the mocked client instance."""
+    """
+    Patch UnraidWebSocketClient in every module that imports it directly.
+
+    The coordinator imports UnraidWebSocketClient from .api.websocket (not from
+    the package __init__), so we must patch both locations to prevent real
+    socket connections during tests.
+    """
     mock_class = MagicMock(return_value=mock_websocket_client)
-    with patch(
-        "custom_components.unraid_management_agent.UnraidWebSocketClient",
-        new=mock_class,
+    with (
+        patch(
+            "custom_components.unraid_management_agent.UnraidWebSocketClient",
+            new=mock_class,
+        ),
+        patch(
+            "custom_components.unraid_management_agent.coordinator.UnraidWebSocketClient",
+            new=mock_class,
+        ),
     ):
         yield mock_class
 
@@ -249,3 +269,29 @@ def mock_coordinator(
 def auto_enable_custom_integrations(enable_custom_integrations):
     """Enable custom integrations for all tests."""
     return
+
+
+@pytest.fixture(autouse=True)
+def _prevent_real_coordinator_websocket() -> Generator[MagicMock]:
+    """
+    Prevent real WebSocket connections from coordinator's direct import.
+
+    coordinator.py imports UnraidWebSocketClient from .api.websocket directly,
+    so patching only the package __init__ namespace leaves the coordinator free
+    to open real sockets.  This autouse fixture covers that import path for
+    every test, regardless of which other fixtures are active.
+
+    Tests that use mock_unraid_websocket_client_class will override this mock
+    with their own more-specific one (last patch wins inside nested context managers).
+    """
+    mock_ws_cls = MagicMock()
+    mock_ws_instance = MagicMock()
+    mock_ws_instance.start = AsyncMock(side_effect=asyncio.CancelledError)
+    mock_ws_instance.stop = AsyncMock()
+    mock_ws_instance.is_connected = False
+    mock_ws_cls.return_value = mock_ws_instance
+    with patch(
+        "custom_components.unraid_management_agent.coordinator.UnraidWebSocketClient",
+        new=mock_ws_cls,
+    ):
+        yield mock_ws_cls

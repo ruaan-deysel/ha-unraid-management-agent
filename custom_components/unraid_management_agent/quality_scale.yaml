@@ -125,8 +125,8 @@ rules:
     status: done
     comment: README includes concrete monitoring, automation, orchestration, and energy dashboard use cases
   dynamic-devices:
-    status: exempt
-    comment: Single device per config entry, dynamic entities created at setup
+    status: done
+    comment: Remote share and unassigned device binary/switch entities added dynamically via coordinator listener when data arrives after initial setup
   entity-category:
     status: done
     comment: EntityCategory.DIAGNOSTIC used for appropriate sensors

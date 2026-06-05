@@ -19,7 +19,11 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import UnraidClient, UnraidConnectionError
 from .const import (
+    CONF_ENABLE_CONTAINER_UPDATES,
+    CONF_ENABLE_FAN_CONTROL,
     CONF_ENABLE_WEBSOCKET,
+    DEFAULT_ENABLE_CONTAINER_UPDATES,
+    DEFAULT_ENABLE_FAN_CONTROL,
     DEFAULT_ENABLE_WEBSOCKET,
     DEFAULT_PORT,
     DOMAIN,
@@ -196,6 +200,19 @@ class UnraidOptionsFlowHandler(OptionsFlowWithReload):
                         CONF_ENABLE_WEBSOCKET,
                         default=self.config_entry.options.get(
                             CONF_ENABLE_WEBSOCKET, DEFAULT_ENABLE_WEBSOCKET
+                        ),
+                    ): cv.boolean,
+                    vol.Optional(
+                        CONF_ENABLE_FAN_CONTROL,
+                        default=self.config_entry.options.get(
+                            CONF_ENABLE_FAN_CONTROL, DEFAULT_ENABLE_FAN_CONTROL
+                        ),
+                    ): cv.boolean,
+                    vol.Optional(
+                        CONF_ENABLE_CONTAINER_UPDATES,
+                        default=self.config_entry.options.get(
+                            CONF_ENABLE_CONTAINER_UPDATES,
+                            DEFAULT_ENABLE_CONTAINER_UPDATES,
                         ),
                     ): cv.boolean,
                 }

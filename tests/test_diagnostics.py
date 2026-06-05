@@ -31,6 +31,7 @@ async def test_async_get_config_entry_diagnostics(
     mock_websocket_client,
 ) -> None:
     """Test diagnostics returns expected data structure."""
+    mock_ws_class = MagicMock(return_value=mock_websocket_client)
     with (
         patch(
             "custom_components.unraid_management_agent.UnraidClient",
@@ -38,7 +39,11 @@ async def test_async_get_config_entry_diagnostics(
         ),
         patch(
             "custom_components.unraid_management_agent.UnraidWebSocketClient",
-            return_value=mock_websocket_client,
+            new=mock_ws_class,
+        ),
+        patch(
+            "custom_components.unraid_management_agent.coordinator.UnraidWebSocketClient",
+            new=mock_ws_class,
         ),
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)

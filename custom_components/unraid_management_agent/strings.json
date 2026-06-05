@@ -38,10 +38,14 @@
         "title": "Unraid Management Agent Options",
         "description": "Configure integration features",
         "data": {
-          "enable_websocket": "Enable WebSocket for real-time updates"
+          "enable_websocket": "Enable WebSocket for real-time updates",
+          "enable_fan_control": "Enable fan control entities",
+          "enable_container_updates": "Enable container update checks"
         },
         "data_description": {
-          "enable_websocket": "WebSocket provides instant updates instead of polling. When disabled, data is polled every 30 seconds."
+          "enable_websocket": "WebSocket provides instant updates instead of polling. When disabled, data is polled every 30 seconds.",
+          "enable_fan_control": "Create fan speed sensor and control entities. Disable if your system does not have controllable fans.",
+          "enable_container_updates": "Periodically check Docker containers for available image updates. This may slow down polling and uses additional network requests."
         }
       }
     }
@@ -265,6 +269,9 @@
       },
       "remote_share_mounted": {
         "name": "Remote Share {share_name} Mounted"
+      },
+      "container_updates_available": {
+        "name": "Container Updates Available"
       }
     },
     "switch": {
@@ -276,6 +283,9 @@
       },
       "disk_spin": {
         "name": "Disk {disk_name} Spin"
+      },
+      "remote_share": {
+        "name": "Remote Share {share_name}"
       }
     },
     "number": {
@@ -447,6 +457,12 @@
     },
     "fan_speed_set_failed": {
       "message": "Failed to set fan speed"
+    },
+    "remote_share_mount_error": {
+      "message": "Failed to mount remote share: {share_name}"
+    },
+    "remote_share_unmount_error": {
+      "message": "Failed to unmount remote share: {share_name}"
     }
   },
   "services": {

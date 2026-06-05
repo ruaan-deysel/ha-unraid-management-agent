@@ -9,10 +9,14 @@ DOMAIN: Final = "unraid_management_agent"
 
 # Configuration keys
 CONF_ENABLE_WEBSOCKET: Final = "enable_websocket"
+CONF_ENABLE_FAN_CONTROL: Final = "enable_fan_control"
+CONF_ENABLE_CONTAINER_UPDATES: Final = "enable_container_updates"
 
 # Default values
 DEFAULT_PORT: Final = 8043
 DEFAULT_ENABLE_WEBSOCKET: Final = True
+DEFAULT_ENABLE_FAN_CONTROL: Final = True
+DEFAULT_ENABLE_CONTAINER_UPDATES: Final = False
 
 # Fixed update interval following Home Assistant best practices
 # https://developers.home-assistant.io/docs/core/integration-quality-scale/rules/appropriate-polling/

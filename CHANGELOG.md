@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2026.6.2] - 2026-06-05
+
+### Added
+
+- **Remote Share Mount/Unmount Switch** (#84): New `switch` entities to mount and unmount remote shares configured in the Unraid Unassigned Devices plugin
+  - One switch per remote share; turns ON to mount, turns OFF to unmount
+  - Attributes include `protocol`, `server`, and `mount_point`
+  - Entities are created dynamically as remote shares appear in coordinator data
+  - API endpoints: `POST /api/v1/unassigned/remote-shares/mount` and `/unmount`
+
+- **Container Update Checks** (#86): Optional feature to periodically check Docker containers for available image updates
+  - New option in Settings → Integrations → Unraid Management Agent → Configure: **Enable container update checks** (disabled by default)
+  - When enabled: `binary_sensor.container_updates_available` is created showing whether any containers have image updates
+  - Attributes include `updates_available` count and `total_containers`
+  - Fetches `/docker/updates` endpoint on each polling cycle
+
+- **Fan Control Toggle** (#85): New option to enable or disable fan control entities
+  - New option in Settings → Integrations → Unraid Management Agent → Configure: **Enable fan control entities** (enabled by default)
+  - When disabled: fan speed sensor and fan speed number (slider) entities are not created
+  - Useful for systems without controllable fans to reduce clutter
+
+### Fixed
+
+- **Remote Share Binary Sensor Missing After Adding Shares** (#83): Remote share mounted/unmounted binary sensors now appear dynamically when shares are added after HA startup
+  - Root cause: `async_setup_entry` only ran once at startup; new remote shares added later were never detected
+  - Fix: registered coordinator update listener that creates new `UnraidRemoteShareBinarySensor` entities as shares appear
+  - Same dynamic registration applied to unassigned device sensors
+
+### Changed
+
+- **Options Flow** (#85, #86): Two new options added to the integration's Configure dialog:
+  - *Enable fan control entities* — controls creation of fan speed sensors and fan speed number entities
+  - *Enable container update checks* — opt-in polling of Docker image update availability
+
+### Quality
+
+- **manifest.json**: Fixed `loggers` field to declare the full `custom_components.unraid_management_agent` namespace (previously only the API sub-logger was listed; the integration's own log messages were not surfaced via HA's logger config UI)
+- **Quality Scale**: Updated `dynamic-devices` rule from `exempt` to `done` — remote share and unassigned device entities are now dynamically registered via coordinator listener
+
 ## [2026.6.1] - 2026-06-01
 
 ### Added

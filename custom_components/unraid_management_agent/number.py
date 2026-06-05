@@ -12,7 +12,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import UnraidConfigEntry
-from .const import DOMAIN
+from .const import CONF_ENABLE_FAN_CONTROL, DEFAULT_ENABLE_FAN_CONTROL, DOMAIN
 from .coordinator import UnraidDataUpdateCoordinator
 from .entity import UnraidBaseEntity
 
@@ -27,6 +27,12 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Unraid number entities for fan control."""
+    fan_control_enabled = entry.options.get(
+        CONF_ENABLE_FAN_CONTROL, DEFAULT_ENABLE_FAN_CONTROL
+    )
+    if not fan_control_enabled:
+        return
+
     coordinator = entry.runtime_data.coordinator
     data = coordinator.data
 

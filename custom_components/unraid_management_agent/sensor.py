@@ -59,6 +59,8 @@ from .const import (
     ATTR_SERVER_MODEL,
     ATTR_UPS_MODEL,
     ATTR_UPS_STATUS,
+    CONF_ENABLE_FAN_CONTROL,
+    DEFAULT_ENABLE_FAN_CONTROL,
 )
 from .coordinator import UnraidData
 from .entity import UnraidBaseEntity
@@ -3223,7 +3225,10 @@ async def async_setup_entry(
         entities.append(UnraidSensorEntity(coordinator, description))
 
     # Fan sensors (dynamic, one per fan, keyed by normalized name for stability)
-    if data and data.system:
+    fan_control_enabled = entry.options.get(
+        CONF_ENABLE_FAN_CONTROL, DEFAULT_ENABLE_FAN_CONTROL
+    )
+    if fan_control_enabled and data and data.system:
         fans: list[Any] = (data.system.fans or []) or []
         seen_names: set[str] = set()
         for idx, fan in enumerate(fans):

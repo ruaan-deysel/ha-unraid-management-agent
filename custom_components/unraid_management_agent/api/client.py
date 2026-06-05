@@ -1343,6 +1343,42 @@ class UnraidClient:
         data = await self._request("GET", "/unassigned/remote-shares")
         return RemoteSharesResponse.model_validate(data)
 
+    async def mount_remote_share(self, source: str) -> ActionResponse:
+        """
+        Mount a remote share by its source path.
+
+        Args:
+            source: Network source path (e.g. "//server/share")
+
+        Returns:
+            Success response
+
+        """
+        data = await self._request(
+            "POST",
+            "/unassigned/remote-shares/mount",
+            json={"source": source},
+        )
+        return ActionResponse.model_validate(data)
+
+    async def unmount_remote_share(self, source: str) -> ActionResponse:
+        """
+        Unmount a remote share by its source path.
+
+        Args:
+            source: Network source path (e.g. "//server/share")
+
+        Returns:
+            Success response
+
+        """
+        data = await self._request(
+            "POST",
+            "/unassigned/remote-shares/unmount",
+            json={"source": source},
+        )
+        return ActionResponse.model_validate(data)
+
     # Settings endpoints
 
     async def get_system_settings(self) -> SystemSettings:

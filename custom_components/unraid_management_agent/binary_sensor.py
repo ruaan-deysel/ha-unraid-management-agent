@@ -13,7 +13,7 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntityDescription,
 )
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import slugify
 
@@ -269,6 +269,44 @@ def _parity_schedule_attributes(
     }
 
 
+# =============================================================================
+# Container Update Functions (#86)
+# =============================================================================
+
+
+def _has_container_updates(coordinator: UnraidDataUpdateCoordinator) -> bool:
+    """Return true if any containers have updates available."""
+    data = coordinator.data
+    if data and data.container_updates:
+        updates_available = getattr(data.container_updates, "updates_available", None)
+        return (updates_available or 0) > 0
+    return False
+
+
+def _has_container_updates_data(coordinator: UnraidDataUpdateCoordinator) -> bool:
+    """Return true if container updates data is available."""
+    data = coordinator.data
+    return (
+        data is not None
+        and data.container_updates is not None
+        and coordinator.is_container_updates_enabled()
+    )
+
+
+def _container_updates_attributes(
+    coordinator: UnraidDataUpdateCoordinator,
+) -> dict[str, Any]:
+    """Return container updates attributes."""
+    data = coordinator.data
+    if not data or not data.container_updates:
+        return {}
+    updates = data.container_updates
+    return {
+        "updates_available": getattr(updates, "updates_available", 0),
+        "total_containers": getattr(updates, "total_count", None),
+    }
+
+
 BINARY_SENSOR_DESCRIPTIONS: tuple[UnraidBinarySensorEntityDescription, ...] = (
     UnraidBinarySensorEntityDescription(
         key="array_started",
@@ -361,6 +399,17 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[UnraidBinarySensorEntityDescription, ...] = (
         supported_fn=_has_parity_schedule,
         extra_state_attributes_fn=_parity_schedule_attributes,
     ),
+    # Container updates available (#86)
+    UnraidBinarySensorEntityDescription(
+        key="container_updates_available",
+        translation_key="container_updates_available",
+        device_class=BinarySensorDeviceClass.UPDATE,
+        icon="mdi:update",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        is_on_fn=_has_container_updates,
+        supported_fn=_has_container_updates_data,
+        extra_state_attributes_fn=_container_updates_attributes,
+    ),
 )
 
 
@@ -402,27 +451,55 @@ async def async_setup_entry(
                     UnraidNetworkInterfaceBinarySensor(coordinator, interface_name)
                 )
 
-    # Unassigned device mounted binary sensors
-    if data and data.unassigned_devices:
-        seen_unassigned: set[str] = set()
-        for device in data.unassigned_devices:
+    # Unassigned device mounted binary sensors - created dynamically as devices appear
+    seen_unassigned: set[str] = set()
+
+    def _add_unassigned_device_sensors() -> None:
+        new_entities: list[BinarySensorEntity] = []
+        current_data = coordinator.data
+        if not current_data or not current_data.unassigned_devices:
+            return
+        for device in current_data.unassigned_devices:
             device_name = getattr(device, "name", None) or getattr(
                 device, "device", None
             )
             if device_name and device_name not in seen_unassigned:
                 seen_unassigned.add(device_name)
-                entities.append(
+                new_entities.append(
                     UnraidUnassignedDeviceBinarySensor(coordinator, device_name)
                 )
+        if new_entities:
+            async_add_entities(new_entities)
 
-    # Remote share mounted binary sensors
-    if data and data.remote_shares:
-        seen_remote_shares: set[str] = set()
-        for remote_share in data.remote_shares:
+    _add_unassigned_device_sensors()
+
+    # Remote share mounted binary sensors - created dynamically as shares appear (#83)
+    seen_remote_shares: set[str] = set()
+
+    def _add_remote_share_sensors() -> None:
+        new_entities: list[BinarySensorEntity] = []
+        current_data = coordinator.data
+        if not current_data or not current_data.remote_shares:
+            return
+        for remote_share in current_data.remote_shares:
             share_name = getattr(remote_share, "name", None)
             if share_name and share_name not in seen_remote_shares:
                 seen_remote_shares.add(share_name)
-                entities.append(UnraidRemoteShareBinarySensor(coordinator, share_name))
+                new_entities.append(
+                    UnraidRemoteShareBinarySensor(coordinator, share_name)
+                )
+        if new_entities:
+            async_add_entities(new_entities)
+
+    _add_remote_share_sensors()
+
+    # Register listeners so entities are added when new unassigned/remote-share data arrives
+    entry.async_on_unload(
+        coordinator.async_add_listener(callback(_add_unassigned_device_sensors))
+    )
+    entry.async_on_unload(
+        coordinator.async_add_listener(callback(_add_remote_share_sensors))
+    )
 
     # Network service binary sensors
     if data and data.network_services:

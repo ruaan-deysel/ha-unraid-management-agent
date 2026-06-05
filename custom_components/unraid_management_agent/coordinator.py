@@ -21,6 +21,7 @@ from .api.models import (
     ArrayStatus,
     CollectorStatus,
     ContainerInfo,
+    ContainerUpdatesResult,
     DiskInfo,
     DiskSettings,
     DockerSettings,
@@ -53,6 +54,8 @@ from .api.models import (
 )
 from .api.websocket import UnraidWebSocketClient
 from .const import (
+    CONF_ENABLE_CONTAINER_UPDATES,
+    DEFAULT_ENABLE_CONTAINER_UPDATES,
     DOMAIN,
     UPDATE_INTERVAL,
 )
@@ -95,6 +98,7 @@ class UnraidData:
     network_services: NetworkServicesStatus | None = None
     unassigned_devices: list[UnassignedDevice] | None = None
     remote_shares: list[RemoteShare] | None = None
+    container_updates: ContainerUpdatesResult | None = None
 
 
 @dataclass
@@ -266,6 +270,18 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
             return True
         return getattr(self.data.docker_settings, "enabled", True)
 
+    def is_container_updates_enabled(self) -> bool:
+        """
+        Check if container update checking is enabled in options.
+
+        Returns:
+            True if container updates should be fetched and exposed as entities.
+
+        """
+        return self.config_entry.options.get(
+            CONF_ENABLE_CONTAINER_UPDATES, DEFAULT_ENABLE_CONTAINER_UPDATES
+        )
+
     def is_vm_enabled(self) -> bool:
         """
         Check if VM service is enabled in Unraid settings.
@@ -384,6 +400,15 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
             network_services: NetworkServicesStatus | None = results[28]
             unassigned_info: UnassignedInfo | None = results[29]
 
+            # Optionally fetch container updates (can be slow — user opt-in)
+            container_updates: ContainerUpdatesResult | None = None
+            if self.is_container_updates_enabled():
+                container_updates = await self._fetch(
+                    "container updates",
+                    self.client.check_all_container_updates,
+                    suppress_404=True,
+                )
+
             # Merge notification overview into notifications response
             if isinstance(notifications, list):
                 notifications = NotificationsResponse(notifications=notifications)
@@ -450,6 +475,7 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
                 remote_shares=list(unassigned_info.remote_shares or [])
                 if unassigned_info
                 else None,
+                container_updates=container_updates,
             )
 
             # Check for issues and create repair flows

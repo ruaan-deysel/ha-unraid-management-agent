@@ -95,6 +95,28 @@ async def async_setup_entry(
                         UnraidDiskSpinSwitch(coordinator, disk_id, disk_name)
                     )
 
+    # Remote share switches - created dynamically as shares appear (#84)
+    seen_remote_shares: set[str] = set()
+
+    def _add_remote_share_switches() -> None:
+        new_entities: list[SwitchEntity] = []
+        current_data = coordinator.data
+        if not current_data or not current_data.remote_shares:
+            return
+        for share in current_data.remote_shares:
+            share_name = getattr(share, "name", None)
+            if share_name and share_name not in seen_remote_shares:
+                seen_remote_shares.add(share_name)
+                new_entities.append(UnraidRemoteShareSwitch(coordinator, share_name))
+        if new_entities:
+            async_add_entities(new_entities)
+
+    _add_remote_share_switches()
+
+    entry.async_on_unload(
+        coordinator.async_add_listener(callback(_add_remote_share_switches))
+    )
+
     _LOGGER.debug("Adding %d Unraid switch entities", len(entities))
     async_add_entities(entities)
 
@@ -512,4 +534,106 @@ class UnraidDiskSpinSwitch(UnraidBaseEntity, SwitchEntity):
                 translation_domain=DOMAIN,
                 translation_key="disk_spin_down_error",
                 translation_placeholders={"disk_name": self._disk_name},
+            ) from exc
+
+
+class UnraidRemoteShareSwitch(UnraidBaseEntity, SwitchEntity):
+    """Mount/unmount switch for a remote share (Unassigned Devices plugin)."""
+
+    _attr_icon = "mdi:folder-network"
+    _attr_assumed_state = False
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        share_name: str,
+    ) -> None:
+        """Initialize the remote share switch."""
+        self._share_name = share_name
+        safe_name = slugify(share_name)
+        super().__init__(coordinator, f"remote_share_{safe_name}_mount")
+        self._attr_translation_key = "remote_share"
+        self._attr_translation_placeholders = {"share_name": share_name}
+        self._optimistic_state: bool | None = None
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Clear optimistic state when API state matches."""
+        if self._optimistic_state is not None:
+            share = self._find_share()
+            if share is not None:
+                actual_mounted = getattr(share, "mounted", False) is True
+                if actual_mounted == self._optimistic_state:
+                    self._optimistic_state = None
+        super()._handle_coordinator_update()
+
+    def _find_share(self) -> Any | None:
+        """Return the remote share data from coordinator."""
+        current_data = self.coordinator.data
+        if not current_data or not current_data.remote_shares:
+            return None
+        for share in current_data.remote_shares:
+            if getattr(share, "name", None) == self._share_name:
+                return share
+        return None
+
+    @property
+    def available(self) -> bool:
+        """Return True if the share is present in coordinator data."""
+        return super().available and self._find_share() is not None
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if the remote share is mounted."""
+        if self._optimistic_state is not None:
+            return self._optimistic_state
+        share = self._find_share()
+        if share is None:
+            return False
+        return getattr(share, "mounted", False) is True
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        share = self._find_share()
+        if share is None:
+            return {}
+        return {
+            "protocol": getattr(share, "protocol", None),
+            "server": getattr(share, "server", None),
+            "mount_point": getattr(share, "mount_point", None),
+        }
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Mount the remote share."""
+        try:
+            self._optimistic_state = True
+            self.async_write_ha_state()
+            await self.coordinator.client.mount_remote_share(self._share_name)
+            _LOGGER.info("Mounted remote share: %s", self._share_name)
+            await self.coordinator.async_request_refresh()
+        except Exception as exc:
+            self._optimistic_state = None
+            self.async_write_ha_state()
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="remote_share_mount_error",
+                translation_placeholders={"share_name": self._share_name},
+            ) from exc
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Unmount the remote share."""
+        try:
+            self._optimistic_state = False
+            self.async_write_ha_state()
+            await self.coordinator.client.unmount_remote_share(self._share_name)
+            _LOGGER.info("Unmounted remote share: %s", self._share_name)
+            await self.coordinator.async_request_refresh()
+        except Exception as exc:
+            self._optimistic_state = None
+            self.async_write_ha_state()
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="remote_share_unmount_error",
+                translation_placeholders={"share_name": self._share_name},
             ) from exc

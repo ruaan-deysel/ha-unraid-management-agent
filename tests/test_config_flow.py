@@ -230,12 +230,24 @@ async def test_options_flow(
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == "init"
 
-    result2 = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={
-            CONF_ENABLE_WEBSOCKET: False,
-        },
-    )
+    with (
+        patch(
+            "custom_components.unraid_management_agent.UnraidClient",
+            return_value=mock_async_unraid_client,
+        ),
+        patch(
+            "custom_components.unraid_management_agent.UnraidWebSocketClient",
+            return_value=mock_websocket_client,
+        ),
+    ):
+        result2 = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_ENABLE_WEBSOCKET: False,
+            },
+        )
+        # Wait for OptionsFlowWithReload to complete the reload cycle
+        await hass.async_block_till_done()
 
     assert result2["type"] == FlowResultType.CREATE_ENTRY
     assert result2["data"][CONF_ENABLE_WEBSOCKET] is False
@@ -271,9 +283,19 @@ async def test_reconfigure_flow(
     mock_client.__aexit__ = AsyncMock(return_value=None)
     mock_client.get_system_info = AsyncMock(return_value=mock_system_info())
 
-    with patch(
-        "custom_components.unraid_management_agent.config_flow.UnraidClient",
-        return_value=mock_client,
+    with (
+        patch(
+            "custom_components.unraid_management_agent.config_flow.UnraidClient",
+            return_value=mock_client,
+        ),
+        patch(
+            "custom_components.unraid_management_agent.UnraidClient",
+            return_value=mock_async_unraid_client,
+        ),
+        patch(
+            "custom_components.unraid_management_agent.UnraidWebSocketClient",
+            return_value=mock_websocket_client,
+        ),
     ):
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
@@ -283,6 +305,8 @@ async def test_reconfigure_flow(
                 CONF_ENABLE_WEBSOCKET: True,
             },
         )
+        # Wait for the reconfigure reload cycle to complete
+        await hass.async_block_till_done()
 
     assert result2["type"] == FlowResultType.ABORT
     assert result2["reason"] == "reconfigure_successful"
