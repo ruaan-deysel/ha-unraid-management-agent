@@ -139,6 +139,8 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
         self._pending_system_action_message: str | None = None
         self._pending_system_action_requested_at: datetime | None = None
         self._pending_system_action_disconnected = False
+        self._previous_uptime_seconds: int | None = None
+        self._last_reboot_detected_at: datetime | None = None
 
         super().__init__(
             hass,
@@ -163,6 +165,23 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
     def websocket_connected(self) -> bool:
         """Return True if websocket is connected."""
         return self._ws_client is not None and self._ws_client.is_connected
+
+    @property
+    def in_reboot_grace_period(self) -> bool:
+        """
+        Return True if we're in the grace period after a server reboot.
+
+        During this period, stale entity cleanup is suppressed to allow APIs
+        to stabilize and return complete data.
+
+        Returns:
+            True if a reboot was detected within the last 5 minutes.
+
+        """
+        if self._last_reboot_detected_at is None:
+            return False
+        grace_period = timedelta(minutes=5)
+        return dt_util.utcnow() - self._last_reboot_detected_at < grace_period
 
     @property
     def pending_system_action(self) -> str | None:
@@ -458,6 +477,23 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
 
             # Mark update as successful
             self.update_success = True
+
+            # Detect if the server rebooted by checking if uptime decreased
+            if system and system.uptime_seconds is not None:
+                current_uptime = system.uptime_seconds
+                if (
+                    self._previous_uptime_seconds is not None
+                    and current_uptime < self._previous_uptime_seconds
+                ):
+                    # Uptime decreased - server rebooted
+                    _LOGGER.warning(
+                        "Server reboot detected (uptime was %d seconds, now %d seconds). "
+                        "Suppressing stale entity cleanup for 5 minutes to allow APIs to stabilize.",
+                        self._previous_uptime_seconds,
+                        current_uptime,
+                    )
+                    self._last_reboot_detected_at = dt_util.utcnow()
+                self._previous_uptime_seconds = current_uptime
 
             # Build data container with Pydantic models
             data = UnraidData(

@@ -272,6 +272,7 @@ def async_cleanup_stale_entities(
     Guards:
     - Runs only when ``coordinator.last_update_success`` is True (server reachable).
     - Runs only when ``coordinator.data`` is not None (first fetch completed).
+    - Skipped during the grace period after a server reboot (5 minutes).
     - Skips static entities (those whose key does not start with a dynamic prefix).
 
     Args:
@@ -281,6 +282,14 @@ def async_cleanup_stale_entities(
 
     """
     if not coordinator.last_update_success or coordinator.data is None:
+        return
+
+    # Suppress cleanup during the grace period after a server reboot
+    # to give APIs time to stabilize and return complete data
+    if coordinator.in_reboot_grace_period:
+        _LOGGER.debug(
+            "Skipping stale entity cleanup (server reboot detected; APIs stabilizing)"
+        )
         return
 
     registry = er.async_get(hass)

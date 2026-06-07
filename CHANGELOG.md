@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2026.6.3] — 2026-06-08
+
+### Fixed
+
+- **Entities Removed After Server Reboot** (#83): Fixed overly aggressive stale entity cleanup that was removing dynamic entities when Unraid servers rebooted
+  - Root cause: During reboots, the UMA API returns data gradually (some endpoints available first, others initializing). The coordinator would mark `last_update_success = True` as soon as any data arrived, causing cleanup to see empty arrays (containers=[], vms=[], remote_shares=[], etc.) and incorrectly remove all associated entities
+  - Fix: Added automatic server reboot detection via uptime tracking and a 5-minute grace period that suppresses cleanup immediately after detection
+  - Implementation:
+    - Coordinator tracks previous uptime (`_previous_uptime_seconds`) and detects reboots when uptime decreases
+    - New property `in_reboot_grace_period` returns True for 5 minutes after reboot detection
+    - `async_cleanup_stale_entities()` skips removal during grace period, allowing APIs time to stabilize and return complete data
+    - Logs warning message when reboot is detected for diagnostics
+  - Impact: Users should no longer see entity counts dropfter Unraid reboots; entities are preserved and naturally repopulated as APIs stabilize
+
 ## [2026.6.2] — 2026-06-07
 
 ### Added
