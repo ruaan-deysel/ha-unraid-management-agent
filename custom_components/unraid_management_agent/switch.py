@@ -71,6 +71,9 @@ async def async_setup_entry(
             if container_name and container_name not in seen_container_names:
                 seen_container_names.add(container_name)
                 entities.append(UnraidContainerSwitch(coordinator, container_name))
+                entities.append(
+                    UnraidContainerAutostartSwitch(coordinator, container_name)
+                )
 
     # VM switches - only if vm collector is enabled AND vm service is enabled
     if coordinator.is_collector_enabled("vm") and coordinator.is_vm_enabled():
@@ -442,6 +445,125 @@ class UnraidVMSwitch(UnraidBaseEntity, SwitchEntity):
                 translation_domain=DOMAIN,
                 translation_key="vm_stop_error",
                 translation_placeholders={"name": self._vm_name},
+            ) from exc
+
+
+class UnraidContainerAutostartSwitch(UnraidBaseEntity, SwitchEntity):
+    """Container autostart control switch."""
+
+    _attr_icon = "mdi:rocket-launch"
+    _attr_assumed_state = False
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        container_name: str,
+    ) -> None:
+        """Initialize the container autostart switch."""
+        self._container_name = container_name
+        safe_name = _make_unique_key(container_name)
+        super().__init__(coordinator, f"container_{safe_name}_autostart")
+        self._attr_translation_key = "container_autostart"
+        self._attr_translation_placeholders = {"name": container_name}
+        self._optimistic_state: bool | None = None
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        if self._optimistic_state is not None:
+            container = self._find_container()
+            if container is not None:
+                actual_autostart = bool(getattr(container, "autostart", False))
+                if actual_autostart == self._optimistic_state:
+                    self._optimistic_state = None
+        super()._handle_coordinator_update()
+
+    def _find_container(self) -> Any | None:
+        """Find the container in coordinator data by name."""
+        data = self.coordinator.data
+        if not data or not data.containers:
+            return None
+
+        for container in data.containers:
+            if getattr(container, "name", None) == self._container_name:
+                return container
+        return None
+
+    @property
+    def _container_id(self) -> str | None:
+        """Get the current container ID for API calls."""
+        container = self._find_container()
+        if container:
+            return getattr(container, "id", None) or getattr(
+                container, "container_id", None
+            )
+        return None
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        return super().available and self._find_container() is not None
+
+    @property
+    def is_on(self) -> bool:
+        """Return true if container autostart is enabled."""
+        if self._optimistic_state is not None:
+            return self._optimistic_state
+
+        container = self._find_container()
+        if container is None:
+            return False
+        return bool(getattr(container, "autostart", False))
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Enable container autostart."""
+        container_id = self._container_id
+        if container_id is None:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="container_autostart_enable_error",
+                translation_placeholders={"name": self._container_name},
+            )
+        try:
+            self._optimistic_state = True
+            self.async_write_ha_state()
+            await self.coordinator.client.set_container_autostart(
+                container_id, enabled=True
+            )
+            await self.coordinator.async_request_refresh()
+        except Exception as exc:
+            self._optimistic_state = None
+            self.async_write_ha_state()
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="container_autostart_enable_error",
+                translation_placeholders={"name": self._container_name},
+            ) from exc
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Disable container autostart."""
+        container_id = self._container_id
+        if container_id is None:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="container_autostart_disable_error",
+                translation_placeholders={"name": self._container_name},
+            )
+        try:
+            self._optimistic_state = False
+            self.async_write_ha_state()
+            await self.coordinator.client.set_container_autostart(
+                container_id, enabled=False
+            )
+            await self.coordinator.async_request_refresh()
+        except Exception as exc:
+            self._optimistic_state = None
+            self.async_write_ha_state()
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="container_autostart_disable_error",
+                translation_placeholders={"name": self._container_name},
             ) from exc
 
 

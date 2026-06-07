@@ -55,6 +55,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - When disabled: fan speed sensor and fan speed number (slider) entities are not created
   - Useful for systems without controllable fans to reduce clutter
 
+- **UMA 2026.06.03 Control Parity**: Added support for newly introduced management operations
+  - New API client methods: `reset_vm()`, `remove_container()`, `set_container_autostart()`, and `clear_array_disk_stats()`
+  - New service actions: `vm_reset`, `container_remove`, `container_set_autostart`, and `array_clear_disk_stats`
+  - New VM reset button entity per VM: `button.<host>_<vm>_reset`
+  - New container autostart switch entity per container: `switch.<host>_<container>_autostart`
+  - New array maintenance button: `button.<host>_array_clear_disk_stats`
+
 ### Fixed
 
 - **Remote Share Entities Not Created** (#83): Remote share binary sensors, switches, and usage sensors were never created despite the agent reporting them
@@ -73,11 +80,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Options Flow** (#85, #86): Two new options added to the integration's Configure dialog:
-  - *Enable fan control entities* — controls creation of fan speed sensors and fan speed number entities
-  - *Enable container update checks* — opt-in polling of Docker image update availability
+  - _Enable fan control entities_ — controls creation of fan speed sensors and fan speed number entities
+  - _Enable container update checks_ — opt-in polling of Docker image update availability
 - **API Models Expanded**
   - Added new typed fields for container throughput/update telemetry, mover runtime stats, ZFS pool/ARC fields, and diagnostics payload models
   - Added typed `DockerPortConflict` fields while keeping `extra="allow"` for forward compatibility
+
+- **WebSocket Event Compatibility**: Added support for the `source_status_changed` event type to keep source-related state synchronized
+  - When this event arrives, the integration now schedules a coordinator refresh to update dependent entities
 
 ### Quality
 

@@ -779,12 +779,12 @@ def _get_plugins_with_updates(data: UnraidData) -> int | None:
     if data and data.update_status:
         updates = getattr(data.update_status, "plugins_with_updates", None)
         if updates is not None:
-            return len(updates) if isinstance(updates, list) else updates
+            return updates
 
     if data and data.plugins:
         updates = data.plugins.plugins_with_updates
         if updates is not None:
-            return len(updates) if isinstance(updates, list) else updates
+            return len(updates)
         plugins_list = data.plugins.plugins or []
         if plugins_list:
             return sum(1 for p in plugins_list if p.update_available)

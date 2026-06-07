@@ -98,6 +98,7 @@ def _build_valid_dynamic_entity_keys(data: UnraidData) -> set[str]:
         safe_sensor = _sanitize_for_sensor(name)
         safe_slug = slugify(name)
         keys.add(switch_key)  # switch: "container_{slug}_{hash}"
+        keys.add(f"{switch_key}_autostart")  # switch: autostart
         keys.add(f"container_{safe_slug}_restart")  # button
         keys.add(f"container_{safe_sensor}_cpu")  # sensor
         keys.add(f"container_{safe_sensor}_memory")  # sensor
@@ -127,7 +128,7 @@ def _build_valid_dynamic_entity_keys(data: UnraidData) -> set[str]:
         # Button keys (mirrors _UnraidVMButtonBase in button.py)
         short_hash = hashlib.md5(vm_id.encode(), usedforsecurity=False).hexdigest()[:8]
         vm_slug = slugify(vm_name)
-        for suffix in ("force_stop", "restart_button", "pause", "resume"):
+        for suffix in ("force_stop", "restart", "pause", "resume", "reset"):
             keys.add(f"vm_{vm_slug}_{short_hash}_{suffix}")  # button
 
     # ── Disks ────────────────────────────────────────────────────────────────

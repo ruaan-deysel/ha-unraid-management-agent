@@ -198,6 +198,13 @@ class FanControlUpdateEvent(WebSocketEvent):
     data: FanControlStatus
 
 
+class SourceStatusChangedEvent(WebSocketEvent):
+    """Source status changed event for unassigned sources and remote shares."""
+
+    event_type: EventType = EventType.SOURCE_STATUS_CHANGED
+    data: dict[str, Any]
+
+
 class UnknownEvent(WebSocketEvent):
     """Unknown event type - data structure not recognized."""
 
@@ -280,6 +287,10 @@ def identify_event_type(data: Any) -> EventType | None:
         return None
 
     if isinstance(data, dict):
+        # Explicitly typed event payload from newer UMA versions.
+        if data.get("event") == EventType.SOURCE_STATUS_CHANGED:
+            return EventType.SOURCE_STATUS_CHANGED
+
         # System update: has 'hostname' and cpu-related fields
         if "hostname" in data and "cpu_usage_percent" in data:
             return EventType.SYSTEM_UPDATE
@@ -417,6 +428,9 @@ def parse_event(data: Any) -> WebSocketEvent:
 
         case EventType.FAN_CONTROL_UPDATE:
             return FanControlUpdateEvent(data=FanControlStatus.model_validate(data))
+
+        case EventType.SOURCE_STATUS_CHANGED:
+            return SourceStatusChangedEvent(data=data)
 
         case _:
             return UnknownEvent(data=data)  # type: ignore[unreachable]

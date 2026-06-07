@@ -780,6 +780,58 @@ class UnraidClient:
         data = await self._request("POST", f"/docker/{container_id}/unpause")
         return ActionResponse.model_validate(data)
 
+    async def remove_container(
+        self,
+        container_id: str,
+        *,
+        remove_image: bool = False,
+        confirm: bool = True,
+    ) -> ActionResponse:
+        """
+        Remove a container.
+
+        Args:
+            container_id: Container identifier
+            remove_image: Whether to remove the associated image as well
+            confirm: Confirmation flag required by the API
+
+        Returns:
+            Success response
+
+        """
+        data = await self._request(
+            "POST",
+            f"/docker/{container_id}/remove",
+            json={"confirm": confirm, "remove_image": remove_image},
+        )
+        return ActionResponse.model_validate(data)
+
+    async def set_container_autostart(
+        self,
+        container_id: str,
+        enabled: bool,
+        *,
+        confirm: bool = True,
+    ) -> ActionResponse:
+        """
+        Enable or disable container autostart.
+
+        Args:
+            container_id: Container identifier
+            enabled: True to enable autostart, False to disable
+            confirm: Confirmation flag required by the API
+
+        Returns:
+            Success response
+
+        """
+        data = await self._request(
+            "POST",
+            f"/docker/{container_id}/autostart",
+            json={"enabled": enabled, "confirm": confirm},
+        )
+        return ActionResponse.model_validate(data)
+
     # VM endpoints
 
     async def list_vms(self) -> list[VMInfo]:
@@ -912,6 +964,43 @@ class UnraidClient:
 
         """
         data = await self._request("POST", f"/vm/{vm_id}/force-stop")
+        return ActionResponse.model_validate(data)
+
+    async def reset_vm(self, vm_id: str, *, confirm: bool = True) -> ActionResponse:
+        """
+        Force reset a VM.
+
+        Args:
+            vm_id: VM identifier
+            confirm: Confirmation flag required by the API
+
+        Returns:
+            Success response
+
+        """
+        data = await self._request(
+            "POST",
+            f"/vm/{vm_id}/reset",
+            json={"confirm": confirm},
+        )
+        return ActionResponse.model_validate(data)
+
+    async def clear_array_disk_stats(self, *, confirm: bool = True) -> ActionResponse:
+        """
+        Clear array disk statistics.
+
+        Args:
+            confirm: Confirmation flag required by the API
+
+        Returns:
+            Success response
+
+        """
+        data = await self._request(
+            "POST",
+            "/array/clear-disk-stats",
+            json={"confirm": confirm},
+        )
         return ActionResponse.model_validate(data)
 
     # Share endpoints

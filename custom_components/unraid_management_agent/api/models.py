@@ -820,6 +820,7 @@ class ContainerInfo(BaseModel):
     )
 
     # Configuration
+    autostart: bool | None = Field(None, description="Container autostart enabled")
     restart_policy: str | None = Field(None, description="Restart policy")
     restart_count: CoercedInt = Field(None, description="Container restart count")
     update_status: str | None = Field(None, description="Container update status")

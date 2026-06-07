@@ -279,6 +279,9 @@
       "container": {
         "name": "Container {name}"
       },
+      "container_autostart": {
+        "name": "Container {name} Autostart"
+      },
       "vm": {
         "name": "VM {name}"
       },
@@ -315,6 +318,9 @@
       "array_stop": {
         "name": "Stop Array"
       },
+      "array_clear_disk_stats": {
+        "name": "Clear Array Disk Stats"
+      },
       "parity_check_start": {
         "name": "Start Parity Check"
       },
@@ -345,6 +351,9 @@
       "vm_resume": {
         "name": "Resume {vm_name}"
       },
+      "vm_reset_button": {
+        "name": "Reset {vm_name}"
+      },
       "user_script": {
         "name": "User Script {script_name}"
       },
@@ -357,6 +366,75 @@
     }
   },
   "exceptions": {
+    "no_config_entries": {
+      "message": "No Unraid Management Agent entries configured"
+    },
+    "container_start_failed": {
+      "message": "Failed to start container {container_id}"
+    },
+    "container_stop_failed": {
+      "message": "Failed to stop container {container_id}"
+    },
+    "container_restart_failed": {
+      "message": "Failed to restart container {container_id}"
+    },
+    "container_pause_failed": {
+      "message": "Failed to pause container {container_id}"
+    },
+    "container_resume_failed": {
+      "message": "Failed to resume container {container_id}"
+    },
+    "container_remove_failed": {
+      "message": "Failed to remove container {container_id}"
+    },
+    "container_set_autostart_failed": {
+      "message": "Failed to update autostart for container {container_id}"
+    },
+    "vm_start_failed": {
+      "message": "Failed to start VM {vm_id}"
+    },
+    "vm_stop_failed": {
+      "message": "Failed to stop VM {vm_id}"
+    },
+    "vm_restart_failed": {
+      "message": "Failed to restart VM {vm_id}"
+    },
+    "vm_pause_failed": {
+      "message": "Failed to pause VM {vm_id}"
+    },
+    "vm_resume_failed": {
+      "message": "Failed to resume VM {vm_id}"
+    },
+    "vm_hibernate_failed": {
+      "message": "Failed to hibernate VM {vm_id}"
+    },
+    "vm_force_stop_failed": {
+      "message": "Failed to force stop VM {vm_id}"
+    },
+    "vm_reset_failed": {
+      "message": "Failed to reset VM {vm_id}"
+    },
+    "array_start_failed": {
+      "message": "Failed to start array"
+    },
+    "array_stop_failed": {
+      "message": "Failed to stop array"
+    },
+    "array_clear_disk_stats_failed": {
+      "message": "Failed to clear array disk stats"
+    },
+    "parity_check_start_failed": {
+      "message": "Failed to start parity check"
+    },
+    "parity_check_stop_failed": {
+      "message": "Failed to stop parity check"
+    },
+    "parity_check_pause_failed": {
+      "message": "Failed to pause parity check"
+    },
+    "parity_check_resume_failed": {
+      "message": "Failed to resume parity check"
+    },
     "button_error": {
       "message": "Failed to execute button action: {key}"
     },
@@ -368,6 +446,12 @@
     },
     "container_stop_error": {
       "message": "Failed to stop container: {name}"
+    },
+    "container_autostart_enable_error": {
+      "message": "Failed to enable autostart for container: {name}"
+    },
+    "container_autostart_disable_error": {
+      "message": "Failed to disable autostart for container: {name}"
     },
     "vm_start_error": {
       "message": "Failed to start VM: {name}"
@@ -389,6 +473,9 @@
     },
     "vm_resume_error": {
       "message": "Failed to resume VM: {vm_name}"
+    },
+    "vm_reset_error": {
+      "message": "Failed to reset VM: {vm_name}"
     },
     "disk_spin_up_error": {
       "message": "Failed to spin up disk: {disk_name}"
@@ -448,6 +535,34 @@
         "container_id": {
           "name": "Container ID",
           "description": "The ID or name of the container to resume"
+        }
+      }
+    },
+    "container_remove": {
+      "name": "Remove Container",
+      "description": "Remove a Docker container",
+      "fields": {
+        "container_id": {
+          "name": "Container ID",
+          "description": "The ID or name of the container to remove"
+        },
+        "remove_image": {
+          "name": "Remove Image",
+          "description": "Also remove the container image"
+        }
+      }
+    },
+    "container_set_autostart": {
+      "name": "Set Container Autostart",
+      "description": "Enable or disable autostart for a Docker container",
+      "fields": {
+        "container_id": {
+          "name": "Container ID",
+          "description": "The ID or name of the container to configure"
+        },
+        "enabled": {
+          "name": "Enabled",
+          "description": "Whether container autostart should be enabled"
         }
       }
     },
@@ -521,6 +636,16 @@
         }
       }
     },
+    "vm_reset": {
+      "name": "Reset VM",
+      "description": "Force reset a virtual machine",
+      "fields": {
+        "vm_id": {
+          "name": "VM ID",
+          "description": "The ID or name of the VM to reset"
+        }
+      }
+    },
     "array_start": {
       "name": "Start Array",
       "description": "Start the Unraid array"
@@ -528,6 +653,10 @@
     "array_stop": {
       "name": "Stop Array",
       "description": "Stop the Unraid array"
+    },
+    "array_clear_disk_stats": {
+      "name": "Clear Array Disk Stats",
+      "description": "Clear array disk read/write statistics"
     },
     "parity_check_start": {
       "name": "Start Parity Check",

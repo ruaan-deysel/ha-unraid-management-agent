@@ -55,6 +55,7 @@ class EventType(StrEnum):
     COLLECTOR_STATE_CHANGE = "collector_state_change"
     NOTIFICATIONS_RESPONSE = "notifications_response"
     FAN_CONTROL_UPDATE = "fan_control_update"
+    SOURCE_STATUS_CHANGED = "source_status_changed"
 
 
 class ArrayState(StrEnum):

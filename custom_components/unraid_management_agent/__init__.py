@@ -32,6 +32,8 @@ from .coordinator import (
 # Service field constants
 ATTR_CONTAINER_ID: Final = "container_id"
 ATTR_VM_ID: Final = "vm_id"
+ATTR_ENABLED: Final = "enabled"
+ATTR_REMOVE_IMAGE: Final = "remove_image"
 
 # Service schemas
 SERVICE_CONTAINER_SCHEMA = vol.Schema(
@@ -46,9 +48,25 @@ SERVICE_VM_SCHEMA = vol.Schema(
     }
 )
 
+SERVICE_CONTAINER_AUTOSTART_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_CONTAINER_ID): cv.string,
+        vol.Required(ATTR_ENABLED): cv.boolean,
+    }
+)
+
+SERVICE_CONTAINER_REMOVE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_CONTAINER_ID): cv.string,
+        vol.Optional(ATTR_REMOVE_IMAGE, default=False): cv.boolean,
+    }
+)
+
 # Re-export for backwards compatibility and for tests to patch
 __all__ = [
     "ATTR_CONTAINER_ID",
+    "ATTR_ENABLED",
+    "ATTR_REMOVE_IMAGE",
     "ATTR_VM_ID",
     "UnraidClient",
     "UnraidConfigEntry",
@@ -348,23 +366,15 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         return entry.runtime_data.coordinator
 
     async def _async_service_call(
-        call: ServiceCall,
-        api_method: Callable[..., Coroutine[Any, Any, Any]],
+        coordinator: UnraidDataUpdateCoordinator,
+        api_call: Callable[[], Coroutine[Any, Any, Any]],
         translation_key: str,
         *,
-        id_attr: str | None = None,
-        id_placeholder: str | None = None,
+        placeholders: dict[str, str] | None = None,
     ) -> None:
         """Execute a service action with standard error handling."""
-        coordinator = _get_coordinator(call)
-        args: tuple[str, ...] = ()
-        placeholders: dict[str, str] | None = None
-        if id_attr and id_placeholder:
-            resource_id: str = call.data[id_attr]
-            args = (resource_id,)
-            placeholders = {id_placeholder: resource_id}
         try:
-            await api_method(*args)
+            await api_call()
             await coordinator.async_request_refresh()
         except Exception as err:
             _LOGGER.error("Service %s failed: %s", translation_key, err)
@@ -391,11 +401,17 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         ("vm_resume", "resume_vm", "vm_resume_failed"),
         ("vm_hibernate", "hibernate_vm", "vm_hibernate_failed"),
         ("vm_force_stop", "force_stop_vm", "vm_force_stop_failed"),
+        ("vm_reset", "reset_vm", "vm_reset_failed"),
     ]
 
     no_arg_services: list[tuple[str, str, str]] = [
         ("array_start", "start_array", "array_start_failed"),
         ("array_stop", "stop_array", "array_stop_failed"),
+        (
+            "array_clear_disk_stats",
+            "clear_array_disk_stats",
+            "array_clear_disk_stats_failed",
+        ),
         ("parity_check_start", "start_parity_check", "parity_check_start_failed"),
         ("parity_check_stop", "stop_parity_check", "parity_check_stop_failed"),
         ("parity_check_pause", "pause_parity_check", "parity_check_pause_failed"),
@@ -412,12 +428,21 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
         async def handler(call: ServiceCall) -> None:
             coordinator = _get_coordinator(call)
+            args: tuple[Any, ...] = ()
+            placeholders: dict[str, str] | None = None
+            if id_attr and id_placeholder:
+                resource_id: str = call.data[id_attr]
+                args = (resource_id,)
+                placeholders = {id_placeholder: resource_id}
+
+            async def _api_call() -> Any:
+                return await getattr(coordinator.client, method_name)(*args)
+
             await _async_service_call(
-                call,
-                getattr(coordinator.client, method_name),
+                coordinator,
+                _api_call,
                 translation_key,
-                id_attr=id_attr,
-                id_placeholder=id_placeholder,
+                placeholders=placeholders,
             )
 
         return handler
@@ -448,5 +473,53 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             _make_handler(method, tkey),
         )
 
-    total = len(container_services) + len(vm_services) + len(no_arg_services)
+    async def _handle_container_remove(call: ServiceCall) -> None:
+        coordinator = _get_coordinator(call)
+        container_id: str = call.data[ATTR_CONTAINER_ID]
+        remove_image: bool = call.data[ATTR_REMOVE_IMAGE]
+
+        async def _api_call() -> Any:
+            return await coordinator.client.remove_container(
+                container_id,
+                remove_image=remove_image,
+            )
+
+        await _async_service_call(
+            coordinator,
+            _api_call,
+            "container_remove_failed",
+            placeholders={"container_id": container_id},
+        )
+
+    async def _handle_container_set_autostart(call: ServiceCall) -> None:
+        coordinator = _get_coordinator(call)
+        container_id: str = call.data[ATTR_CONTAINER_ID]
+        enabled: bool = call.data[ATTR_ENABLED]
+
+        async def _api_call() -> Any:
+            return await coordinator.client.set_container_autostart(
+                container_id, enabled
+            )
+
+        await _async_service_call(
+            coordinator,
+            _api_call,
+            "container_set_autostart_failed",
+            placeholders={"container_id": container_id},
+        )
+
+    hass.services.async_register(
+        DOMAIN,
+        "container_remove",
+        _handle_container_remove,
+        schema=SERVICE_CONTAINER_REMOVE_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "container_set_autostart",
+        _handle_container_set_autostart,
+        schema=SERVICE_CONTAINER_AUTOSTART_SCHEMA,
+    )
+
+    total = len(container_services) + len(vm_services) + len(no_arg_services) + 2
     _LOGGER.info("Registered %d services for Unraid Management Agent", total)

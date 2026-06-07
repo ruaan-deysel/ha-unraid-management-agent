@@ -251,6 +251,13 @@
           "off": "mdi:docker"
         }
       },
+      "container_autostart": {
+        "default": "mdi:rocket-launch",
+        "state": {
+          "on": "mdi:rocket-launch",
+          "off": "mdi:rocket-outline"
+        }
+      },
       "vm": {
         "default": "mdi:desktop-tower",
         "state": {
@@ -272,6 +279,9 @@
       },
       "array_stop": {
         "default": "mdi:harddisk"
+      },
+      "array_clear_disk_stats": {
+        "default": "mdi:database-remove"
       },
       "parity_check_start": {
         "default": "mdi:shield-check"
@@ -311,6 +321,9 @@
       },
       "vm_resume": {
         "default": "mdi:play"
+      },
+      "vm_reset_button": {
+        "default": "mdi:backup-restore"
       }
     }
   },
@@ -320,6 +333,8 @@
     "container_restart": "mdi:restart",
     "container_pause": "mdi:pause",
     "container_resume": "mdi:play",
+    "container_remove": "mdi:delete",
+    "container_set_autostart": "mdi:rocket-launch",
     "vm_start": "mdi:play",
     "vm_stop": "mdi:stop",
     "vm_restart": "mdi:restart",
@@ -327,8 +342,10 @@
     "vm_resume": "mdi:play",
     "vm_hibernate": "mdi:power-sleep",
     "vm_force_stop": "mdi:close-circle",
+    "vm_reset": "mdi:backup-restore",
     "array_start": "mdi:play",
     "array_stop": "mdi:stop",
+    "array_clear_disk_stats": "mdi:database-remove",
     "parity_check_start": "mdi:play-circle",
     "parity_check_stop": "mdi:stop-circle",
     "parity_check_pause": "mdi:pause-circle",

@@ -427,7 +427,11 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
 
             # Merge notification overview into notifications response
             if isinstance(notifications, list):
-                notifications = NotificationsResponse(notifications=notifications)
+                notifications = NotificationsResponse(
+                    overview=None,
+                    notifications=notifications,
+                    timestamp=None,
+                )
             if notification_overview is not None:
                 if notifications is None:
                     notifications = NotificationsResponse(
@@ -588,6 +592,11 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
             self.data.collectors = event.data
         elif event.event_type == EventType.FAN_CONTROL_UPDATE:
             self.data.fan_control = event.data
+        elif event.event_type == EventType.SOURCE_STATUS_CHANGED:
+            # Source status changes can affect unassigned devices and remote shares.
+            # Schedule a full refresh so all related entities stay in sync.
+            self.hass.async_create_task(self.async_request_refresh())
+            return
 
         # Notify listeners of data update without resetting the polling timer.
         # Using async_set_updated_data would cancel and reschedule the poll

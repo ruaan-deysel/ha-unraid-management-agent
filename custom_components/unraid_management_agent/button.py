@@ -74,6 +74,14 @@ async def _async_resume_parity_check(coordinator: UnraidDataUpdateCoordinator) -
     await coordinator.async_request_refresh()
 
 
+async def _async_clear_array_disk_stats(
+    coordinator: UnraidDataUpdateCoordinator,
+) -> None:
+    """Clear array disk statistics."""
+    await coordinator.client.clear_array_disk_stats()
+    await coordinator.async_request_refresh()
+
+
 async def _async_archive_all_notifications(
     coordinator: UnraidDataUpdateCoordinator,
 ) -> None:
@@ -114,6 +122,13 @@ BUTTON_DESCRIPTIONS: tuple[UnraidButtonEntityDescription, ...] = (
         translation_key="array_stop",
         icon="mdi:harddisk",
         press_fn=_async_stop_array,
+    ),
+    UnraidButtonEntityDescription(
+        key="array_clear_disk_stats",
+        translation_key="array_clear_disk_stats",
+        icon="mdi:database-remove",
+        entity_category=EntityCategory.CONFIG,
+        press_fn=_async_clear_array_disk_stats,
     ),
     UnraidButtonEntityDescription(
         key="parity_check_start",
@@ -215,6 +230,9 @@ async def async_setup_entry(
                 )
                 entities.append(
                     UnraidVMResumeButton(coordinator, vm_identifier, vm_name)
+                )
+                entities.append(
+                    UnraidVMResetButton(coordinator, vm_identifier, vm_name)
                 )
 
     _LOGGER.debug("Adding %d Unraid button entities", len(entities))
@@ -494,5 +512,33 @@ class UnraidVMResumeButton(_UnraidVMButtonBase):
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="vm_resume_error",
+                translation_placeholders={"vm_name": self._vm_name},
+            ) from exc
+
+
+class UnraidVMResetButton(_UnraidVMButtonBase):
+    """VM reset button."""
+
+    _attr_icon = "mdi:backup-restore"
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        vm_identifier: str,
+        vm_name: str,
+    ) -> None:
+        """Initialize the VM reset button."""
+        super().__init__(coordinator, vm_identifier, vm_name, "reset")
+        self._attr_translation_key = "vm_reset_button"
+        self._attr_translation_placeholders = {"vm_name": vm_name}
+
+    async def async_press(self) -> None:
+        """Reset the VM."""
+        try:
+            await self.coordinator.client.reset_vm(self._vm_identifier)
+        except Exception as exc:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="vm_reset_error",
                 translation_placeholders={"vm_name": self._vm_name},
             ) from exc

@@ -61,6 +61,44 @@ container_resume:
       selector:
         text:
 
+container_remove:
+  name: Remove Container
+  description: Remove a Docker container
+  fields:
+    container_id:
+      name: Container ID
+      description: The ID or name of the container to remove
+      required: true
+      example: "nginx"
+      selector:
+        text:
+    remove_image:
+      name: Remove Image
+      description: Also remove the container image
+      required: false
+      example: false
+      selector:
+        boolean:
+
+container_set_autostart:
+  name: Set Container Autostart
+  description: Enable or disable autostart for a Docker container
+  fields:
+    container_id:
+      name: Container ID
+      description: The ID or name of the container to configure
+      required: true
+      example: "nginx"
+      selector:
+        text:
+    enabled:
+      name: Enabled
+      description: Whether container autostart should be enabled
+      required: true
+      example: true
+      selector:
+        boolean:
+
 # Virtual Machine Services
 vm_start:
   name: Start VM
@@ -146,6 +184,18 @@ vm_force_stop:
       selector:
         text:
 
+vm_reset:
+  name: Reset VM
+  description: Force reset a virtual machine
+  fields:
+    vm_id:
+      name: VM ID
+      description: The ID or name of the VM to reset
+      required: true
+      example: "Ubuntu"
+      selector:
+        text:
+
 # Array Control Services
 array_start:
   name: Start Array
@@ -154,6 +204,10 @@ array_start:
 array_stop:
   name: Stop Array
   description: Stop the Unraid array
+
+array_clear_disk_stats:
+  name: Clear Array Disk Stats
+  description: Clear array disk read/write statistics
 
 # Parity Check Services
 parity_check_start:
