@@ -800,8 +800,15 @@ class ContainerInfo(BaseModel):
         None, description="Network mode (bridge, host, etc.)"
     )
     ip_address: str | None = Field(None, description="Container IP address")
+    mac_address: str | None = Field(None, description="Container MAC address")
     network_rx_bytes: CoercedInt = Field(None, description="Network bytes received")
     network_tx_bytes: CoercedInt = Field(None, description="Network bytes transmitted")
+    network_rx_bytes_per_sec: CoercedFloat = Field(
+        None, description="Receive throughput in bytes/second"
+    )
+    network_tx_bytes_per_sec: CoercedFloat = Field(
+        None, description="Transmit throughput in bytes/second"
+    )
 
     # Port and volume mappings
     ports: list[PortMapping] | None = Field(None, description="Port mappings")
@@ -814,6 +821,14 @@ class ContainerInfo(BaseModel):
 
     # Configuration
     restart_policy: str | None = Field(None, description="Restart policy")
+    restart_count: CoercedInt = Field(None, description="Container restart count")
+    update_status: str | None = Field(None, description="Container update status")
+    update_available: bool | None = Field(
+        None, description="Whether a container update is available"
+    )
+    update_checked: str | None = Field(
+        None, description="Timestamp of the last update check"
+    )
 
     timestamp: str | None = Field(None, description="Data collection timestamp")
 
@@ -1337,14 +1352,54 @@ class UnassignedDevice(BaseModel):
 class RemoteShare(BaseModel):
     """Remote share information."""
 
-    name: str | None = Field(None, description="Share name")
-    protocol: str | None = Field(None, description="Protocol (SMB, NFS)")
-    server: str | None = Field(None, description="Remote server")
-    mounted: bool | None = Field(None, description="Whether mounted")
+    # Fields as returned by the UMA API
+    source: str | None = Field(None, description="Source path, e.g. //server/share")
+    type: str | None = Field(None, description="Protocol type (smb, nfs, iso)")
+    status: str | None = Field(
+        None, description="Mount status string (mounted/unmounted)"
+    )
     mount_point: str | None = Field(None, description="Mount point path")
+    size_bytes: int | None = Field(None, description="Total size in bytes")
+    used_bytes: int | None = Field(None, description="Used bytes")
+    free_bytes: int | None = Field(None, description="Free bytes")
+    usage_percent: float | None = Field(None, description="Usage percentage 0-100")
+    auto_mount: bool | None = Field(
+        None, description="Whether configured for auto-mount"
+    )
+    read_only: bool | None = Field(None, description="Whether mounted read-only")
+    smb_server: str | None = Field(None, description="SMB server address")
+    smb_share: str | None = Field(None, description="SMB share name")
+    # Derived fields — populated by model_validator from the real API fields above
+    name: str | None = Field(None, description="Identifier derived from source")
+    protocol: str | None = Field(None, description="Protocol derived from type")
+    server: str | None = Field(None, description="Server derived from smb_server")
+    mounted: bool | None = Field(
+        None, description="Whether mounted (derived from status)"
+    )
     timestamp: str | None = Field(None, description="Data collection timestamp")
 
     model_config = {"frozen": True, "extra": "allow"}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _derive_fields(cls, data: Any) -> Any:
+        """Populate legacy/derived fields from the real API field names."""
+        if not isinstance(data, dict):
+            return data
+        data = dict(data)
+        # name ← source (used as entity identifier and as API source argument)
+        if not data.get("name") and data.get("source"):
+            data["name"] = data["source"]
+        # mounted ← status == "mounted"
+        if data.get("mounted") is None and data.get("status") is not None:
+            data["mounted"] = data["status"] == "mounted"
+        # protocol ← type
+        if not data.get("protocol") and data.get("type"):
+            data["protocol"] = data["type"]
+        # server ← smb_server
+        if not data.get("server") and data.get("smb_server"):
+            data["server"] = data["smb_server"]
+        return data
 
 
 class UnassignedDevicesResponse(BaseModel):
@@ -1713,6 +1768,12 @@ class ZFSPool(BaseModel):
     used_bytes: CoercedInt = Field(None, description="Used space in bytes")
     free_bytes: CoercedInt = Field(None, description="Free space in bytes")
     health: str | None = Field(None, description="Pool health")
+    corrupted_files: CoercedInt = Field(
+        None, description="Number of corrupted files reported by zpool status"
+    )
+    is_boot_pool: bool | None = Field(
+        None, description="Whether this pool is the Unraid boot pool"
+    )
     timestamp: str | None = Field(None, description="Data collection timestamp")
 
     model_config = {"frozen": True, "extra": "allow"}
@@ -1771,6 +1832,9 @@ class ZFSArcStats(BaseModel):
     )
     size_bytes: int | None = Field(None, description="ARC size in bytes")
     target_size_bytes: int | None = Field(None, description="ARC target size in bytes")
+    configured_max_bytes: int | None = Field(
+        None, description="Configured ARC max size in bytes (0 means auto)"
+    )
     hits: int | None = Field(None, description="ARC hits")
     misses: int | None = Field(None, description="ARC misses")
     timestamp: str | None = Field(None, description="Data collection timestamp")
@@ -2072,6 +2136,20 @@ class MoverSettings(BaseModel):
     cache_floor_kb: int | None = Field(
         None, description="Minimum free space to leave on cache (KB)"
     )
+    last_run_start: str | None = Field(None, description="Mover last run start time")
+    last_run_finish: str | None = Field(None, description="Mover last run end time")
+    last_run_duration_seconds: CoercedInt = Field(
+        None, description="Mover last run duration in seconds"
+    )
+    last_run_files_moved: CoercedInt = Field(
+        None, description="Number of files moved in last run"
+    )
+    last_run_bytes_moved: CoercedInt = Field(
+        None, description="Bytes moved in last run"
+    )
+    current_throughput_mbs: CoercedFloat = Field(
+        None, description="Current mover throughput in MB/s"
+    )
     timestamp: str | None = Field(None, description="Data collection timestamp")
 
     model_config = {"frozen": True, "extra": "allow"}
@@ -2098,7 +2176,14 @@ class UpdateStatus(BaseModel):
     latest_version: str | None = Field(
         None, description="The version available for update"
     )
-    os_update_available: bool | None = Field(None, description="OS update available")
+    os_update_available: bool | None = Field(
+        None,
+        description="OS update available",
+        validation_alias=AliasChoices("os_update_available", "update_available"),
+    )
+    status: str | None = Field(
+        None, description="OS update status (up_to_date, update_available, unknown)"
+    )
     total_plugins: int | None = Field(None, description="Total installed plugins")
     plugin_updates_count: int | None = Field(
         None, description="Number of plugins with updates"
@@ -2168,6 +2253,54 @@ class FlashDriveInfo(BaseModel):
         if percent is None:
             return True
         return percent < 90.0
+
+
+class SubsystemSelfTestStatus(BaseModel):
+    """Self-test status for a single subsystem."""
+
+    subsystem: str | None = Field(None, description="Subsystem name")
+    state: str | None = Field(None, description="Subsystem state")
+    last_checked: str | None = Field(None, description="Last check timestamp")
+    source_status: str | None = Field(
+        None, description="Optional source status when subsystem is degraded"
+    )
+
+    model_config = {"frozen": True, "extra": "allow"}
+
+
+class DiagnosticsSelfTestResponse(BaseModel):
+    """Diagnostics self-test response from /diagnostics/self-test."""
+
+    unraid_version: str | None = Field(None, description="Unraid version")
+    overall_state: str | None = Field(None, description="Overall self-test state")
+    subsystems: list[SubsystemSelfTestStatus] | None = Field(
+        None, description="Per-subsystem self-test statuses"
+    )
+    timestamp: str | None = Field(None, description="Self-test timestamp")
+
+    model_config = {"frozen": True, "extra": "allow"}
+
+    @property
+    def degraded_subsystem_count(self) -> int:
+        """Return number of subsystems that are not healthy."""
+        if not self.subsystems:
+            return 0
+        return sum(1 for s in self.subsystems if (s.state or "").lower() != "healthy")
+
+
+class DockerPortConflict(BaseModel):
+    """A Docker port conflict entry from /docker/port-conflicts."""
+
+    container_name: str | None = Field(None, description="Container name")
+    conflicting_container: str | None = Field(
+        None, description="Container currently holding the conflicting port"
+    )
+    host_ip: str | None = Field(None, description="Host bind IP")
+    host_port: CoercedInt = Field(None, description="Host port")
+    container_port: CoercedInt = Field(None, description="Container port")
+    protocol: str | None = Field(None, description="Protocol (tcp/udp)")
+
+    model_config = {"frozen": True, "extra": "allow"}
 
 
 # Issue #32: Plugin list

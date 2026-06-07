@@ -25,6 +25,7 @@ from .const import (
     mock_network_interfaces,
     mock_shares,
     mock_system_info,
+    mock_unassigned_info,
     mock_ups_info,
     mock_vms,
     mock_zfs_pools,
@@ -91,7 +92,7 @@ def mock_async_unraid_client() -> Generator[MagicMock]:
         client.get_vm_settings = AsyncMock(return_value=None)
         client.get_registration_info = AsyncMock(return_value=None)
         client.get_network_services = AsyncMock(return_value=None)
-        client.get_unassigned_info = AsyncMock(return_value=None)
+        client.get_unassigned_info = AsyncMock(return_value=mock_unassigned_info())
         client.get_fan_status = AsyncMock(return_value=None)
         client.check_all_container_updates = AsyncMock(return_value=None)
         client.mount_remote_share = AsyncMock(return_value=None)

@@ -16,6 +16,7 @@ from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .api import UnraidClient, UnraidConnectionError
 from .const import (
@@ -86,6 +87,11 @@ class UnraidConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
     MINOR_VERSION = 1
 
+    def __init__(self) -> None:
+        """Initialize config flow."""
+        self._discovered_host: str = ""
+        self._discovered_port: int = DEFAULT_PORT
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -114,11 +120,42 @@ class UnraidConfigFlow(ConfigFlow, domain=DOMAIN):
                     data=user_input,
                 )
 
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_HOST, default=self._discovered_host or vol.UNDEFINED
+                ): cv.string,
+                vol.Required(
+                    CONF_PORT,
+                    default=self._discovered_port
+                    if self._discovered_host
+                    else DEFAULT_PORT,
+                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
+                vol.Optional(
+                    CONF_ENABLE_WEBSOCKET, default=DEFAULT_ENABLE_WEBSOCKET
+                ): cv.boolean,
+            }
+        )
         return self.async_show_form(
             step_id="user",
-            data_schema=STEP_USER_DATA_SCHEMA,
+            data_schema=schema,
             errors=errors,
         )
+
+    async def async_step_zeroconf(
+        self, discovery_info: ZeroconfServiceInfo
+    ) -> ConfigFlowResult:
+        """Handle zeroconf discovery."""
+        host = discovery_info.host
+        port = discovery_info.port or DEFAULT_PORT
+
+        await self.async_set_unique_id(f"{host}:{port}")
+        self._abort_if_unique_id_configured(updates={CONF_HOST: host, CONF_PORT: port})
+
+        self._discovered_host = host
+        self._discovered_port = port
+        self.context["title_placeholders"] = {"host": host}
+        return await self.async_step_user()
 
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None

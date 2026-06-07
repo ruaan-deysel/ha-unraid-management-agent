@@ -320,6 +320,55 @@ def mock_collectors_status(*, all_enabled: bool = True) -> MagicMock:
     return collectors_status
 
 
+def mock_remote_shares() -> list[MagicMock]:
+    """Return mock RemoteShare objects matching the real API field layout."""
+    share1 = MagicMock()
+    share1.source = "//192.168.20.65/unraid-test"
+    share1.name = "//192.168.20.65/unraid-test"
+    share1.type = "smb"
+    share1.protocol = "smb"
+    share1.status = "mounted"
+    share1.mounted = True
+    share1.mount_point = "/mnt/remotes/192.168.20.65_unraid-test"
+    share1.size_bytes = 3296722944
+    share1.used_bytes = 2713268224
+    share1.free_bytes = 583454720
+    share1.usage_percent = 82.3
+    share1.auto_mount = False
+    share1.read_only = False
+    share1.smb_server = "192.168.20.65"
+    share1.smb_share = "unraid-test"
+    share1.server = "192.168.20.65"
+
+    share2 = MagicMock()
+    share2.source = "//192.168.20.65/public"
+    share2.name = "//192.168.20.65/public"
+    share2.type = "smb"
+    share2.protocol = "smb"
+    share2.status = "mounted"
+    share2.mounted = True
+    share2.mount_point = "/mnt/remotes/192.168.20.65_public"
+    share2.size_bytes = 3296722944
+    share2.used_bytes = 2713268224
+    share2.free_bytes = 583454720
+    share2.usage_percent = 82.3
+    share2.auto_mount = False
+    share2.read_only = False
+    share2.smb_server = "192.168.20.65"
+    share2.smb_share = "public"
+    share2.server = "192.168.20.65"
+
+    return [share1, share2]
+
+
+def mock_unassigned_info() -> MagicMock:
+    """Return a mock UnassignedInfo response with remote shares."""
+    info = MagicMock()
+    info.remote_shares = mock_remote_shares()
+    info.devices = []
+    return info
+
+
 # Legacy dict format for backward compatibility with older tests
 MOCK_HEALTH_CHECK = {
     "status": "healthy",

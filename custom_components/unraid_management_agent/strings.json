@@ -30,7 +30,8 @@
     "abort": {
       "already_configured": "[%key:common::config_flow::abort::already_configured_device%]",
       "unique_id_mismatch": "The server at this address has a different unique ID. Create a new entry instead."
-    }
+    },
+    "flow_title": "{host}"
   },
   "options": {
     "step": {

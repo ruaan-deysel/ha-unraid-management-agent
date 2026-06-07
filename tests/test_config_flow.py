@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from ipaddress import ip_address
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from custom_components.unraid_management_agent.api import UnraidConnectionError
 from custom_components.unraid_management_agent.const import (
@@ -438,3 +440,80 @@ async def test_validate_input_missing_hostname(
     assert result2["title"] == "Unraid (unknown)"
     # Verify setup was called
     assert len(mock_setup_entry.mock_calls) == 1
+
+
+async def test_zeroconf_discovery_new_entry(
+    hass: HomeAssistant, mock_setup_entry: AsyncMock
+) -> None:
+    """Test that zeroconf discovery pre-fills the user form and creates an entry."""
+    discovery_info = ZeroconfServiceInfo(
+        ip_address=ip_address("192.168.1.100"),
+        ip_addresses=[ip_address("192.168.1.100")],
+        hostname="unraid-test.local.",
+        name="_unraid-mgmt-agent._tcp.local.",
+        port=8043,
+        type="_unraid-mgmt-agent._tcp.local.",
+        properties={"version": "2026.06.02", "path": "/api/v1"},
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_ZEROCONF},
+        data=discovery_info,
+    )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "user"
+
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.get_system_info = AsyncMock(return_value=mock_system_info())
+
+    with patch(
+        "custom_components.unraid_management_agent.config_flow.UnraidClient",
+        return_value=mock_client,
+    ):
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {CONF_HOST: "192.168.1.100", CONF_PORT: 8043},
+        )
+        await hass.async_block_till_done()
+
+    assert result2["type"] == FlowResultType.CREATE_ENTRY
+    assert result2["data"][CONF_HOST] == "192.168.1.100"
+    assert result2["data"][CONF_PORT] == 8043
+
+
+async def test_zeroconf_discovery_already_configured(
+    hass: HomeAssistant, mock_setup_entry: AsyncMock
+) -> None:
+    """Test that zeroconf discovery aborts when device is already configured."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Unraid (unraid-test)",
+        data={CONF_HOST: "192.168.1.100", CONF_PORT: 8043},
+        unique_id="192.168.1.100:8043",
+    )
+    entry.add_to_hass(hass)
+
+    discovery_info = ZeroconfServiceInfo(
+        ip_address=ip_address("192.168.1.100"),
+        ip_addresses=[ip_address("192.168.1.100")],
+        hostname="unraid-test.local.",
+        name="_unraid-mgmt-agent._tcp.local.",
+        port=8043,
+        type="_unraid-mgmt-agent._tcp.local.",
+        properties={},
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_ZEROCONF},
+        data=discovery_info,
+    )
+
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "already_configured"

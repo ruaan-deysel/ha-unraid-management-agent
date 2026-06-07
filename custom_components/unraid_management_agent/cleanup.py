@@ -50,6 +50,7 @@ _ALWAYS_VALID_KEYS: frozenset[str] = frozenset(
     [
         "zfs_available",  # binary_sensor - static, key starts with "zfs_"
         "zfs_arc_hit_ratio",  # sensor - static, key starts with "zfs_"
+        "zfs_arc_configured_max",  # sensor - static, key starts with "zfs_"
     ]
 )
 
@@ -101,6 +102,9 @@ def _build_valid_dynamic_entity_keys(data: UnraidData) -> set[str]:
         keys.add(f"container_{safe_sensor}_cpu")  # sensor
         keys.add(f"container_{safe_sensor}_memory")  # sensor
         keys.add(f"container_{safe_sensor}_memory_percent")  # sensor
+        keys.add(f"container_{safe_sensor}_restart_count")  # sensor
+        keys.add(f"container_{safe_sensor}_network_rx_rate")  # sensor
+        keys.add(f"container_{safe_sensor}_network_tx_rate")  # sensor
 
     # ── Virtual Machines ─────────────────────────────────────────────────────
     for vm in data.vms or []:
@@ -222,6 +226,7 @@ def _build_valid_dynamic_entity_keys(data: UnraidData) -> set[str]:
         if name:
             keys.add(f"zfs_{name}_usage")  # sensor
             keys.add(f"zfs_{name}_health")  # sensor
+            keys.add(f"zfs_{name}_corrupted_files")  # sensor
 
     # ── Remote shares ─────────────────────────────────────────────────────────
     for share in data.remote_shares or []:

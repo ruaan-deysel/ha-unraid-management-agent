@@ -88,7 +88,11 @@ rules:
     comment: No authentication required (local API without credentials)
   test-coverage:
     status: done
-    comment: The isolated pytest suite enforces a 95% coverage floor for the integration package, excluding the vendored api helper package
+    comment: >
+      pytest suite enforces an 85% coverage floor (currently 87%) for the integration package,
+      excluding the vendored api/models and api/client code. Config flow, coordinator, entities,
+      cleanup, repairs, and diagnostics are all covered. Remaining gaps are in fan-speed number
+      entities, event platform, and button edge cases.
 
   # Gold
   devices:
@@ -98,11 +102,16 @@ rules:
     status: done
     comment: diagnostics.py with redacted config and coordinator data
   discovery:
-    status: exempt
-    comment: Local push integration, manual setup appropriate
+    status: done
+    comment: >
+      Zeroconf/mDNS discovery via _unraid-mgmt-agent._tcp.local. (advertised by
+      the UMA agent since v2026.06.02). async_step_zeroconf in config_flow.py
+      pre-fills the user form with the discovered host/port.
   discovery-update-info:
-    status: exempt
-    comment: No discovery mechanism
+    status: done
+    comment: >
+      async_step_zeroconf calls _abort_if_unique_id_configured(updates={host, port})
+      which updates the existing entry and triggers reload when the agent's IP changes.
   docs-data-update:
     status: done
     comment: README documents initial load, websocket updates, and 30-second REST fallback polling

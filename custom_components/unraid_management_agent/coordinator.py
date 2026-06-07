@@ -22,8 +22,10 @@ from .api.models import (
     CollectorStatus,
     ContainerInfo,
     ContainerUpdatesResult,
+    DiagnosticsSelfTestResponse,
     DiskInfo,
     DiskSettings,
+    DockerPortConflict,
     DockerSettings,
     FanControlStatus,
     FlashDriveInfo,
@@ -99,6 +101,8 @@ class UnraidData:
     unassigned_devices: list[UnassignedDevice] | None = None
     remote_shares: list[RemoteShare] | None = None
     container_updates: ContainerUpdatesResult | None = None
+    diagnostics_self_test: DiagnosticsSelfTestResponse | None = None
+    docker_port_conflicts: list[DockerPortConflict] | None = None
 
 
 @dataclass
@@ -366,6 +370,16 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
                     self.client.get_unassigned_info,
                     suppress_404=True,
                 ),
+                self._fetch(
+                    "diagnostics self-test",
+                    self.client.get_diagnostics_self_test,
+                    suppress_404=True,
+                ),
+                self._fetch(
+                    "docker port conflicts",
+                    self.client.get_docker_port_conflicts,
+                    suppress_404=True,
+                ),
             )
 
             # Unpack results with proper types (gather loses individual type info)
@@ -399,6 +413,8 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
             registration: RegistrationInfo | None = results[27]
             network_services: NetworkServicesStatus | None = results[28]
             unassigned_info: UnassignedInfo | None = results[29]
+            diagnostics_self_test: DiagnosticsSelfTestResponse | None = results[30]
+            docker_port_conflicts: list[DockerPortConflict] = results[31] or []
 
             # Optionally fetch container updates (can be slow — user opt-in)
             container_updates: ContainerUpdatesResult | None = None
@@ -476,6 +492,8 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
                 if unassigned_info
                 else None,
                 container_updates=container_updates,
+                diagnostics_self_test=diagnostics_self_test,
+                docker_port_conflicts=docker_port_conflicts,
             )
 
             # Check for issues and create repair flows

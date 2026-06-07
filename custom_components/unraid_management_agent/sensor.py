@@ -2516,6 +2516,59 @@ class UnraidZFSPoolHealthSensor(UnraidZFSPoolSensorBase):
         return attrs
 
 
+class UnraidZFSPoolCorruptedFilesSensor(UnraidZFSPoolSensorBase):
+    """ZFS pool corrupted files sensor."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:file-alert"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        entry: UnraidConfigEntry,
+        pool_name: str,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry, pool_name, "corrupted_files")
+        self._attr_name = f"{pool_name} Corrupted Files"
+
+    @property
+    def native_value(self) -> int | None:
+        """Return corrupted file count for this pool."""
+        pool = self._get_pool()
+        if not pool:
+            return None
+        return getattr(pool, "corrupted_files", None)
+
+
+class UnraidZFSArcConfiguredMaxSensor(UnraidBaseEntity, SensorEntity):
+    """Configured ARC max sensor."""
+
+    _attr_native_unit_of_measurement = UnitOfInformation.BYTES
+    _attr_device_class = SensorDeviceClass.DATA_SIZE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_unit_of_measurement = UnitOfInformation.GIBIBYTES
+    _attr_icon = "mdi:memory"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, "zfs_arc_configured_max")
+        self._attr_name = "ZFS ARC Configured Max"
+
+    @property
+    def native_value(self) -> int | None:
+        """Return configured ARC max in bytes."""
+        data = self.coordinator.data
+        if not data or not data.zfs_arc:
+            return None
+        return getattr(data.zfs_arc, "configured_max_bytes", None)
+
+
 # =============================================================================
 # GPU Metric Sensors
 # =============================================================================
@@ -3071,6 +3124,75 @@ class UnraidContainerMemoryPercentSensor(UnraidContainerSensorBase):
         return None
 
 
+class UnraidContainerRestartCountSensor(UnraidContainerSensorBase):
+    """Container restart count sensor."""
+
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_icon = "mdi:restart"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        container_name: str,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, container_name, "restart_count")
+        self._attr_name = f"{container_name} Restart Count"
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the container restart count."""
+        container = self._find_container()
+        if not container:
+            return None
+        return getattr(container, "restart_count", None)
+
+
+class UnraidContainerNetworkRateSensor(UnraidContainerSensorBase):
+    """Container network throughput sensor."""
+
+    _attr_native_unit_of_measurement = UnitOfDataRate.BYTES_PER_SECOND
+    _attr_device_class = SensorDeviceClass.DATA_RATE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
+    _attr_suggested_display_precision = 1
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        container_name: str,
+        direction: str,
+    ) -> None:
+        """Initialize the sensor."""
+        self._direction = direction
+        super().__init__(coordinator, container_name, f"network_{direction}_rate")
+        if direction == "rx":
+            self._attr_name = f"{container_name} Network RX"
+            self._attr_icon = "mdi:download-network"
+        else:
+            self._attr_name = f"{container_name} Network TX"
+            self._attr_icon = "mdi:upload-network"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return throughput in bytes/second."""
+        container = self._find_container()
+        if not container:
+            return None
+        field = (
+            "network_rx_bytes_per_sec"
+            if self._direction == "rx"
+            else "network_tx_bytes_per_sec"
+        )
+        value = getattr(container, field, None)
+        if value is None:
+            return None
+        return round(float(value), 1)
+
+
 # =============================================================================
 # Docker Aggregate Sensors
 # =============================================================================
@@ -3193,6 +3315,89 @@ NOTIFICATION_BREAKDOWN_SENSOR_DESCRIPTIONS: tuple[
         ),
     ),
 )
+
+
+class UnraidDiagnosticsDegradedSubsystemsSensor(UnraidBaseEntity, SensorEntity):
+    """Diagnostics sensor for degraded subsystem count."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:stethoscope"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, "diagnostics_degraded_subsystems")
+        self._attr_name = "Diagnostics Degraded Subsystems"
+
+    @property
+    def native_value(self) -> int | None:
+        """Return degraded subsystem count from diagnostics self-test."""
+        data = self.coordinator.data
+        if not data or not data.diagnostics_self_test:
+            return None
+        return data.diagnostics_self_test.degraded_subsystem_count
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return diagnostic subsystem status details."""
+        data = self.coordinator.data
+        if not data or not data.diagnostics_self_test:
+            return {}
+        self_test = data.diagnostics_self_test
+        attrs: dict[str, Any] = {}
+        _add_attr_if_set(attrs, "overall_state", self_test.overall_state)
+        degraded: list[dict[str, Any]] = []
+        for subsystem in self_test.subsystems or []:
+            if (subsystem.state or "").lower() == "healthy":
+                continue
+            degraded.append(
+                {
+                    "subsystem": subsystem.subsystem,
+                    "state": subsystem.state,
+                    "source_status": subsystem.source_status,
+                }
+            )
+        if degraded:
+            attrs["degraded_subsystems"] = degraded
+        return attrs
+
+
+class UnraidDockerPortConflictsSensor(UnraidBaseEntity, SensorEntity):
+    """Docker port conflicts count sensor."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:lan-disconnect"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, "docker_port_conflicts")
+        self._attr_name = "Docker Port Conflicts"
+
+    @property
+    def native_value(self) -> int | None:
+        """Return number of detected Docker port conflicts."""
+        data = self.coordinator.data
+        if not data or data.docker_port_conflicts is None:
+            return None
+        return len(data.docker_port_conflicts)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return conflict list details."""
+        data = self.coordinator.data
+        if not data or data.docker_port_conflicts is None:
+            return {}
+        conflicts = [
+            item.model_dump(exclude_none=True) for item in data.docker_port_conflicts
+        ]
+        return {"conflicts": conflicts} if conflicts else {}
 
 
 # =============================================================================
@@ -3358,6 +3563,11 @@ async def async_setup_entry(
                         [
                             UnraidZFSPoolUsageSensor(coordinator, entry, pool.name),
                             UnraidZFSPoolHealthSensor(coordinator, entry, pool.name),
+                            UnraidZFSPoolCorruptedFilesSensor(
+                                coordinator,
+                                entry,
+                                pool.name,
+                            ),
                         ]
                     )
 
@@ -3365,6 +3575,13 @@ async def async_setup_entry(
             for description in ZFS_ARC_SENSOR_DESCRIPTIONS:
                 if description.supported_fn(data):
                     entities.append(UnraidSensorEntity(coordinator, description))
+
+            if (
+                data
+                and data.zfs_arc
+                and getattr(data.zfs_arc, "configured_max_bytes", None) is not None
+            ):
+                entities.append(UnraidZFSArcConfiguredMaxSensor(coordinator))
 
     # Flash drive sensors
     if data and data.flash_info:
@@ -3376,6 +3593,12 @@ async def async_setup_entry(
         for description in PLUGIN_SENSOR_DESCRIPTIONS:
             if description.supported_fn(data):
                 entities.append(UnraidSensorEntity(coordinator, description))
+
+    if data and data.diagnostics_self_test is not None:
+        entities.append(UnraidDiagnosticsDegradedSubsystemsSensor(coordinator))
+
+    if data and data.docker_port_conflicts is not None:
+        entities.append(UnraidDockerPortConflictsSensor(coordinator))
 
     # Parity schedule sensors
     for description in PARITY_SCHEDULE_SENSOR_DESCRIPTIONS:
@@ -3415,6 +3638,23 @@ async def async_setup_entry(
                 )
                 entities.append(
                     UnraidContainerMemoryPercentSensor(coordinator, container_name)
+                )
+                entities.append(
+                    UnraidContainerRestartCountSensor(coordinator, container_name)
+                )
+                entities.append(
+                    UnraidContainerNetworkRateSensor(
+                        coordinator,
+                        container_name,
+                        "rx",
+                    )
+                )
+                entities.append(
+                    UnraidContainerNetworkRateSensor(
+                        coordinator,
+                        container_name,
+                        "tx",
+                    )
                 )
 
     # Registration sensors
@@ -3518,9 +3758,6 @@ class UnraidRemoteShareSensor(UnraidBaseEntity, SensorEntity):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:folder-network"
     _attr_suggested_display_precision = 1
-    # Disabled by default: the current RemoteShare model has no size fields.
-    # Enable manually once the UMA API exposes used/total/free bytes for remote shares.
-    _attr_entity_registry_enabled_default = False
 
     def __init__(
         self,
@@ -3550,18 +3787,10 @@ class UnraidRemoteShareSensor(UnraidBaseEntity, SensorEntity):
 
     @property
     def native_value(self) -> float | None:
-        """Return usage percentage if available."""
+        """Return usage percentage."""
         share = self._get_share()
         if share is None:
             return None
-        used = getattr(share, "used_bytes", None)
-        total = getattr(share, "total_bytes", None)
-        if (
-            isinstance(used, (int, float))
-            and isinstance(total, (int, float))
-            and total > 0
-        ):
-            return round(used / total * 100, 1)
         usage_pct = getattr(share, "usage_percent", None)
         if isinstance(usage_pct, (int, float)):
             return round(float(usage_pct), 1)
@@ -3581,7 +3810,7 @@ class UnraidRemoteShareSensor(UnraidBaseEntity, SensorEntity):
         if getattr(share, "mount_point", None):
             attrs["mount_point"] = share.mount_point
         used = getattr(share, "used_bytes", None)
-        total = getattr(share, "total_bytes", None)
+        total = getattr(share, "size_bytes", None)
         free = getattr(share, "free_bytes", None)
         if isinstance(total, (int, float)) and total > 0:
             attrs["total_size"] = format_bytes(int(total))

@@ -7,7 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2026.6.2] — 2026-06-07
+
 ### Added
+
+- **UMA 2025.12.1 Endpoint Coverage**: Added API and coordinator support for newer UMA endpoints with backward-compatible fallbacks
+  - New client methods for `GET /diagnostics/self-test` and `GET /docker/port-conflicts`
+  - `get_mover_settings()` now prefers `GET /mover` and falls back to `GET /settings/mover`
+  - `get_update_status()` now prefers `GET /os/update` and falls back to `GET /updates`
+
+- **New Monitoring Sensors**
+  - `sensor.<host>_diagnostics_degraded_subsystems` (diagnostics self-test degraded subsystem count)
+  - `sensor.<host>_docker_port_conflicts` (Docker port conflict count)
+  - `sensor.<host>_zfs_arc_configured_max` (configured ARC max bytes)
+  - `sensor.<host>_<pool>_corrupted_files` (ZFS pool corrupted files)
+  - Per-container sensors: `<container>_restart_count`, `<container>_network_rx`, `<container>_network_tx`
+
+- **Zeroconf/mDNS Auto-Discovery**: The integration now discovers Unraid Management Agent instances automatically on the local network
+  - No manual host/port entry required — HA detects the agent via mDNS service type `_unraid-mgmt-agent._tcp.local.`
+  - Requires Unraid Management Agent v2026.06.02 or later (which added zeroconf advertising)
+  - When the agent's IP changes, the existing config entry is automatically updated and reloaded (`discovery-update-info` rule)
+  - Quality Scale: `discovery` and `discovery-update-info` rules updated from `exempt` to `done`
+
+- **Remote Share Usage Sensor**: New `sensor` entity showing usage percentage for each mounted remote share
+  - Reports `usage_percent` from the API; attributes include `total_size`, `used_size`, `free_size`, `protocol`, `server`, `mount_point`
 
 - **Stale Entity Cleanup**: Entity registry entries for removed dynamic items are now automatically cleaned on every successful coordinator update
   - Covers all dynamic entity types: Docker containers, VMs, disks, fans, GPUs, network interfaces, user shares, ZFS pools, remote shares, unassigned devices, and user scripts
@@ -34,16 +57,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Remote Share Entities Not Created** (#83): Remote share binary sensors, switches, and usage sensors were never created despite the agent reporting them
+  - Root cause: `RemoteShare` Pydantic model had `name: str | None` field but the UMA API returns `source` (e.g. `//server/share`) instead of `name`, causing `name` to always be `None`
+  - Fix: added `source`, `status`, `type`, `smb_server`, `smb_share`, `size_bytes`, `used_bytes`, `free_bytes`, `usage_percent`, `auto_mount`, `read_only` fields to the model and a `model_validator(mode='before')` that derives `name` from `source`, `mounted` from `status`, `protocol` from `type`, and `server` from `smb_server`
+  - Entity IDs use the full source path slugified (e.g. `switch.cube_remote_share_192_168_20_65_public`)
+  - Usage sensor enabled by default now that the API exposes size fields
 - **Remote Share Binary Sensor Missing After Adding Shares** (#83): Remote share mounted/unmounted binary sensors now appear dynamically when shares are added after HA startup
   - Root cause: `async_setup_entry` only ran once at startup; new remote shares added later were never detected
   - Fix: registered coordinator update listener that creates new `UnraidRemoteShareBinarySensor` entities as shares appear
   - Same dynamic registration applied to unassigned device sensors
+- **Stale Cleanup Compatibility**: Prevented new dynamic container and ZFS sensors from being removed as stale immediately after creation
+  - Added cleanup key coverage for container restart/network-rate sensors
+  - Added cleanup key coverage for ZFS pool corrupted-files and static ARC configured-max sensor
 
 ### Changed
 
 - **Options Flow** (#85, #86): Two new options added to the integration's Configure dialog:
   - *Enable fan control entities* — controls creation of fan speed sensors and fan speed number entities
   - *Enable container update checks* — opt-in polling of Docker image update availability
+- **API Models Expanded**
+  - Added new typed fields for container throughput/update telemetry, mover runtime stats, ZFS pool/ARC fields, and diagnostics payload models
+  - Added typed `DockerPortConflict` fields while keeping `extra="allow"` for forward compatibility
 
 ### Quality
 

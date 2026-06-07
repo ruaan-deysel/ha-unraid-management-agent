@@ -21,7 +21,7 @@ source "$SCRIPT_DIR/../.lib/output.sh"
 
 PYTHON_VERSION="3.14.2"
 # Fallback version used when PyPI is unreachable
-HOME_ASSISTANT_VERSION="2026.5.4"
+HOME_ASSISTANT_VERSION="2026.6.1"
 
 log_header "Checking for uv"
 if ! command -v uv >/dev/null 2>&1; then

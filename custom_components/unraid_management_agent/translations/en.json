@@ -30,7 +30,8 @@
     "abort": {
       "already_configured": "Device is already configured",
       "unique_id_mismatch": "The server at this address has a different unique ID. Create a new entry instead."
-    }
+    },
+    "flow_title": "{host}"
   },
   "options": {
     "step": {

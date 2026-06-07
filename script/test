@@ -28,7 +28,7 @@ cd "$SCRIPT_DIR/.."
 
 TEST_PYTHON_VERSION="3.14.2"
 # Fallback versions used when PyPI is unreachable
-TEST_HOME_ASSISTANT_VERSION="2026.5.4"
+TEST_HOME_ASSISTANT_VERSION="2026.6.1"
 TEST_PLUGIN_VERSION="0.13.333"
 
 # shellcheck source=script/.lib/output.sh

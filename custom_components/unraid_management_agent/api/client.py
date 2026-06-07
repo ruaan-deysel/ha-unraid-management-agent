@@ -35,8 +35,10 @@ from .models import (
     ContainerUpdatesResult,
     CPUCacheInfo,
     CPUHardwareInfo,
+    DiagnosticsSelfTestResponse,
     DiskInfo,
     DiskSettings,
+    DockerPortConflict,
     DockerSettings,
     FanControlStatus,
     FlashDriveInfo,
@@ -1474,7 +1476,10 @@ class UnraidClient:
             >>> print(f"Mover active: {mover.active}, Schedule: {mover.schedule}")
 
         """
-        data = await self._request("GET", "/settings/mover")
+        try:
+            data = await self._request("GET", "/mover")
+        except Exception:
+            data = await self._request("GET", "/settings/mover")
         return MoverSettings.model_validate(data)
 
     async def get_service_status(self) -> ServiceStatus:
@@ -1623,8 +1628,21 @@ class UnraidClient:
             ...     print(f"Update available! Current: {status.current_version}")
 
         """
-        data = await self._request("GET", "/updates")
+        try:
+            data = await self._request("GET", "/os/update")
+        except Exception:
+            data = await self._request("GET", "/updates")
         return UpdateStatus.model_validate(data)
+
+    async def get_diagnostics_self_test(self) -> DiagnosticsSelfTestResponse:
+        """Get diagnostics self-test status and subsystem health."""
+        data = await self._request("GET", "/diagnostics/self-test")
+        return DiagnosticsSelfTestResponse.model_validate(data)
+
+    async def get_docker_port_conflicts(self) -> list[DockerPortConflict]:
+        """List Docker port conflicts detected by the agent."""
+        data = await self._request("GET", "/docker/port-conflicts")
+        return [DockerPortConflict.model_validate(item) for item in data]
 
     # ZFS endpoints
 
