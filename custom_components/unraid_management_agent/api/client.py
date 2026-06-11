@@ -13,6 +13,7 @@ from .exceptions import (
     UnraidConnectionError,
     UnraidNotFoundError,
     UnraidRateLimitError,
+    UnraidTimeoutError,
     UnraidValidationError,
 )
 from .models import (
@@ -199,6 +200,7 @@ class UnraidClient:
         data: dict[str, Any] | None = None,
         params: dict[str, Any] | None = None,
         json: dict[str, Any] | None = None,
+        timeout_seconds: float | None = None,
     ) -> Any:
         """
         Make an async request to the API with rate-limit handling.
@@ -212,6 +214,9 @@ class UnraidClient:
             data: Request body data
             params: Query parameters
             json: JSON body data (alias for data)
+            timeout_seconds: Per-request timeout override (defaults to the
+                client timeout; also applied to externally provided sessions
+                that may have no timeout of their own)
 
         Returns:
             Response data
@@ -229,6 +234,11 @@ class UnraidClient:
 
         url = urljoin(self.base_url + "/", endpoint.lstrip("/"))
         session = await self._ensure_session()
+        # Apply the timeout per request: injected sessions (e.g. Home
+        # Assistant's shared session) don't carry this client's timeout, and
+        # without one a stalled agent can hang requests for aiohttp's default
+        # 5 minutes.
+        request_timeout = aiohttp.ClientTimeout(total=timeout_seconds or self.timeout)
 
         last_err: UnraidRateLimitError | None = None
         for attempt in range(_MAX_RETRIES + 1):
@@ -244,6 +254,7 @@ class UnraidClient:
                         url=url,
                         json=json if json is not None else data,
                         params=params,
+                        timeout=request_timeout,
                     ) as response:
                         # Handle successful responses
                         if response.status == 200:
@@ -323,7 +334,7 @@ class UnraidClient:
                         f"Unable to connect to Unraid API at {url}: {e!s}"
                     ) from e
                 except TimeoutError as e:
-                    raise UnraidConnectionError(f"Request to {url} timed out") from e
+                    raise UnraidTimeoutError(f"Request to {url} timed out") from e
 
             # Semaphore released - now sleep so other requests can proceed.
             if backoff_delay is not None:
@@ -371,7 +382,7 @@ class UnraidClient:
                 f"Unable to connect to Unraid API at {url}: {e!s}"
             ) from e
         except TimeoutError as e:
-            raise UnraidConnectionError(f"Request to {url} timed out") from e
+            raise UnraidTimeoutError(f"Request to {url} timed out") from e
 
     # Health & System endpoints
 
@@ -428,7 +439,7 @@ class UnraidClient:
                 f"Unable to connect to Unraid metrics at {url}: {e!s}"
             ) from e
         except TimeoutError as e:
-            raise UnraidConnectionError(f"Request to {url} timed out") from e
+            raise UnraidTimeoutError(f"Request to {url} timed out") from e
 
     async def get_system_info(self) -> SystemInfo:
         """
@@ -1958,7 +1969,9 @@ class UnraidClient:
             Update status for every container with summary counts
 
         """
-        data = await self._request("GET", "/docker/updates")
+        # Checking every container's registry digest can legitimately take a
+        # while, so allow well beyond the default request timeout.
+        data = await self._request("GET", "/docker/updates", timeout_seconds=120)
         return ContainerUpdatesResult.model_validate(data)
 
     async def update_container(self, container_id: str) -> ContainerUpdateResult:

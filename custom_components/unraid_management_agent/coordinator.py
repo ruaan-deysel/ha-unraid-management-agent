@@ -10,13 +10,14 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
 from .api import UnraidClient
 from .api.constants import EventType
 from .api.events import WebSocketEvent, parse_event
+from .api.exceptions import UnraidTimeoutError
 from .api.models import (
     ArrayStatus,
     CollectorStatus,
@@ -63,6 +64,13 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# Warn after this many consecutive failed update cycles (likely plugin stall).
+_FAILED_UPDATE_WARN_THRESHOLD = 3
+
+# Minimum time between coordinator refreshes triggered by WebSocket reconnects,
+# so rapid connect/disconnect cycles don't hammer the API.
+_RECONNECT_REFRESH_DEBOUNCE = timedelta(seconds=10)
 
 
 @dataclass
@@ -135,6 +143,15 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
         self._ws_client: UnraidWebSocketClient | None = None
         self._ws_task: asyncio.Task[None] | None = None
         self._unavailable_logged = False
+        self._consecutive_failed_updates = 0
+        self._last_successful_update: datetime | None = None
+        # Seed with the current time so the initial WebSocket connection during
+        # setup doesn't trigger a refresh right after the first data fetch.
+        self._last_reconnect_refresh: datetime | None = dt_util.utcnow()
+        # Tracks when each dynamic entity unique_id was first seen missing from
+        # coordinator data; used by cleanup.py to defer removal until the item
+        # has been absent for a sustained period (not just one bad poll).
+        self.stale_entity_candidates: dict[str, datetime] = {}
         self._pending_system_action: str | None = None
         self._pending_system_action_message: str | None = None
         self._pending_system_action_requested_at: datetime | None = None
@@ -165,6 +182,16 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
     def websocket_connected(self) -> bool:
         """Return True if websocket is connected."""
         return self._ws_client is not None and self._ws_client.is_connected
+
+    @property
+    def last_successful_update(self) -> datetime | None:
+        """Return the timestamp of the last successful data fetch."""
+        return self._last_successful_update
+
+    @property
+    def consecutive_failed_updates(self) -> int:
+        """Return the number of consecutive failed update cycles."""
+        return self._consecutive_failed_updates
 
     @property
     def in_reboot_grace_period(self) -> bool:
@@ -329,6 +356,11 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
         """Fetch data from a single API endpoint, returning *None* on failure."""
         try:
             return await coro_fn()
+        except UnraidTimeoutError as err:
+            # Logged distinctly: a timeout while the server is otherwise
+            # reachable usually means the agent plugin is stalled.
+            _LOGGER.debug("Timeout fetching %s: %s", label, err)
+            return None
         except Exception as err:
             if not (suppress_404 and "404" in str(err)):
                 _LOGGER.debug("Error fetching %s: %s", label, err)
@@ -401,22 +433,26 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
                 ),
             )
 
-            # Unpack results with proper types (gather loses individual type info)
+            # Unpack results with proper types (gather loses individual type info).
+            # List-valued fields deliberately preserve the None/[] distinction:
+            # None means the fetch failed (data unavailable), while [] means the
+            # API responded and the list is genuinely empty. Stale entity cleanup
+            # relies on this to avoid removing entities during transient outages.
             system: SystemInfo | None = results[0]
             array: ArrayStatus | None = results[1]
-            disks: list[DiskInfo] = results[2] or []
-            containers: list[ContainerInfo] = results[3] or []
-            vms: list[VMInfo] = results[4] or []
+            disks: list[DiskInfo] | None = results[2]
+            containers: list[ContainerInfo] | None = results[3]
+            vms: list[VMInfo] | None = results[4]
             ups: UPSInfo | None = results[5]
-            gpu: list[GPUInfo] = results[6] or []
-            network: list[NetworkInterface] = results[7] or []
-            shares: list[ShareInfo] = results[8] or []
+            gpu: list[GPUInfo] | None = results[6]
+            network: list[NetworkInterface] | None = results[7]
+            shares: list[ShareInfo] | None = results[8]
             notifications: NotificationsResponse | None = results[9]
             notification_overview: NotificationOverview | None = results[10]
-            user_scripts: list[UserScript] = results[11] or []
-            zfs_pools: list[ZFSPool] = results[12] or []
-            zfs_datasets: list[ZFSDataset] = results[13] or []
-            zfs_snapshots: list[ZFSSnapshot] = results[14] or []
+            user_scripts: list[UserScript] | None = results[11]
+            zfs_pools: list[ZFSPool] | None = results[12]
+            zfs_datasets: list[ZFSDataset] | None = results[13]
+            zfs_snapshots: list[ZFSSnapshot] | None = results[14]
             zfs_arc: ZFSArcStats | None = results[15]
             collectors: CollectorStatus | None = results[16]
             fan_control: FanControlStatus | None = results[17]
@@ -433,7 +469,24 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
             network_services: NetworkServicesStatus | None = results[28]
             unassigned_info: UnassignedInfo | None = results[29]
             diagnostics_self_test: DiagnosticsSelfTestResponse | None = results[30]
-            docker_port_conflicts: list[DockerPortConflict] = results[31] or []
+            docker_port_conflicts: list[DockerPortConflict] | None = results[31]
+
+            # If the core endpoints are all unreachable, treat the whole update
+            # as failed instead of returning an empty snapshot. This flips
+            # last_update_success to False so entities become unavailable and
+            # stale entity cleanup is suppressed (the previous behaviour fed an
+            # empty-but-"successful" snapshot to cleanup, which then removed
+            # every dynamic entity while the server was rebooting; see #83).
+            if system is None and array is None:
+                if not self._unavailable_logged:
+                    _LOGGER.warning(
+                        "Unraid server is unreachable (core endpoints returned no data)"
+                    )
+                    self._unavailable_logged = True
+                raise UpdateFailed(
+                    translation_domain=DOMAIN,
+                    translation_key="api_error",
+                )
 
             # Optionally fetch container updates (can be slow — user opt-in)
             container_updates: ContainerUpdatesResult | None = None
@@ -477,6 +530,8 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
 
             # Mark update as successful
             self.update_success = True
+            self._consecutive_failed_updates = 0
+            self._last_successful_update = dt_util.utcnow()
 
             # Detect if the server rebooted by checking if uptime decreased
             if system and system.uptime_seconds is not None:
@@ -543,18 +598,34 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
 
             return data
 
+        except UpdateFailed:
+            self._record_failed_update()
+            raise
+
         except Exception as err:
             # Log unavailable only once
             if not self._unavailable_logged:
                 _LOGGER.warning("Error communicating with Unraid API: %s", err)
                 self._unavailable_logged = True
-            if self._pending_system_action:
-                self._pending_system_action_disconnected = True
-            self.update_success = False
+            self._record_failed_update()
             raise UpdateFailed(
                 translation_domain=DOMAIN,
                 translation_key="api_error",
             ) from err
+
+    def _record_failed_update(self) -> None:
+        """Track a failed update cycle and warn on sustained failures."""
+        if self._pending_system_action:
+            self._pending_system_action_disconnected = True
+        self.update_success = False
+        self._consecutive_failed_updates += 1
+        if self._consecutive_failed_updates == _FAILED_UPDATE_WARN_THRESHOLD:
+            _LOGGER.warning(
+                "Unraid data fetch has failed %d times in a row. The Unraid "
+                "Management Agent plugin may be stalled or unreachable; check "
+                "its status on the Unraid server (Settings > Management Agent)",
+                self._consecutive_failed_updates,
+            )
 
     def _handle_websocket_event(self, event: WebSocketEvent) -> None:
         """Handle WebSocket event and update coordinator data."""
@@ -648,6 +719,27 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
         except Exception as err:
             _LOGGER.debug("Error parsing WebSocket event: %s", err)
 
+    @callback
+    def _handle_ws_connect(self) -> None:
+        """
+        Handle WebSocket (re)connection.
+
+        Triggers an immediate coordinator refresh so data recovers right away
+        after a server reboot or network interruption instead of waiting for
+        the next poll cycle. Debounced to avoid hammering the API during rapid
+        connect/disconnect cycles.
+        """
+        _LOGGER.info("WebSocket connected")
+        now = dt_util.utcnow()
+        if (
+            self._last_reconnect_refresh is not None
+            and now - self._last_reconnect_refresh < _RECONNECT_REFRESH_DEBOUNCE
+        ):
+            _LOGGER.debug("Skipping reconnect-triggered refresh (debounced)")
+            return
+        self._last_reconnect_refresh = now
+        self.hass.async_create_task(self.async_request_refresh())
+
     async def async_start_websocket(self) -> None:
         """Start WebSocket connection for real-time updates."""
         if not self.enable_websocket:
@@ -664,7 +756,7 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
                 host=self.client.host,
                 port=self.client.port,
                 on_message=self._handle_raw_message,
-                on_connect=lambda: _LOGGER.info("WebSocket connected"),
+                on_connect=self._handle_ws_connect,
                 on_disconnect=lambda: _LOGGER.warning("WebSocket disconnected"),
                 auto_reconnect=True,
                 reconnect_delays=[1, 2, 5, 10, 30],

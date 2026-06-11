@@ -5,9 +5,16 @@ Dynamic entities (containers, VMs, disks, fans, etc.) are created at setup
 and whenever new items appear. When items are permanently removed from Unraid,
 their HA entity registry entries linger indefinitely. This module removes them.
 
-Cleanup runs on every successful coordinator update and is a no-op when the
-coordinator has no data (server unreachable), preventing false removal during
-transient outages.
+Removal is deliberately conservative so transient data gaps never destroy
+entities (which would lose history, automations, and dashboards; see #83):
+
+- Cleanup is a no-op when the coordinator update failed or during the
+  post-reboot grace period.
+- Each data category distinguishes ``None`` (fetch failed, data unavailable)
+  from ``[]`` (fetch succeeded, list genuinely empty). Categories whose data
+  is ``None`` are skipped entirely.
+- An entity is only removed after its item has been continuously missing for
+  ``STALE_REMOVAL_GRACE`` across successful updates, not on the first miss.
 """
 
 from __future__ import annotations
@@ -15,16 +22,28 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
-from typing import TYPE_CHECKING
+from datetime import timedelta
+from typing import TYPE_CHECKING, Final
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
+from homeassistant.util import dt as dt_util
 from homeassistant.util import slugify
 
+from .const import DOMAIN
+
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from .coordinator import UnraidConfigEntry, UnraidData, UnraidDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+# An item must be continuously absent from coordinator data for this long
+# before its entity registry entries are removed. Protects against agent
+# collectors that briefly return empty results (e.g., while subsystems are
+# still starting after an array start).
+STALE_REMOVAL_GRACE: Final[timedelta] = timedelta(minutes=10)
 
 # Prefixes that identify entity keys belonging to dynamic entities.
 # Any key that starts with one of these AND is absent from the valid-key set
@@ -261,6 +280,77 @@ def _is_dynamic_key(key: str) -> bool:
 
 
 @callback
+def async_prune_seen_names(
+    hass: HomeAssistant,
+    platform_domain: str,
+    seen: set[str],
+    unique_id_for: Callable[[str], str],
+) -> None:
+    """
+    Drop names from a platform's ``seen_*`` tracking set when their registry entity is gone.
+
+    Dynamic entity platforms track created items in closure-captured ``seen_*``
+    sets to avoid duplicates. If an entity is later removed from the registry
+    (stale cleanup or manual user deletion), the lingering set entry would block
+    re-creation when the item reappears. Pruning the set lets the entity be
+    re-created without a reload (see #83).
+
+    Args:
+        hass: Home Assistant instance.
+        platform_domain: Entity platform domain (e.g. ``binary_sensor``).
+        seen: The tracking set of item names to prune in place.
+        unique_id_for: Maps an item name to the entity's full unique_id.
+
+    """
+    registry = er.async_get(hass)
+    for name in list(seen):
+        if (
+            registry.async_get_entity_id(platform_domain, DOMAIN, unique_id_for(name))
+            is None
+        ):
+            seen.discard(name)
+
+
+def _unavailable_data_prefixes(data: UnraidData) -> set[str]:
+    """
+    Return dynamic key prefixes whose source data is unavailable this cycle.
+
+    A category's data being ``None`` means its API fetch failed (as opposed to
+    ``[]``, which means the API responded with a genuinely empty list). Entities
+    in these categories must not be considered stale, since their absence
+    reflects a fetch failure rather than intentional removal from Unraid.
+    """
+    prefixes: set[str] = set()
+    if data.containers is None:
+        prefixes.add("container_")
+    if data.vms is None:
+        prefixes.add("vm_")
+    if data.disks is None:
+        prefixes.add("disk_")
+    # fan_ covers fan_{name} (from system.fans) and fan_speed_{id} (from
+    # fan_control); protect the whole prefix if either source is unavailable.
+    if data.system is None or data.fan_control is None:
+        prefixes.add("fan_")
+    if data.gpu is None:
+        prefixes.add("gpu_")
+    if data.network is None:
+        prefixes.add("network_")
+    if data.network_services is None:
+        prefixes.add("network_service_")
+    if data.shares is None:
+        prefixes.add("share_")
+    if data.zfs_pools is None:
+        prefixes.add("zfs_")
+    if data.remote_shares is None:
+        prefixes.add("remote_share_")
+    if data.unassigned_devices is None:
+        prefixes.add("unassigned_device_")
+    if data.user_scripts is None:
+        prefixes.add("user_script_")
+    return prefixes
+
+
+@callback
 def async_cleanup_stale_entities(
     hass: HomeAssistant,
     entry: UnraidConfigEntry,
@@ -274,6 +364,10 @@ def async_cleanup_stale_entities(
     - Runs only when ``coordinator.data`` is not None (first fetch completed).
     - Skipped during the grace period after a server reboot (5 minutes).
     - Skips static entities (those whose key does not start with a dynamic prefix).
+    - Skips categories whose data is ``None`` this cycle (fetch failed); only
+      ``[]`` (fetch succeeded, genuinely empty) makes entities eligible.
+    - Defers removal until an item has been missing for ``STALE_REMOVAL_GRACE``,
+      so a single empty poll never deletes entities.
 
     Args:
         hass: Home Assistant instance.
@@ -295,23 +389,48 @@ def async_cleanup_stale_entities(
     registry = er.async_get(hass)
     entry_prefix = f"{entry.entry_id}_"
     valid_keys = _build_valid_dynamic_entity_keys(coordinator.data)
+    unavailable_prefixes = _unavailable_data_prefixes(coordinator.data)
+    candidates = coordinator.stale_entity_candidates
+    now = dt_util.utcnow()
 
     removed = 0
+    seen_unique_ids: set[str] = set()
     for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
         unique_id = entity_entry.unique_id
         if not unique_id.startswith(entry_prefix):
             continue
 
         key = unique_id[len(entry_prefix) :]
+        seen_unique_ids.add(unique_id)
 
-        if _is_dynamic_key(key) and key not in valid_keys:
-            _LOGGER.debug(
-                "Removing stale entity %s (unique_id=%s)",
-                entity_entry.entity_id,
-                unique_id,
-            )
-            registry.async_remove(entity_entry.entity_id)
-            removed += 1
+        if not _is_dynamic_key(key) or key in valid_keys:
+            candidates.pop(unique_id, None)
+            continue
+
+        if any(key.startswith(prefix) for prefix in unavailable_prefixes):
+            # Source data fetch failed this cycle; absence is not meaningful.
+            candidates.pop(unique_id, None)
+            continue
+
+        first_missing = candidates.setdefault(unique_id, now)
+        if now - first_missing < STALE_REMOVAL_GRACE:
+            continue
+
+        _LOGGER.debug(
+            "Removing stale entity %s (unique_id=%s, missing since %s)",
+            entity_entry.entity_id,
+            unique_id,
+            first_missing,
+        )
+        registry.async_remove(entity_entry.entity_id)
+        candidates.pop(unique_id, None)
+        removed += 1
+
+    # Drop tracking for entities no longer in the registry (e.g., removed
+    # manually by the user) so the dict cannot grow unbounded.
+    for unique_id in list(candidates):
+        if unique_id not in seen_unique_ids:
+            candidates.pop(unique_id, None)
 
     if removed:
         _LOGGER.info(

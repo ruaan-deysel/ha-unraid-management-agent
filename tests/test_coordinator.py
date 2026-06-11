@@ -671,7 +671,10 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        with pytest.raises(HomeAssistantError, match="container_start_failed"):
+        with pytest.raises(
+            HomeAssistantError,
+            match=r"Failed to start container|container_start_failed",
+        ):
             await hass.services.async_call(
                 DOMAIN,
                 "container_start",
@@ -736,7 +739,9 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        with pytest.raises(HomeAssistantError, match="container_stop_failed"):
+        with pytest.raises(
+            HomeAssistantError, match=r"Failed to stop container|container_stop_failed"
+        ):
             await hass.services.async_call(
                 DOMAIN,
                 "container_stop",
@@ -803,7 +808,10 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        with pytest.raises(HomeAssistantError, match="container_restart_failed"):
+        with pytest.raises(
+            HomeAssistantError,
+            match=r"Failed to restart container|container_restart_failed",
+        ):
             await hass.services.async_call(
                 DOMAIN,
                 "container_restart",
@@ -868,7 +876,10 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        with pytest.raises(HomeAssistantError, match="container_pause_failed"):
+        with pytest.raises(
+            HomeAssistantError,
+            match=r"Failed to pause container|container_pause_failed",
+        ):
             await hass.services.async_call(
                 DOMAIN,
                 "container_pause",
@@ -935,7 +946,10 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        with pytest.raises(HomeAssistantError, match="container_resume_failed"):
+        with pytest.raises(
+            HomeAssistantError,
+            match=r"Failed to resume container|container_resume_failed",
+        ):
             await hass.services.async_call(
                 DOMAIN,
                 "container_resume",
@@ -998,7 +1012,9 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        with pytest.raises(HomeAssistantError, match="vm_start_failed"):
+        with pytest.raises(
+            HomeAssistantError, match=r"Failed to start VM|vm_start_failed"
+        ):
             await hass.services.async_call(
                 DOMAIN,
                 "vm_start",
@@ -1061,7 +1077,9 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        with pytest.raises(HomeAssistantError, match="vm_stop_failed"):
+        with pytest.raises(
+            HomeAssistantError, match=r"Failed to stop VM|vm_stop_failed"
+        ):
             await hass.services.async_call(
                 DOMAIN,
                 "vm_stop",
@@ -1124,7 +1142,9 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        with pytest.raises(HomeAssistantError, match="vm_restart_failed"):
+        with pytest.raises(
+            HomeAssistantError, match=r"Failed to restart VM|vm_restart_failed"
+        ):
             await hass.services.async_call(
                 DOMAIN,
                 "vm_restart",
@@ -1187,7 +1207,9 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        with pytest.raises(HomeAssistantError, match="vm_pause_failed"):
+        with pytest.raises(
+            HomeAssistantError, match=r"Failed to pause VM|vm_pause_failed"
+        ):
             await hass.services.async_call(
                 DOMAIN,
                 "vm_pause",
@@ -1250,7 +1272,9 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        with pytest.raises(HomeAssistantError, match="vm_resume_failed"):
+        with pytest.raises(
+            HomeAssistantError, match=r"Failed to resume VM|vm_resume_failed"
+        ):
             await hass.services.async_call(
                 DOMAIN,
                 "vm_resume",
@@ -1315,7 +1339,9 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        with pytest.raises(HomeAssistantError, match="vm_hibernate_failed"):
+        with pytest.raises(
+            HomeAssistantError, match=r"Failed to hibernate VM|vm_hibernate_failed"
+        ):
             await hass.services.async_call(
                 DOMAIN,
                 "vm_hibernate",
@@ -1380,7 +1406,9 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        with pytest.raises(HomeAssistantError, match="vm_force_stop_failed"):
+        with pytest.raises(
+            HomeAssistantError, match=r"Failed to force stop VM|vm_force_stop_failed"
+        ):
             await hass.services.async_call(
                 DOMAIN,
                 "vm_force_stop",
@@ -1445,7 +1473,10 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        with pytest.raises(HomeAssistantError, match="parity_check_pause_failed"):
+        with pytest.raises(
+            HomeAssistantError,
+            match=r"Failed to pause parity check|parity_check_pause_failed",
+        ):
             await hass.services.async_call(
                 DOMAIN,
                 "parity_check_pause",
@@ -1510,7 +1541,10 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        with pytest.raises(HomeAssistantError, match="parity_check_resume_failed"):
+        with pytest.raises(
+            HomeAssistantError,
+            match=r"Failed to resume parity check|parity_check_resume_failed",
+        ):
             await hass.services.async_call(
                 DOMAIN,
                 "parity_check_resume",
@@ -1542,7 +1576,9 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        with pytest.raises(HomeAssistantError, match="array_start_failed"):
+        with pytest.raises(
+            HomeAssistantError, match=r"Failed to start array|array_start_failed"
+        ):
             await hass.services.async_call(
                 DOMAIN,
                 "array_start",
@@ -1574,7 +1610,9 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        with pytest.raises(HomeAssistantError, match="array_stop_failed"):
+        with pytest.raises(
+            HomeAssistantError, match=r"Failed to stop array|array_stop_failed"
+        ):
             await hass.services.async_call(
                 DOMAIN,
                 "array_stop",
@@ -1608,7 +1646,10 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        with pytest.raises(HomeAssistantError, match="parity_check_start_failed"):
+        with pytest.raises(
+            HomeAssistantError,
+            match=r"Failed to start parity check|parity_check_start_failed",
+        ):
             await hass.services.async_call(
                 DOMAIN,
                 "parity_check_start",
@@ -1642,7 +1683,10 @@ class TestServiceHandlers:
             await hass.config_entries.async_setup(mock_config_entry.entry_id)
             await hass.async_block_till_done()
 
-        with pytest.raises(HomeAssistantError, match="parity_check_stop_failed"):
+        with pytest.raises(
+            HomeAssistantError,
+            match=r"Failed to stop parity check|parity_check_stop_failed",
+        ):
             await hass.services.async_call(
                 DOMAIN,
                 "parity_check_stop",

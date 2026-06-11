@@ -42,6 +42,7 @@ from homeassistant.util import slugify as ha_slugify
 from . import UnraidConfigEntry, UnraidDataUpdateCoordinator
 from .api import EnergyIntegrator, RateCalculator, parse_timestamp
 from .api.formatting import format_bytes, format_duration
+from .cleanup import async_prune_seen_names
 from .const import (
     ATTR_ARRAY_STATE,
     ATTR_CPU_CORES,
@@ -774,17 +775,30 @@ def _get_latest_version_attrs(data: UnraidData) -> dict[str, Any]:
     return attrs
 
 
+def _as_update_count(value: Any) -> int | None:
+    """Normalize a plugins-with-updates value (count or list of names) to a count."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, (list, tuple, set)):
+        return len(value)
+    return None
+
+
 def _get_plugins_with_updates(data: UnraidData) -> int | None:
     """Get count of plugins with updates from coordinator data."""
     if data and data.update_status:
-        updates = getattr(data.update_status, "plugins_with_updates", None)
-        if updates is not None:
-            return updates
+        count = _as_update_count(
+            getattr(data.update_status, "plugins_with_updates", None)
+        )
+        if count is not None:
+            return count
 
     if data and data.plugins:
-        updates = data.plugins.plugins_with_updates
-        if updates is not None:
-            return len(updates)
+        count = _as_update_count(data.plugins.plugins_with_updates)
+        if count is not None:
+            return count
         plugins_list = data.plugins.plugins or []
         if plugins_list:
             return sum(1 for p in plugins_list if p.update_available)
@@ -817,6 +831,17 @@ def _get_plugins_with_updates_attrs(data: UnraidData) -> dict[str, Any]:
 # =============================================================================
 
 
+def _next_cron_occurrence(cron_expr: str) -> datetime | None:
+    """Compute the next occurrence of a cron expression in local time."""
+    try:
+        from cronsim import CronSim
+
+        return next(CronSim(cron_expr, dt_util.now()))
+    except Exception:
+        _LOGGER.debug("Could not compute next run for cron expression %r", cron_expr)
+        return None
+
+
 def _get_next_parity_check(data: UnraidData) -> datetime | None:
     """Get next parity check timestamp from coordinator data."""
     if not data or not data.parity_schedule:
@@ -824,10 +849,27 @@ def _get_next_parity_check(data: UnraidData) -> datetime | None:
 
     schedule = data.parity_schedule
 
+    # Prefer the authoritative cron entry Unraid actually runs
+    # (parity-check.cron, exposed by agent >= 2026.06.05); it is exact for
+    # every scheduled mode including custom (issue #68).
+    if schedule.check_cron:
+        next_check = _next_cron_occurrence(schedule.check_cron)
+        if next_check is not None:
+            return next_check
+
     if not schedule.is_enabled:
         return None
 
-    return schedule.next_check_datetime
+    next_check = schedule.next_check_datetime
+    if (
+        next_check is None
+        and (schedule.mode or "").lower() == "custom"
+        and schedule.cron
+    ):
+        # Custom mode: the schedule is a raw cron expression (issue #68).
+        next_check = _next_cron_occurrence(schedule.cron)
+
+    return next_check
 
 
 def _get_next_parity_check_attrs(data: UnraidData) -> dict[str, Any]:
@@ -852,6 +894,10 @@ def _get_next_parity_check_attrs(data: UnraidData) -> dict[str, Any]:
         attrs["hour"] = schedule.hour
     if schedule.correcting is not None:
         attrs["correcting"] = schedule.correcting
+    if schedule.cron:
+        attrs["cron"] = schedule.cron
+    if schedule.check_cron:
+        attrs["check_cron"] = schedule.check_cron
 
     return attrs
 
@@ -3663,25 +3709,66 @@ async def async_setup_entry(
             if description.supported_fn(data):
                 entities.append(UnraidSensorEntity(coordinator, description))
 
-    # Unassigned device sensors
-    if data and data.unassigned_devices:
-        seen_unassigned: set[str] = set()
-        for device in data.unassigned_devices:
+    # Unassigned device sensors - created dynamically as devices appear
+    seen_unassigned: set[str] = set()
+
+    def _add_unassigned_device_sensors() -> None:
+        new_entities: list[SensorEntity] = []
+        current_data = coordinator.data
+        if not current_data or not current_data.unassigned_devices:
+            return
+        # Allow re-creation of entities removed from the registry (see #83)
+        async_prune_seen_names(
+            hass,
+            "sensor",
+            seen_unassigned,
+            lambda name: f"{entry.entry_id}_unassigned_device_{ha_slugify(name)}_size",
+        )
+        for device in current_data.unassigned_devices:
             device_name = getattr(device, "name", None) or getattr(
                 device, "device", None
             )
             if device_name and device_name not in seen_unassigned:
                 seen_unassigned.add(device_name)
-                entities.append(UnraidUnassignedDeviceSensor(coordinator, device_name))
+                new_entities.append(
+                    UnraidUnassignedDeviceSensor(coordinator, device_name)
+                )
+        if new_entities:
+            async_add_entities(new_entities)
 
-    # Remote share sensors
-    if data and data.remote_shares:
-        seen_remote_shares: set[str] = set()
-        for remote_share in data.remote_shares:
+    _add_unassigned_device_sensors()
+
+    # Remote share sensors - created dynamically as shares appear (#83)
+    seen_remote_shares: set[str] = set()
+
+    def _add_remote_share_sensors() -> None:
+        new_entities: list[SensorEntity] = []
+        current_data = coordinator.data
+        if not current_data or not current_data.remote_shares:
+            return
+        # Allow re-creation of entities removed from the registry (see #83)
+        async_prune_seen_names(
+            hass,
+            "sensor",
+            seen_remote_shares,
+            lambda name: f"{entry.entry_id}_remote_share_{ha_slugify(name)}_usage",
+        )
+        for remote_share in current_data.remote_shares:
             share_name = getattr(remote_share, "name", None)
             if share_name and share_name not in seen_remote_shares:
                 seen_remote_shares.add(share_name)
-                entities.append(UnraidRemoteShareSensor(coordinator, share_name))
+                new_entities.append(UnraidRemoteShareSensor(coordinator, share_name))
+        if new_entities:
+            async_add_entities(new_entities)
+
+    _add_remote_share_sensors()
+
+    entry.async_on_unload(
+        coordinator.async_add_listener(callback(_add_unassigned_device_sensors))
+    )
+    entry.async_on_unload(
+        coordinator.async_add_listener(callback(_add_remote_share_sensors))
+    )
 
     _LOGGER.debug("Adding %d Unraid sensor entities", len(entities))
     async_add_entities(entities)

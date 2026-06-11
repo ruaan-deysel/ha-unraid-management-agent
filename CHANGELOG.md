@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2026.6.4] — 2026-06-11
+
+### Fixed
+
+- **Permanent Entity Loss After Server Reboot** (#83): Reworked the dynamic entity
+  lifecycle so transient data gaps can never delete entities. Previously, a server
+  reboot could wipe hundreds of entities (e.g., 449 → 55) that only came back after
+  a manual integration reload.
+  - Root cause 1: every per-endpoint fetch failure was silently converted to an empty
+    list, so while the server was down the coordinator reported a *successful* update
+    with empty data and stale entity cleanup removed every dynamic entity. The
+    5-minute reboot grace period could not help because reboot detection (uptime
+    decrease) only fires after the server is back.
+  - Root cause 2: the closure-captured `seen_*` tracking sets in each platform
+    blocked re-creation of deleted entities until a reload.
+  - The coordinator now raises `UpdateFailed` when the core endpoints (system, array)
+    are unreachable, so entities become **unavailable** (HA best practice) instead of
+    being fed an empty snapshot
+  - List data now preserves the `None` (fetch failed) vs `[]` (genuinely empty)
+    distinction, and cleanup skips any category whose fetch failed that cycle
+  - Stale entity removal is deferred until an item has been continuously missing for
+    10 minutes (`STALE_REMOVAL_GRACE`), so a single empty poll can never delete
+    entities
+  - `seen_*` tracking sets are pruned against the entity registry, so entities
+    removed by cleanup or manually by the user are re-created automatically when
+    the item reappears — no reload needed
+  - Remote share and unassigned device **sensors** are now added dynamically while
+    running (previously only created at setup), matching the binary sensor and
+    switch platforms
+- **Slow Recovery After Reboot** (#83): A WebSocket (re)connect now triggers an
+  immediate coordinator refresh (debounced to once per 10s), so data recovers right
+  away instead of waiting for the next poll cycle
+- **Requests Could Hang on a Stalled Agent** (#83): API requests now always apply the
+  client timeout (10s; 120s for the container update check). Previously, with Home
+  Assistant's shared aiohttp session, no timeout was applied and a stalled agent
+  could hang each request for up to 5 minutes. Timeouts raise a distinct
+  `UnraidTimeoutError` and are logged separately to help diagnose plugin stalls
+- **Plugins With Updates Sensor**: `sensor.<host>_plugins_with_updates` now reports a
+  count when the API returns a list of plugin names (previously it exposed the raw
+  list, or failed when the value was already a count)
+- **Next Parity Check Sensor Unknown / Wrong Values** (#68 follow-up):
+  - Custom schedule mode is now supported: when the agent exposes the cron
+    expression, the next run is computed from it (via `cronsim`, bundled with HA).
+    Previously `sensor.next_parity_check` showed Unknown for custom schedules
+  - The agent's `manual` fallback mode (no schedule configured in `dynamix.cfg`) is
+    now treated as not scheduled, so `binary_sensor.parity_check_scheduled` no longer
+    reports a schedule that doesn't exist
+  - Weekly mode now interprets `day` using the Unraid/cron convention (0=Sunday);
+    it was previously read as a Python weekday (0=Monday), shifting the predicted
+    check by a day
+  - With Unraid Management Agent **v2026.06.05+** (which resolved
+    [unraid-management-agent#124](https://github.com/ruaan-deysel/unraid-management-agent/issues/124)),
+    the sensor now prefers the new `check_cron` field — the exact cron entry Unraid
+    runs from `parity-check.cron` — making the next-check time exact for every
+    schedule mode (daily/weekly/monthly/yearly/custom). The `month` field is also
+    consumed, fixing yearly schedules outside January on older field-based
+    computation. Older agents keep working via the field-based fallback
+
+### Added
+
+- **Sustained Failure Warning**: After 3 consecutive failed update cycles a warning
+  is logged with guidance to check the Unraid Management Agent plugin status
+- **Connection Health Diagnostics**: Integration diagnostics now include a
+  `coordinator_health` section (last successful update timestamp, consecutive failed
+  updates, WebSocket connection state, reboot grace period state) to help distinguish
+  integration issues from agent-side stalls (upstream investigation:
+  [unraid-management-agent#123](https://github.com/ruaan-deysel/unraid-management-agent/issues/123))
+
 ## [2026.6.3] — 2026-06-08
 
 ### Fixed

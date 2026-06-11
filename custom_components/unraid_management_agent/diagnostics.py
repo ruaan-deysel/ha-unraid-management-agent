@@ -69,6 +69,8 @@ async def async_get_config_entry_diagnostics(
     # Serialize coordinator data (contains Pydantic models)
     coordinator_data = _serialize_data(coordinator.data)
 
+    last_successful_update = coordinator.last_successful_update
+
     return {
         "entry": {
             "entry_id": entry.entry_id,
@@ -77,6 +79,17 @@ async def async_get_config_entry_diagnostics(
             "title": entry.title,
             "data": async_redact_data(entry.data, TO_REDACT),
             "options": async_redact_data(entry.options, TO_REDACT),
+        },
+        # Connection health: helps distinguish HA integration issues from a
+        # stalled or unreachable Unraid Management Agent plugin.
+        "coordinator_health": {
+            "last_update_success": coordinator.last_update_success,
+            "last_successful_update": last_successful_update.isoformat()
+            if last_successful_update
+            else None,
+            "consecutive_failed_updates": coordinator.consecutive_failed_updates,
+            "websocket_connected": coordinator.websocket_connected,
+            "in_reboot_grace_period": coordinator.in_reboot_grace_period,
         },
         "coordinator_data": async_redact_data(coordinator_data, TO_REDACT),
     }

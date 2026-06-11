@@ -3326,6 +3326,113 @@ def test_get_next_parity_check_no_data() -> None:
     assert _get_next_parity_check(None) is None
 
 
+def test_get_next_parity_check_custom_cron() -> None:
+    """Custom schedule mode computes the next run from the cron expression (#68)."""
+    from custom_components.unraid_management_agent.api.models import ParitySchedule
+    from custom_components.unraid_management_agent.sensor import (
+        _get_next_parity_check,
+    )
+
+    data = UnraidData()
+    # First Saturday-style schedule: 07:00 on any Saturday
+    data.parity_schedule = ParitySchedule(mode="custom", cron="0 7 * * 6")
+
+    result = _get_next_parity_check(data)
+    assert result is not None
+    assert result.weekday() == 5  # Saturday in Python weekday terms
+    assert result.hour == 7
+
+
+def test_get_next_parity_check_custom_without_cron() -> None:
+    """Custom mode without a cron expression (agent doesn't expose it) stays unknown."""
+    from custom_components.unraid_management_agent.api.models import ParitySchedule
+    from custom_components.unraid_management_agent.sensor import (
+        _get_next_parity_check,
+    )
+
+    data = UnraidData()
+    data.parity_schedule = ParitySchedule(mode="custom")
+
+    assert _get_next_parity_check(data) is None
+
+
+def test_get_next_parity_check_custom_invalid_cron() -> None:
+    """An invalid cron expression must not raise; the sensor reports unknown."""
+    from custom_components.unraid_management_agent.api.models import ParitySchedule
+    from custom_components.unraid_management_agent.sensor import (
+        _get_next_parity_check,
+    )
+
+    data = UnraidData()
+    data.parity_schedule = ParitySchedule(mode="custom", cron="not a cron")
+
+    assert _get_next_parity_check(data) is None
+
+
+def test_get_next_parity_check_prefers_check_cron() -> None:
+    """check_cron (the entry Unraid actually runs) wins over field-based math (#68)."""
+    from custom_components.unraid_management_agent.api.models import ParitySchedule
+    from custom_components.unraid_management_agent.sensor import (
+        _get_next_parity_check,
+    )
+
+    data = UnraidData()
+    # Fields say yearly Jan 1, but the authoritative cron says Jun 1 at 04:00
+    data.parity_schedule = ParitySchedule(
+        mode="yearly", month=1, day_of_month=1, check_cron="0 4 1 6 *"
+    )
+
+    result = _get_next_parity_check(data)
+    assert result is not None
+    assert result.month == 6
+    assert result.day == 1
+    assert result.hour == 4
+
+
+def test_get_next_parity_check_manual_mode_with_check_cron() -> None:
+    """A check_cron entry yields a next check even when mode parsed as 'manual' (#68)."""
+    from custom_components.unraid_management_agent.api.models import ParitySchedule
+    from custom_components.unraid_management_agent.sensor import (
+        _get_next_parity_check,
+    )
+
+    data = UnraidData()
+    data.parity_schedule = ParitySchedule(mode="manual", check_cron="0 7 * * 6")
+
+    result = _get_next_parity_check(data)
+    assert result is not None
+    assert result.weekday() == 5  # Saturday
+    assert result.hour == 7
+    assert data.parity_schedule.is_enabled is True
+
+
+def test_parity_schedule_manual_mode_not_enabled() -> None:
+    """The agent's 'manual' fallback mode means no schedule is configured (#68)."""
+    from custom_components.unraid_management_agent.api.models import ParitySchedule
+
+    schedule = ParitySchedule(mode="manual")
+    assert schedule.is_enabled is False
+    assert schedule.next_check_datetime is None
+
+
+def test_parity_schedule_weekly_uses_cron_day_of_week() -> None:
+    """Weekly mode interprets day as cron day-of-week (0=Sunday), not Python weekday."""
+    from custom_components.unraid_management_agent.api.models import ParitySchedule
+
+    # day=0 is Sunday in Unraid/cron convention
+    schedule = ParitySchedule(mode="weekly", day=0, hour=3)
+    next_check = schedule.next_check_datetime
+    assert next_check is not None
+    assert next_check.weekday() == 6  # Sunday in Python weekday terms
+    assert next_check.hour == 3
+
+    # day=6 is Saturday in cron convention
+    schedule = ParitySchedule(mode="weekly", day=6, hour=3)
+    next_check = schedule.next_check_datetime
+    assert next_check is not None
+    assert next_check.weekday() == 5  # Saturday in Python weekday terms
+
+
 def test_get_next_parity_check_attrs_full() -> None:
     """Test _get_next_parity_check_attrs with all attributes."""
     from custom_components.unraid_management_agent.sensor import (

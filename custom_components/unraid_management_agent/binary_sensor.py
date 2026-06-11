@@ -18,6 +18,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import slugify
 
 from . import UnraidConfigEntry, UnraidDataUpdateCoordinator
+from .cleanup import async_prune_seen_names
 from .const import ATTR_PARITY_CHECK_STATUS
 from .entity import UnraidBaseEntity, UnraidEntityDescription
 
@@ -459,6 +460,13 @@ async def async_setup_entry(
         current_data = coordinator.data
         if not current_data or not current_data.unassigned_devices:
             return
+        # Allow re-creation of entities removed from the registry (see #83)
+        async_prune_seen_names(
+            hass,
+            "binary_sensor",
+            seen_unassigned,
+            lambda name: f"{entry.entry_id}_unassigned_device_{slugify(name)}_mounted",
+        )
         for device in current_data.unassigned_devices:
             device_name = getattr(device, "name", None) or getattr(
                 device, "device", None
@@ -481,6 +489,13 @@ async def async_setup_entry(
         current_data = coordinator.data
         if not current_data or not current_data.remote_shares:
             return
+        # Allow re-creation of entities removed from the registry (see #83)
+        async_prune_seen_names(
+            hass,
+            "binary_sensor",
+            seen_remote_shares,
+            lambda name: f"{entry.entry_id}_remote_share_{slugify(name)}_mounted",
+        )
         for remote_share in current_data.remote_shares:
             share_name = getattr(remote_share, "name", None)
             if share_name and share_name not in seen_remote_shares:

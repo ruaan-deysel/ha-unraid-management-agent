@@ -14,6 +14,7 @@ from homeassistant.util import slugify
 
 from . import UnraidConfigEntry, UnraidDataUpdateCoordinator
 from .api.formatting import format_bytes
+from .cleanup import async_prune_seen_names
 from .const import (
     ATTR_CONTAINER_IMAGE,
     ATTR_CONTAINER_PORTS,
@@ -106,6 +107,13 @@ async def async_setup_entry(
         current_data = coordinator.data
         if not current_data or not current_data.remote_shares:
             return
+        # Allow re-creation of entities removed from the registry (see #83)
+        async_prune_seen_names(
+            hass,
+            "switch",
+            seen_remote_shares,
+            lambda name: f"{entry.entry_id}_remote_share_{slugify(name)}_mount",
+        )
         for share in current_data.remote_shares:
             share_name = getattr(share, "name", None)
             if share_name and share_name not in seen_remote_shares:
@@ -744,7 +752,14 @@ class UnraidRemoteShareSwitch(UnraidBaseEntity, SwitchEntity):
             ) from exc
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Unmount the remote share."""
+        """
+        Unmount the remote share.
+
+        Note: if Docker containers (or other processes) hold open files on the
+        share, Unraid's Unassigned Devices may report the unmount as successful
+        while the mount actually remains active at /mnt/remotes. This is Unraid
+        behaviour, not an integration bug (reported in #83).
+        """
         try:
             self._optimistic_state = False
             self.async_write_ha_state()

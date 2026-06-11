@@ -1977,6 +1977,20 @@ class ParitySchedule(BaseModel):
         description="Whether the schedule is enabled",
         validation_alias=AliasChoices("enabled", "schedule_enabled", "scheduled"),
     )
+    cron: str | None = Field(
+        None,
+        description="Cron expression for custom schedule mode",
+        validation_alias=AliasChoices("cron", "cron_expression", "custom_cron"),
+    )
+    check_cron: str | None = Field(
+        None,
+        description=(
+            "Authoritative cron spec of the scheduled check entry from "
+            "parity-check.cron (the line Unraid actually runs); valid for "
+            "every scheduled mode including custom"
+        ),
+        validation_alias=AliasChoices("check_cron", "schedule_cron"),
+    )
     pause_hour: CoercedInt = Field(None, description="Hour to pause check (0-23)")
     timestamp: str | None = Field(None, description="Data collection timestamp")
 
@@ -2001,8 +2015,14 @@ class ParitySchedule(BaseModel):
         """
         if self.enabled is not None:
             return self.enabled
+        # A check entry in parity-check.cron means Unraid has a scheduled
+        # check regardless of how the mode field was parsed.
+        if self.check_cron:
+            return True
         if self.mode is not None:
-            return self.mode.lower() != "disabled"
+            # "manual" is the agent's fallback when no schedule is configured
+            # in dynamix.cfg; treat it like "disabled" (no scheduled checks).
+            return self.mode.lower() not in ("disabled", "manual")
         return False
 
     @property
@@ -2016,7 +2036,10 @@ class ParitySchedule(BaseModel):
 
         Returns:
             The next datetime when a parity check is scheduled, or None
-            if schedule is disabled or insufficient data.
+            if schedule is disabled or insufficient data. ``custom`` mode
+            always returns None here; consumers should compute the next run
+            from the ``cron`` field (kept out of this library to avoid a
+            cron-parser dependency).
 
         Example:
             >>> sched = ParitySchedule(mode="daily", hour=3, minute=0)
@@ -2042,7 +2065,9 @@ class ParitySchedule(BaseModel):
         if mode == "weekly":
             if self.day is None:
                 return None
-            target_weekday = self.day  # 0=Monday in Python
+            # Unraid stores cron day-of-week (0=Sunday); convert to Python
+            # weekday (0=Monday). Cron 7 also means Sunday.
+            target_weekday = (self.day - 1) % 7
             days_ahead = target_weekday - now.weekday()
             if days_ahead < 0:
                 days_ahead += 7

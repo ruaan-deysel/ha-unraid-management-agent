@@ -20,6 +20,15 @@ class UnraidConnectionError(UnraidAPIError):
     """Exception raised when unable to connect to the Unraid API."""
 
 
+class UnraidTimeoutError(UnraidConnectionError):
+    """
+    Exception raised when a request to the Unraid API times out.
+
+    Distinct from other connection errors so callers can flag a stalled
+    (running but unresponsive) Unraid Management Agent plugin.
+    """
+
+
 class UnraidNotFoundError(UnraidAPIError):
     """Exception raised when a resource is not found (404)."""
 
