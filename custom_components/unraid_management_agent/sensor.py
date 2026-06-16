@@ -1626,6 +1626,46 @@ class UnraidSensorEntity(UnraidBaseEntity, SensorEntity):
         return self.entity_description.available_fn(self.coordinator.data)
 
 
+class UnraidUptimeSensorEntity(UnraidSensorEntity):
+    """
+    Uptime sensor that stabilizes the derived boot timestamp.
+
+    The boot time is derived as ``now() - uptime_seconds``. Because ``now()``
+    advances continuously while ``uptime_seconds`` is whole-second quantized and
+    only changes when the daemon refreshes its data, the raw value drifts by a
+    second or two on every coordinator update, spamming the logbook with a
+    "changed" event on each refresh (the daemon pushes updates roughly once a
+    second over WebSocket). Hold the last reported boot time and only move it
+    when it drifts beyond a small tolerance, so a genuine reboot still registers
+    while refresh jitter does not.
+    """
+
+    _BOOT_TIME_TOLERANCE = timedelta(seconds=30)
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        description: UnraidSensorEntityDescription,
+    ) -> None:
+        """Initialize the uptime sensor."""
+        super().__init__(coordinator, description)
+        self._boot_time: datetime | None = None
+
+    @property
+    def native_value(self) -> Any:
+        """Return a boot timestamp that is stable across refresh jitter."""
+        boot_time = super().native_value
+        if not isinstance(boot_time, datetime):
+            self._boot_time = None
+            return boot_time
+        if (
+            self._boot_time is None
+            or abs(boot_time - self._boot_time) > self._BOOT_TIME_TOLERANCE
+        ):
+            self._boot_time = boot_time
+        return self._boot_time
+
+
 class UnraidSystemStatusSensor(UnraidBaseEntity, SensorEntity):
     """High-level system status sensor for shutdown and reboot visibility."""
 
@@ -3467,7 +3507,10 @@ async def async_setup_entry(
     # System sensors (always enabled - system collector is required)
     for description in SYSTEM_SENSOR_DESCRIPTIONS:
         if description.supported_fn(data):
-            entities.append(UnraidSensorEntity(coordinator, description))
+            if description.key == "uptime":
+                entities.append(UnraidUptimeSensorEntity(coordinator, description))
+            else:
+                entities.append(UnraidSensorEntity(coordinator, description))
 
     entities.append(UnraidSystemStatusSensor(coordinator))
 
