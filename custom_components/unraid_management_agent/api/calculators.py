@@ -188,6 +188,20 @@ class RateCalculator:
                         else:
                             delta_bytes += self.COUNTER_64_MAX
 
+                    if delta_bytes == 0:
+                        # The counter has not advanced since the last sample.
+                        # This happens whenever the consumer samples faster than
+                        # the source refreshes the counter (e.g. the HA
+                        # coordinator polls every ~30s but the daemon only
+                        # refreshes network counters every ~60s). Computing a
+                        # rate here would report a false 0 and make the sensor
+                        # flap between the real value and 0. Instead, hold the
+                        # previous rate and keep the baseline so the next real
+                        # change is measured over the true elapsed interval.
+                        # A genuinely idle interface is still driven to 0 by the
+                        # stale-threshold branch above once dt grows large enough.
+                        return
+
                     # Convert bytes/sec to kilobits/sec
                     self._rate_kbps = (delta_bytes / dt) * 8 / 1000
 
