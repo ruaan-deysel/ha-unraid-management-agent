@@ -35,6 +35,7 @@ from custom_components.unraid_management_agent.sensor import (
     UnraidSensorEntity,
     UnraidShareUsageSensor,
     UnraidUPSEnergySensor,
+    UnraidUptimeSensorEntity,
     UnraidZFSPoolHealthSensor,
     UnraidZFSPoolUsageSensor,
     # Value functions for testing
@@ -495,6 +496,56 @@ def test_get_uptime_attrs_none_data():
     """Test _get_uptime_attrs with None data."""
     attrs = _get_uptime_attrs(None)
     assert attrs == {}
+
+
+def _make_uptime_entity(uptime_seconds: int | None) -> UnraidUptimeSensorEntity:
+    """Build an uptime entity backed by a mock coordinator."""
+    coordinator = MagicMock()
+    coordinator.data = MagicMock(spec=UnraidData)
+    coordinator.data.system = MagicMock()
+    coordinator.data.system.uptime_seconds = uptime_seconds
+    description = next(d for d in SYSTEM_SENSOR_DESCRIPTIONS if d.key == "uptime")
+    return UnraidUptimeSensorEntity(coordinator, description)
+
+
+def test_uptime_entity_ignores_refresh_jitter():
+    """Boot timestamp stays put when now() drifts but uptime is unchanged."""
+    entity = _make_uptime_entity(86400)
+    with patch(
+        "custom_components.unraid_management_agent.sensor.dt_util.now"
+    ) as mock_now:
+        mock_now.return_value = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+        first = entity.native_value
+        mock_now.return_value = datetime(2026, 1, 1, 12, 0, 2, tzinfo=UTC)
+        second = entity.native_value
+    assert isinstance(first, datetime)
+    assert first == second
+
+
+def test_uptime_entity_tracks_reboot():
+    """A real reboot moves the boot timestamp beyond the tolerance."""
+    entity = _make_uptime_entity(86400)
+    with patch(
+        "custom_components.unraid_management_agent.sensor.dt_util.now"
+    ) as mock_now:
+        mock_now.return_value = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+        first = entity.native_value
+        entity.coordinator.data.system.uptime_seconds = 60
+        second = entity.native_value
+    assert second > first
+
+
+def test_uptime_entity_passthrough_none():
+    """A missing uptime value passes through and resets the cache."""
+    entity = _make_uptime_entity(86400)
+    with patch(
+        "custom_components.unraid_management_agent.sensor.dt_util.now"
+    ) as mock_now:
+        mock_now.return_value = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+        assert isinstance(entity.native_value, datetime)
+        entity.coordinator.data.system.uptime_seconds = None
+        assert entity.native_value is None
+        assert entity._boot_time is None
 
 
 # =============================================================================
