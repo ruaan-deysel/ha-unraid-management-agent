@@ -1,16 +1,144 @@
+---
+# yamllint disable rule:line-length
 name: Release
 
-on:
+"on":
   push:
+    branches:
+      - main
+    paths:
+      - custom_components/unraid_management_agent/manifest.json
     tags:
       - "v*"
 
 permissions: {}
 
 jobs:
+  auto_tag:
+    name: Tag release on manifest change
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/heads/')
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.manifest.outputs.version }}
+      tag_created: ${{ steps.create_tag.outputs.created }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+
+      - name: Read version from manifest
+        id: manifest
+        run: |
+          VERSION=$(python3 -c "import json; print(json.load(open('custom_components/unraid_management_agent/manifest.json'))['version'])")
+
+          if [ -z "$VERSION" ]; then
+            echo "Version not found in manifest.json"
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Manifest version: $VERSION"
+
+      # Only release once the CHANGELOG is ready: the [VERSION] content must have
+      # been added to CHANGELOG.md matching the manifest version. A manifest bump
+      # without that section skips tagging instead of publishing with generic notes.
+      - name: Check CHANGELOG has notes for this version
+        id: changelog
+        run: |
+          VERSION="${{ steps.manifest.outputs.version }}"
+
+          if [ ! -f "CHANGELOG.md" ]; then
+            echo "ready=false" >> $GITHUB_OUTPUT
+            echo "CHANGELOG.md not found"
+            exit 0
+          fi
+
+          # Escape regex metacharacters (the dots) in the version string
+          VER_RE=$(printf '%s' "$VERSION" | sed 's/\./\\./g')
+          NOTES=$(awk -v ver="$VER_RE" '
+            $0 ~ "^## \\[" ver "\\]" {in_section=1; next}
+            in_section && $0 ~ /^## \[/ {exit}
+            in_section {print}
+          ' CHANGELOG.md)
+
+          if [ -n "$(echo "$NOTES" | tr -d '[:space:]')" ]; then
+            echo "ready=true" >> $GITHUB_OUTPUT
+            echo "Found release notes for $VERSION in CHANGELOG.md"
+          else
+            echo "ready=false" >> $GITHUB_OUTPUT
+            echo "No '## [$VERSION]' section with content found in CHANGELOG.md"
+          fi
+
+      - name: Check if tag already exists
+        id: check_tag
+        run: |
+          TAG="v${{ steps.manifest.outputs.version }}"
+
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Tag $TAG already exists (local)"
+            exit 0
+          fi
+
+          if git ls-remote --exit-code --tags origin "$TAG" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Tag $TAG already exists (remote)"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Tag $TAG does not exist"
+          fi
+
+      - name: Create and push tag
+        id: create_tag
+        if: >-
+          steps.check_tag.outputs.exists == 'false' &&
+          steps.changelog.outputs.ready == 'true'
+        run: |
+          TAG="v${{ steps.manifest.outputs.version }}"
+          echo "Creating tag $TAG"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+
+          echo "created=true" >> $GITHUB_OUTPUT
+
+      - name: Summary
+        run: |
+          TAG="v${{ steps.manifest.outputs.version }}"
+          VERSION="${{ steps.manifest.outputs.version }}"
+          if [ "${{ steps.check_tag.outputs.exists }}" = "true" ]; then
+            echo "Tag $TAG already existed. No new tag created." >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.changelog.outputs.ready }}" != "true" ]; then
+            echo "⚠️ Tag $TAG **not** created: CHANGELOG.md has no \`## [$VERSION]\` section with content." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Add a \`## [$VERSION]\` section with release notes to CHANGELOG.md and push together with the manifest.json update to trigger the release." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Created and pushed tag $TAG from manifest.json version." >> $GITHUB_STEP_SUMMARY
+            echo "The release job in this workflow run will now build and publish the release." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # Runs in two ways:
+  #   1. Same-run after auto_tag creates a tag from a manifest version bump.
+  #      Tags pushed with the default GITHUB_TOKEN do NOT trigger new workflow
+  #      runs (GitHub's recursion guard), so the release must be built here.
+  #   2. Directly from a manually pushed v* tag (auto_tag is skipped; the
+  #      `!cancelled()` keeps this job eligible despite the skipped dependency).
   release:
     name: Build and Release
     runs-on: ubuntu-latest
+    needs: auto_tag
+    if: >-
+      !cancelled() && (
+        startsWith(github.ref, 'refs/tags/') ||
+        (needs.auto_tag.result == 'success' && needs.auto_tag.outputs.tag_created == 'true')
+      )
     permissions:
       contents: write
 
@@ -20,11 +148,22 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Extract version from tag
+      - name: Determine version
         id: version
         run: |
-          # Extract version from tag (e.g., v2025.11.1 -> 2025.11.1)
-          VERSION=${GITHUB_REF#refs/tags/v}
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            # Triggered by a manually pushed tag (e.g., v2025.12.0 -> 2025.12.0)
+            VERSION=${GITHUB_REF#refs/tags/v}
+          else
+            # Same-run release after auto_tag created the tag
+            VERSION="${{ needs.auto_tag.outputs.version }}"
+          fi
+
+          if [ -z "$VERSION" ]; then
+            echo "ERROR: could not determine release version"
+            exit 1
+          fi
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
 
@@ -53,13 +192,10 @@ jobs:
         run: |
           echo "Building release package..."
 
-          # Create build directory
           mkdir -p build
 
-          # Create the integration package (zip file for HACS compatibility)
           PACKAGE_FILE="build/unraid_management_agent-${{ steps.version.outputs.version }}.zip"
 
-          # Package the custom_components directory
           cd custom_components
           zip -r "../$PACKAGE_FILE" unraid_management_agent/ \
             -x "*.pyc" \
@@ -68,7 +204,6 @@ jobs:
             -x "*.DS_Store"
           cd ..
 
-          # Verify the package was created
           if [ ! -f "$PACKAGE_FILE" ]; then
             echo "ERROR: Package file not found: $PACKAGE_FILE"
             ls -la build/
@@ -78,7 +213,6 @@ jobs:
           echo "✅ Package created: $PACKAGE_FILE"
           ls -lh "$PACKAGE_FILE"
 
-          # Show package contents
           echo ""
           echo "Package contents:"
           unzip -l "$PACKAGE_FILE" | head -20
@@ -88,13 +222,11 @@ jobs:
         run: |
           PACKAGE_FILE="build/unraid_management_agent-${{ steps.version.outputs.version }}.zip"
 
-          # Calculate SHA256 checksum
           SHA256=$(sha256sum "$PACKAGE_FILE" | awk '{print $1}')
 
           echo "sha256=$SHA256" >> $GITHUB_OUTPUT
           echo "✅ SHA256 checksum: $SHA256"
 
-          # Save checksum to file for release notes
           echo "$SHA256" > build/SHA256SUM
 
       - name: Extract release notes from CHANGELOG
@@ -102,17 +234,20 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
 
-          # Check if CHANGELOG.md exists
           if [ ! -f "CHANGELOG.md" ]; then
             echo "⚠️  CHANGELOG.md not found, using default release notes"
             NOTES="Release v$VERSION of the Unraid Management Agent Home Assistant integration."
           else
             # Extract release notes for this version from CHANGELOG.md
-            # Look for the section between [VERSION] and the next version header
-
-            if grep -q "\[$VERSION\]" CHANGELOG.md; then
-              # Extract the section for this version
-              NOTES=$(awk "/\[$VERSION\]/,/^## \[/" CHANGELOG.md | sed '1d;$d' | sed '/^$/d')
+            # Look for content after "## [VERSION]" until the next version header.
+            if grep -qF "## [$VERSION]" CHANGELOG.md; then
+              # Escape regex metacharacters (the dots) in the version string
+              VER_RE=$(printf '%s' "$VERSION" | sed 's/\./\\./g')
+              NOTES=$(awk -v ver="$VER_RE" '
+                $0 ~ "^## \\[" ver "\\]" {in_section=1; next}
+                in_section && $0 ~ /^## \[/ {exit}
+                in_section {print}
+              ' CHANGELOG.md)
 
               if [ -z "$NOTES" ]; then
                 echo "⚠️  No release notes found for version $VERSION in CHANGELOG.md"
@@ -128,6 +263,12 @@ jobs:
 
           # Save to file (GitHub Actions doesn't handle multiline outputs well)
           echo "$NOTES" > build/RELEASE_NOTES.md
+
+          # Add link to full changelog if not already present in NOTES
+          if ! grep -q "See \[CHANGELOG.md\](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details\." build/RELEASE_NOTES.md; then
+            echo "" >> build/RELEASE_NOTES.md
+            echo "See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details." >> build/RELEASE_NOTES.md
+          fi
 
           # Add installation instructions
           echo "" >> build/RELEASE_NOTES.md
@@ -169,19 +310,20 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          PACKAGE_FILE="build/unraid_management_agent-${VERSION}.zip"
-          PRERELEASE_FLAG=""
-          if [ "${{ steps.version.outputs.prerelease }}" == "true" ]; then
-            PRERELEASE_FLAG="--prerelease"
+          TAG="v${{ steps.version.outputs.version }}"
+          PRE_FLAG=""
+
+          if [ "${{ steps.version.outputs.prerelease }}" = "true" ]; then
+            PRE_FLAG="--prerelease"
           fi
 
-          gh release create "v${VERSION}" \
-            --title "v${VERSION}" \
+          gh release create "$TAG" \
+            build/unraid_management_agent-${{ steps.version.outputs.version }}.zip \
+            build/SHA256SUM \
+            CHANGELOG.md \
+            --title "$TAG" \
             --notes-file build/RELEASE_NOTES.md \
-            ${PRERELEASE_FLAG} \
-            "${PACKAGE_FILE}" \
-            build/SHA256SUM
+            $PRE_FLAG
 
       - name: Release Summary
         run: |
