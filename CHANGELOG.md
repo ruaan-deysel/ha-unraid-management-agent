@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2026.6.5] — 2026-06-17
+
+### Fixed
+
+- **Network rate sensor flapping to 0** ([#94](https://github.com/ruaan-deysel/ha-unraid-management-agent/pull/94), contributed by @mdinic):
+  Stabilized rate calculations so transient API updates do not force network
+  throughput sensors to briefly report `0` between valid samples.
+- **Uptime boot timestamp flapping** ([#95](https://github.com/ruaan-deysel/ha-unraid-management-agent/pull/95), contributed by @mdinic):
+  Prevented the uptime/boot-time sensor path from repeatedly changing the boot
+  timestamp value when the underlying uptime update jittered.
+
 ## [2026.6.4] — 2026-06-11
 
 ### Fixed
