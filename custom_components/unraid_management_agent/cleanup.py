@@ -39,6 +39,13 @@ from .const import (
     DEFAULT_ENABLE_VM_DEVICES,
     DOMAIN,
 )
+from .nut import (
+    NUT_BINARY_SENSOR_SUFFIXES,
+    NUT_KEY_PREFIX,
+    NUT_SENSOR_SUFFIXES,
+    nut_device_key,
+    secondary_nut_device_names,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -73,6 +80,7 @@ _DYNAMIC_KEY_PREFIXES: tuple[str, ...] = (
     "user_script_",
     "plugin_",  # plugin update entities
     ALERT_RULE_KEY_PREFIX,  # "alert_rule_": per-rule alert binary sensors
+    NUT_KEY_PREFIX,  # "nut_": NUT devices other than the primary UPS
 )
 
 # Static entity keys that start with a dynamic prefix and must never be removed.
@@ -289,6 +297,12 @@ def _build_valid_dynamic_entity_keys(
         if service.name:
             keys.add(f"system_service_{slugify(service.name)}")  # binary sensor
 
+    # ── NUT devices other than the primary UPS ────────────────────────────────
+    for name in secondary_nut_device_names(data):
+        prefix = nut_device_key(name)
+        keys.update(f"{prefix}_{suffix}" for suffix in NUT_SENSOR_SUFFIXES)
+        keys.update(f"{prefix}_{suffix}" for suffix in NUT_BINARY_SENSOR_SUFFIXES)
+
     # ── User shares ───────────────────────────────────────────────────────────
     for share in data.shares or []:
         name = getattr(share, "name", None)
@@ -433,6 +447,8 @@ def _unavailable_data_prefixes(data: UnraidData) -> set[str]:
     # rules, whose binary sensors must stay.
     if data.alert_rules is None:
         prefixes.add(ALERT_RULE_KEY_PREFIX)
+    if data.nut is None:
+        prefixes.add(NUT_KEY_PREFIX)
     return prefixes
 
 

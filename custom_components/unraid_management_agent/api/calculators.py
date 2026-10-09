@@ -112,6 +112,16 @@ class EnergyIntegrator:
 
         self._total_wh = total_wh
 
+    def break_series(self) -> None:
+        """
+        Forget the last sample but keep the accumulated total.
+
+        Call this when a power reading is unknown, so the next known sample
+        starts a new series instead of interpolating across the gap.
+        """
+        self._last_power_watts = None
+        self._last_timestamp = None
+
     def reset(self) -> None:
         """Reset the integrator to zero."""
         self._last_power_watts = None

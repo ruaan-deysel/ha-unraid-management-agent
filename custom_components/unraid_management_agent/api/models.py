@@ -1213,6 +1213,11 @@ class UPSInfo(BaseModel):
     """UPS information response (from apcupsd)."""
 
     # Basic info
+    device_name: str | None = Field(
+        None,
+        description="NUT device name the data comes from (absent for apcupsd and "
+        "older agents)",
+    )
     model: str | None = Field(None, description="UPS model")
     status: str | None = Field(None, description="UPS status (e.g., OL, OB)")
 
@@ -2049,12 +2054,64 @@ class ZFSArcStats(BaseModel):
     model_config = ConfigDict(frozen=True, extra="allow")
 
 
+class NUTDevice(BaseModel):
+    """A NUT device listed by ``upsc -l``."""
+
+    name: str | None = Field(None, description="NUT device name")
+    description: str | None = Field(None, description="Device description")
+    available: bool | None = Field(None, description="Whether the device is listed")
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+
+class NUTDeviceStatus(BaseModel):
+    """
+    Detailed status of one NUT device (a UPS, or e.g. an ATS).
+
+    Readings the device does not report are None (the agent sends null, older
+    agents send 0).
+    """
+
+    device_name: str | None = Field(None, description="NUT device name")
+    type: str | None = Field(None, description="NUT device.type (ups, ats, ...)")
+    status: str | None = Field(None, description="ups.status (e.g. OL, OB LB)")
+    model: str | None = Field(None, description="Device model")
+    manufacturer: str | None = Field(None, description="Device manufacturer")
+    connected: bool | None = Field(None, description="Whether the device answered")
+    battery_charge_percent: CoercedFloat = Field(
+        None, description="Battery charge percentage"
+    )
+    battery_runtime_seconds: CoercedInt = Field(
+        None, description="Battery runtime remaining in seconds"
+    )
+    load_percent: CoercedFloat = Field(None, description="Load percentage")
+    realpower_watts: CoercedFloat = Field(None, description="Real power in watts")
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    @property
+    def runtime_minutes(self) -> float | None:
+        """Return the battery runtime in minutes, or None if not reported."""
+        if self.battery_runtime_seconds is None:
+            return None
+        return round(self.battery_runtime_seconds / 60, 1)
+
+
 class NUTInfo(BaseModel):
     """NUT (Network UPS Tools) information."""
 
     installed: bool | None = Field(None, description="NUT installed")
     running: bool | None = Field(None, description="NUT service running")
     config_mode: str | None = Field(None, description="Configuration mode")
+    devices: list[NUTDevice] | None = Field(None, description="Devices from upsc -l")
+    status: NUTDeviceStatus | None = Field(
+        None, description="Status of the first NUT device"
+    )
+    statuses: list[NUTDeviceStatus] | None = Field(
+        None,
+        description="Status of every NUT device that answered (agents with "
+        "multi-device support; absent on older agents)",
+    )
     timestamp: str | None = Field(None, description="Data collection timestamp")
 
     model_config = ConfigDict(frozen=True, extra="allow")

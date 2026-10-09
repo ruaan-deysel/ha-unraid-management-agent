@@ -30,6 +30,7 @@ from .api.models import SystemService
 from .cleanup import async_prune_seen_names
 from .const import ATTR_PARITY_CHECK_STATUS
 from .entity import UnraidBaseEntity, UnraidEntityDescription
+from .nut import find_nut_status, nut_device_key, secondary_nut_statuses
 from .storage import (
     StorageEntitySpec,
     UnraidStorageBinarySensorEntityDescription,
@@ -619,6 +620,33 @@ async def async_setup_entry(
         coordinator.async_add_listener(callback(_add_system_service_sensors))
     )
 
+    # NUT device connected sensors - one per NUT device other than the primary
+    # UPS (which has ups_connected), created as devices appear
+    seen_nut_devices: set[str] = set()
+
+    def _add_nut_device_sensors() -> None:
+        if not coordinator.is_collector_enabled("nut"):
+            return
+        # Allow re-creation of entities removed from the registry (see #83)
+        async_prune_seen_names(
+            hass,
+            "binary_sensor",
+            seen_nut_devices,
+            lambda name: f"{entry.entry_id}_{nut_device_key(name)}_connected",
+        )
+        new_entities: list[BinarySensorEntity] = []
+        for name, _status in secondary_nut_statuses(coordinator.data):
+            if name not in seen_nut_devices:
+                seen_nut_devices.add(name)
+                new_entities.append(UnraidNUTConnectedBinarySensor(coordinator, name))
+        if new_entities:
+            async_add_entities(new_entities)
+
+    _add_nut_device_sensors()
+    entry.async_on_unload(
+        coordinator.async_add_listener(callback(_add_nut_device_sensors))
+    )
+
     # Network service binary sensors
     if data and data.network_services:
         # Iterate over known service fields on NetworkServicesStatus
@@ -770,6 +798,46 @@ class UnraidNetworkServiceBinarySensor(UnraidBaseEntity, BinarySensorEntity):
         return {
             "enabled": getattr(service_info, "enabled", None),
             "port": getattr(service_info, "port", None),
+        }
+
+
+class UnraidNUTConnectedBinarySensor(UnraidBaseEntity, BinarySensorEntity):
+    """Whether a NUT device other than the primary UPS answers, like UPS Connected."""
+
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_translation_key = "nut_ups_connected"
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        device_name: str,
+    ) -> None:
+        """Initialize the binary sensor."""
+        super().__init__(coordinator, f"{nut_device_key(device_name)}_connected")
+        self._device_name = device_name
+        self._attr_translation_placeholders = {"device": device_name}
+
+    @property
+    def is_on(self) -> bool:
+        """Return True while the device answers with a status."""
+        status = find_nut_status(self.coordinator.data, self._device_name)
+        return status is not None and bool(status.status)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the device type, status and model when known."""
+        status = find_nut_status(self.coordinator.data, self._device_name)
+        if status is None:
+            return {}
+        return {
+            key: value
+            for key, value in (
+                ("device_type", status.type),
+                ("ups_status", status.status),
+                ("ups_model", status.model),
+            )
+            if value
         }
 
 

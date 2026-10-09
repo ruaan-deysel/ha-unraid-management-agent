@@ -164,7 +164,7 @@ When the agent's `storage_topology` collector is active (`storcli` or `sg3_utils
 ### GPUs, UPS, Fans, & Services
 
 - **GPUs**: Utilization percentage, VRAM Used (MiB), VRAM Total (GiB), VRAM Usage (%), temperatures, and clock frequencies.
-- **UPS**: Battery percentage, load percentage, estimated runtime duration, and power draw.
+- **UPS**: Battery percentage, load percentage, estimated runtime duration, and power draw. With NUT, every additional NUT device (a second UPS, an ATS, ...) gets its own `UPS <device> ...` entities for the readings it reports, plus a connected sensor (needs an agent with multi-device NUT support).
 - **Fans**: Fan RPM sensors and PWM speed number entities (`number`) when fan control is enabled.
 - **Network Interfaces**: Status, IPv4/IPv6 addresses, link speeds, MTU, and real-time throughput.
 - **Network & System Services**: Binary sensors for network services (SMB, NFS, SSH, FTP, Syslog) and system services (Docker, Libvirt, Nginx).

@@ -96,6 +96,7 @@ def mock_async_unraid_client() -> Generator[MagicMock]:
         client.get_unassigned_info = AsyncMock(return_value=mock_unassigned_info())
         client.get_fan_status = AsyncMock(return_value=None)
         client.get_storage_topology = AsyncMock(return_value=None)
+        client.get_nut_info = AsyncMock(return_value=None)
         client.check_all_container_updates = AsyncMock(return_value=None)
         client.mount_remote_share = AsyncMock(return_value=None)
         client.unmount_remote_share = AsyncMock(return_value=None)

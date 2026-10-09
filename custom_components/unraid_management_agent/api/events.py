@@ -299,16 +299,18 @@ def identify_event_type(data: Any) -> EventType | None:
         if "state" in data and "total_disks" in data:
             return EventType.ARRAY_STATUS_UPDATE
 
-        # UPS status: has 'battery_charge_percent' and 'load_percent'
-        if "battery_charge_percent" in data and "load_percent" in data:
+        # UPS status: has the UPS-specific 'battery_charge_percent' (readings
+        # such as 'load_percent' may be null or left out when not reported)
+        if "battery_charge_percent" in data:
             return EventType.UPS_STATUS_UPDATE
 
         # ZFS ARC: has 'hit_ratio_percent' and 'size_bytes'
         if "hit_ratio_percent" in data and "size_bytes" in data:
             return EventType.ZFS_ARC_UPDATE
 
-        # NUT: has 'installed' and 'running' and 'config_mode'
-        if "installed" in data and "running" in data and "config_mode" in data:
+        # NUT: has 'installed' and 'running' (no other payload has both at the
+        # top level; the agent never sends 'config_mode')
+        if "installed" in data and "running" in data:
             return EventType.NUT_STATUS_UPDATE
 
         # Hardware: has 'bios' and 'baseboard' keys

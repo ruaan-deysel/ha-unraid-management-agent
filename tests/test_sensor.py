@@ -4592,6 +4592,9 @@ def test_ups_energy_sensor_native_value() -> None:
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
+    mock_coordinator.data.ups.power_watts = (
+        100.0  # value is reported while power is known
+    )
     sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
     sensor._total_energy = 1.2345
 
@@ -4823,6 +4826,7 @@ async def test_ups_energy_sensor_restore_energy_state() -> None:
     mock_entry = MagicMock()
     mock_entry.entry_id = "test_entry"
 
+    mock_coordinator.data.ups.power_watts = 100.0
     sensor = UnraidUPSEnergySensor(mock_coordinator, mock_entry)
     sensor.async_get_last_state = AsyncMock(return_value=MagicMock(state="1.25"))
     sensor.async_get_last_extra_data = AsyncMock(

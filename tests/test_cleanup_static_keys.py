@@ -23,7 +23,7 @@ from custom_components.unraid_management_agent.coordinator import UnraidData
 
 # Description tuples whose keys are only ever used inside a per-item key
 # (e.g. vm_<id>_<key>), never as a whole unique-ID key.
-_PER_ITEM_DESCRIPTIONS = {"VM_SENSOR_DESCRIPTIONS"}
+_PER_ITEM_DESCRIPTIONS = {"VM_SENSOR_DESCRIPTIONS", "NUT_DEVICE_SENSOR_DESCRIPTIONS"}
 
 
 def _static_description_keys() -> Iterator[tuple[str, str]]:

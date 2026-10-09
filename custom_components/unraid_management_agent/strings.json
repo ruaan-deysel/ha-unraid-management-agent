@@ -165,6 +165,21 @@
       "ups_energy": {
         "name": "UPS Energy"
       },
+      "nut_ups_battery": {
+        "name": "UPS {device} Battery"
+      },
+      "nut_ups_load": {
+        "name": "UPS {device} Load"
+      },
+      "nut_ups_runtime": {
+        "name": "UPS {device} Runtime"
+      },
+      "nut_ups_power": {
+        "name": "UPS {device} Power"
+      },
+      "nut_ups_energy": {
+        "name": "UPS {device} Energy"
+      },
       "flash_usage": {
         "name": "Flash Usage"
       },
@@ -419,6 +434,9 @@
       },
       "ups_connected": {
         "name": "UPS Connected"
+      },
+      "nut_ups_connected": {
+        "name": "UPS {device} Connected"
       },
       "zfs_available": {
         "name": "ZFS Available"

@@ -43,7 +43,7 @@ from . import UnraidConfigEntry, UnraidDataUpdateCoordinator
 from .alerts import ALERT_STATE_FIRING
 from .api import EnergyIntegrator, RateCalculator, parse_timestamp
 from .api.formatting import format_bytes, format_duration
-from .api.models import TemperatureInfo
+from .api.models import NUTDeviceStatus, TemperatureInfo
 from .cleanup import async_prune_seen_names
 from .const import (
     ATTR_ARRAY_STATE,
@@ -74,6 +74,7 @@ from .entity import (
     find_vm,
     vm_devices_enabled,
 )
+from .nut import find_nut_status, nut_device_key, secondary_nut_statuses
 from .storage import (
     StorageEntitySpec,
     UnraidStorageEntity,
@@ -3226,6 +3227,10 @@ class UnraidUPSEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
 
     This sensor integrates power readings over time to calculate total energy
     consumption in kWh. It persists its state across restarts using RestoreEntity.
+
+    Many UPSes report no power reading, so the agent sends ``power_watts: null``.
+    While power is unknown the sensor is unknown too and adds no energy; the
+    accumulated total is kept and reported again once power is known.
     """
 
     _attr_device_class = SensorDeviceClass.ENERGY
@@ -3286,7 +3291,7 @@ class UnraidUPSEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
     def extra_restore_state_data(self) -> UnraidEnergySensorExtraStoredData:
         """Return energy sensor state data that should survive restarts."""
         return UnraidEnergySensorExtraStoredData(
-            self.native_value,
+            self._total_kwh(),
             self.native_unit_of_measurement,
             self._last_power,
             self._energy_integrator.last_timestamp,
@@ -3299,14 +3304,24 @@ class UnraidUPSEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
         self._update_energy()
         self.async_write_ha_state()
 
+    def _current_power(self) -> float | None:
+        """Return the UPS power reading, or None when it is unknown or invalid."""
+        if not self.coordinator.data or not self.coordinator.data.ups:
+            return None
+        power = self.coordinator.data.ups.power_watts
+        if power is None or power < 0:
+            return None
+        return power
+
     def _update_energy(self) -> None:
         """Calculate and update energy based on current power reading."""
-        if not self.coordinator.data or not self.coordinator.data.ups:
-            return
+        current_power = self._current_power()
 
-        current_power = self.coordinator.data.ups.power_watts
-
-        if current_power is None or current_power < 0:
+        if current_power is None:
+            # No energy is added while power is unknown, and the gap is not
+            # interpolated: integration restarts with the next known reading.
+            self._energy_integrator.break_series()
+            self._last_power = None
             return
 
         current_uptime_seconds = _get_system_uptime_seconds(self.coordinator.data)
@@ -3320,10 +3335,16 @@ class UnraidUPSEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
         self._last_power = current_power
         self._last_uptime_seconds = current_uptime_seconds
 
-    @property
-    def native_value(self) -> float:
-        """Return the total energy consumed in kWh."""
+    def _total_kwh(self) -> float:
+        """Return the accumulated energy in kWh, including the current series."""
         return round(self._total_energy + self._energy_integrator.total_wh / 1000, 3)
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the total energy consumed in kWh, or None while power is unknown."""
+        if self._current_power() is None:
+            return None
+        return self._total_kwh()
 
     @property
     def available(self) -> bool:
@@ -3343,6 +3364,168 @@ class UnraidUPSEnergySensor(UnraidBaseEntity, RestoreEntity, SensorEntity):
             attrs["current_power_watts"] = self._last_power
 
         return attrs
+
+
+# =============================================================================
+# NUT device sensors (every NUT device other than the primary UPS)
+# =============================================================================
+
+
+def _nut_runtime_minutes(status: NUTDeviceStatus) -> int | None:
+    """Return a NUT device's battery runtime in whole minutes."""
+    minutes = status.runtime_minutes
+    return int(minutes) if minutes is not None else None
+
+
+@dataclass(frozen=True, kw_only=True)
+class UnraidNUTSensorEntityDescription(SensorEntityDescription):
+    """Description of a per-NUT-device sensor."""
+
+    value_fn: Callable[[NUTDeviceStatus], float | int | None]
+
+
+# The same readings as the primary UPS sensors, keyed by NUT device. A sensor is
+# only created once the device reports the reading.
+NUT_DEVICE_SENSOR_DESCRIPTIONS: tuple[UnraidNUTSensorEntityDescription, ...] = (
+    UnraidNUTSensorEntityDescription(
+        key="battery",
+        translation_key="nut_ups_battery",
+        native_unit_of_measurement=PERCENTAGE,
+        device_class=SensorDeviceClass.BATTERY,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda status: status.battery_charge_percent,
+    ),
+    UnraidNUTSensorEntityDescription(
+        key="load",
+        translation_key="nut_ups_load",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda status: status.load_percent,
+    ),
+    UnraidNUTSensorEntityDescription(
+        key="runtime",
+        translation_key="nut_ups_runtime",
+        native_unit_of_measurement=UnitOfTime.MINUTES,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=_nut_runtime_minutes,
+    ),
+    UnraidNUTSensorEntityDescription(
+        key="power",
+        translation_key="nut_ups_power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda status: status.realpower_watts,
+    ),
+)
+
+
+class UnraidNUTDeviceSensor(UnraidBaseEntity, SensorEntity):
+    """A reading of a NUT device other than the primary UPS."""
+
+    entity_description: UnraidNUTSensorEntityDescription
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        device_name: str,
+        description: UnraidNUTSensorEntityDescription,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(
+            coordinator, f"{nut_device_key(device_name)}_{description.key}"
+        )
+        self.entity_description = description
+        self._device_name = device_name
+        self._attr_translation_placeholders = {"device": device_name}
+
+    @property
+    def available(self) -> bool:
+        """Return False while the NUT device does not answer."""
+        return super().available and (
+            find_nut_status(self.coordinator.data, self._device_name) is not None
+        )
+
+    @property
+    def native_value(self) -> float | int | None:
+        """Return the reading, or None while the device does not report it."""
+        status = find_nut_status(self.coordinator.data, self._device_name)
+        return self.entity_description.value_fn(status) if status else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the device status and model, as the primary UPS battery does."""
+        status = find_nut_status(self.coordinator.data, self._device_name)
+        if status is None or self.entity_description.key != "battery":
+            return {}
+        attrs: dict[str, Any] = {}
+        _add_attr_if_set(attrs, ATTR_UPS_STATUS, status.status)
+        _add_attr_if_set(attrs, ATTR_UPS_MODEL, status.model)
+        return attrs
+
+
+class UnraidNUTEnergySensor(UnraidUPSEnergySensor):
+    """Energy of a NUT device other than the primary UPS, from its real power."""
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        entry: UnraidConfigEntry,
+        device_name: str,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry)
+        self._device_name = device_name
+        self._attr_unique_id = (
+            f"{coordinator.config_entry.entry_id}_{nut_device_key(device_name)}_energy"
+        )
+        self._attr_translation_key = "nut_ups_energy"
+        self._attr_translation_placeholders = {"device": device_name}
+
+    def _current_power(self) -> float | None:
+        """Return the device's real power, or None when unknown or invalid."""
+        status = find_nut_status(self.coordinator.data, self._device_name)
+        power = status.realpower_watts if status else None
+        if power is None or power < 0:
+            return None
+        return power
+
+    @property
+    def available(self) -> bool:
+        """Return False while the NUT device does not answer."""
+        return bool(
+            self.coordinator.last_update_success
+            and find_nut_status(self.coordinator.data, self._device_name) is not None
+        )
+
+
+def _new_nut_device_sensors(
+    coordinator: UnraidDataUpdateCoordinator,
+    entry: UnraidConfigEntry,
+    seen: set[str],
+) -> list[SensorEntity]:
+    """
+    Return sensors for NUT device readings that have no entity yet.
+
+    A sensor is created once its device reports the reading, so an ATS without
+    a battery gets no battery, load, runtime, power or energy sensor. ``seen``
+    holds the keys already created and is updated in place.
+    """
+    new_entities: list[SensorEntity] = []
+    for name, status in secondary_nut_statuses(coordinator.data):
+        prefix = nut_device_key(name)
+        for description in NUT_DEVICE_SENSOR_DESCRIPTIONS:
+            key = f"{prefix}_{description.key}"
+            if key in seen or description.value_fn(status) is None:
+                continue
+            seen.add(key)
+            new_entities.append(UnraidNUTDeviceSensor(coordinator, name, description))
+        energy_key = f"{prefix}_energy"
+        if energy_key not in seen and status.realpower_watts is not None:
+            seen.add(energy_key)
+            new_entities.append(UnraidNUTEnergySensor(coordinator, entry, name))
+    return new_entities
 
 
 # =============================================================================
@@ -4337,6 +4520,27 @@ async def async_setup_entry(
 
         # Add UPS Energy sensor (uses specialized class for state restoration)
         entities.append(UnraidUPSEnergySensor(coordinator, entry))
+
+    # NUT device sensors - one set per NUT device other than the primary UPS,
+    # created as devices and readings appear
+    seen_nut_sensors: set[str] = set()
+
+    def _add_nut_device_sensors() -> None:
+        if not coordinator.is_collector_enabled("nut"):
+            return
+        # Allow re-creation of entities removed from the registry (see #83)
+        async_prune_seen_names(
+            hass, "sensor", seen_nut_sensors, lambda key: f"{entry.entry_id}_{key}"
+        )
+        if new_entities := _new_nut_device_sensors(
+            coordinator, entry, seen_nut_sensors
+        ):
+            async_add_entities(new_entities)
+
+    _add_nut_device_sensors()
+    entry.async_on_unload(
+        coordinator.async_add_listener(callback(_add_nut_device_sensors))
+    )
 
     # Disk sensors - only if disk collector is enabled
     if coordinator.is_collector_enabled("disk"):

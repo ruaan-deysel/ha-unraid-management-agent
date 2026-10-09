@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Entities for every NUT device** ([#181](https://github.com/ruaan-deysel/ha-unraid-management-agent/issues/181)):
+  Every NUT device other than the primary UPS (a second UPS, an ATS, ...) gets
+  `UPS <device> Battery/Load/Runtime/Power/Energy` sensors and a
+  `UPS <device> Connected` binary sensor, keyed by NUT device name
+  (`nut_<device>_*`) and on the server device like the existing UPS entities. A
+  sensor is only created once the device reports that reading, so an ATS only
+  gets the connected sensor. The existing `ups_*` entities keep their unique IDs
+  and entity IDs. Needs an agent that reports `/nut` `statuses`
+  ([ruaan-deysel/unraid-management-agent#206](https://github.com/ruaan-deysel/unraid-management-agent/issues/206));
+  older agents get no extra entities. NUT `raw_variables` are redacted in
+  diagnostics.
 - **Bundled Lovelace Dashboard Cards Suite** ([#150](https://github.com/ruaan-deysel/ha-unraid-management-agent/issues/150)):
   - Shipped a complete suite of custom Lovelace cards bundled directly with the integration under `custom_components/unraid_management_agent/frontend/unraid-cards.js` (no separate manual HACS card installation required).
   - Automatically registered via `async_register_frontend` during `async_setup` with cache-busting URLs (`?v={version}-{digest}`) in Lovelace resource storage and YAML mode fallback.
@@ -126,6 +137,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **UPS readings the UPS does not report** ([#179](https://github.com/ruaan-deysel/ha-unraid-management-agent/issues/179)):
+  The UPS Energy sensor showed `0.000 kWh` for a UPS without a power reading. It is now
+  unknown while UPS power is unknown, adds no energy during that time, and starts a new
+  integration series when power returns instead of interpolating across the gap. The
+  accumulated total is still saved for restarts. UPS Load, Power, Battery and Runtime are
+  unknown when the agent sends `null` or leaves the field out (agent fix
+  [ruaan-deysel/unraid-management-agent#204](https://github.com/ruaan-deysel/unraid-management-agent/issues/204));
+  older agents that send `0` still show 0.
 - **Dashboard card accessibility, entity platform scoping, and slugification**:
   - Replaced ad-hoc regex with Home Assistant compliant NFKD slugification (`slugifyDeviceName`) across base card device matches.
   - Added keyboard interaction (`role="button"`, `tabindex="0"`, Enter/Space keydown handlers) across user shares and network interface rows.

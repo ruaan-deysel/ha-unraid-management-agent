@@ -42,6 +42,7 @@ from .api.models import (
     NetworkServicesStatus,
     NotificationOverview,
     NotificationsResponse,
+    NUTInfo,
     ParityHistory,
     ParitySchedule,
     PluginList,
@@ -92,6 +93,8 @@ class UnraidData:
     containers: list[ContainerInfo] | None = None
     vms: list[VMInfo] | None = None
     ups: UPSInfo | None = None
+    # /nut: every NUT device (statuses). None when the fetch failed.
+    nut: NUTInfo | None = None
     gpu: list[GPUInfo] | None = None
     network: list[NetworkInterface] | None = None
     shares: list[ShareInfo] | None = None
@@ -487,6 +490,7 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
                     self.client.get_storage_topology,
                     suppress_404=True,
                 ),
+                self._fetch("NUT status", self.client.get_nut_info, suppress_404=True),
             )
 
             # Unpack results with proper types (gather loses individual type info).
@@ -530,6 +534,7 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
             alert_rules: list[AlertRule] | None = results[33]
             alerts_status: AlertsStatusResponse | None = results[34]
             storage_topology: StorageTopology | None = results[35]
+            nut: NUTInfo | None = results[36]
 
             # If the core endpoints are all unreachable, treat the whole update
             # as failed instead of returning an empty snapshot. This flips
@@ -618,6 +623,7 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
                 containers=containers,
                 vms=vms,
                 ups=ups,
+                nut=nut,
                 gpu=gpu,
                 network=network,
                 shares=shares,
@@ -765,14 +771,14 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
             )
         elif event.event_type == EventType.ZFS_ARC_UPDATE:
             self.data.zfs_arc = event.data
-        elif event.event_type in (
-            EventType.NUT_STATUS_UPDATE,
-            EventType.HARDWARE_UPDATE,
-        ):
-            # These carry NUTInfo and HardwareFullInfo, which are different
-            # models from data.ups (UPSInfo) and data.system (SystemInfo) and
-            # are not used by any entity. Storing them there replaced UPS and
-            # system data until the next poll, so ignore them.
+        elif event.event_type == EventType.NUT_STATUS_UPDATE:
+            # NUTInfo feeds the per-device NUT entities; data.ups (UPSInfo)
+            # comes from ups_status_update and is left alone.
+            self.data.nut = event.data
+        elif event.event_type == EventType.HARDWARE_UPDATE:
+            # HardwareFullInfo is a different model from data.system
+            # (SystemInfo) and is not used by any entity. Storing it there
+            # replaced system data until the next poll, so ignore it.
             return
         elif event.event_type == EventType.COLLECTOR_STATE_CHANGE:
             # One collector changed: update it within the full status

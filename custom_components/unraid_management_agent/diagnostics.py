@@ -37,6 +37,8 @@ TO_REDACT = {
     "secret",
     # Alert rule notification targets: shoutrrr URLs can embed credentials
     "channels",
+    # NUT upsc output per device: serials, SNMP device addresses
+    "raw_variables",
 }
 
 
