@@ -148,7 +148,8 @@ rules:
       Remote share and unassigned device binary/switch entities, hwmon
       temperature sensors, system service running binary sensors, plugin
       and container update entities, agent alert rule binary sensors, and
-      storage controller and enclosure devices (storage.py) are added
+      storage controller and enclosure devices (storage.py) and their
+      throughput sensors (from the agent's second collection cycle) are added
       dynamically via coordinator listener when data arrives after initial setup;
       the alert event and firing alerts sensor are added once the agent first
       reports alert status

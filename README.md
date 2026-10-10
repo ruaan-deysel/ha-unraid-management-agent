@@ -126,6 +126,7 @@ When the agent's `storage_topology` collector is active (`storcli` or `sg3_utils
 
 - **Controllers**: Controller temperature, firmware version, PCIe link generation/width, port link rates, and overall controller problem binary sensor.
 - **Enclosures / Shelves**: Enclosure status, highest temperature, lowest fan speed, drive media/other error totals, and slot error counters.
+- **Throughput**: Read, write and total throughput and link utilization for each controller and enclosure (agents that report `throughput` in `/storage/topology`).
 - **Problem Binary Sensors**: Dedicated problem sensors for each power supply, I/O module, fan bank, cabling anomaly, path redundancy loss, drive health, and I/O firmware mismatches.
 
 ### Docker Containers

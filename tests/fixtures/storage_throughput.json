@@ -1,0 +1,29 @@
+{
+  "DLP9672282": {
+    "read_bytes_per_sec": 412500000.0,
+    "write_bytes_per_sec": 37500000.0,
+    "total_bytes_per_sec": 450000000.0,
+    "capacity_bytes_per_sec": 15754000000.0,
+    "utilization_percent": 2.856417418,
+    "drives": 43,
+    "interval_seconds": 30.02
+  },
+  "50050ccb33cbcba2": {
+    "read_bytes_per_sec": 262144000.0,
+    "write_bytes_per_sec": 1048576.0,
+    "total_bytes_per_sec": 263192576.0,
+    "capacity_bytes_per_sec": 4800000000.0,
+    "utilization_percent": 5.48317867,
+    "drives": 22,
+    "interval_seconds": 30.02
+  },
+  "500605bbd7eb76e8": {
+    "read_bytes_per_sec": 0.0,
+    "write_bytes_per_sec": 5242880.0,
+    "total_bytes_per_sec": 5242880.0,
+    "capacity_bytes_per_sec": 0.0,
+    "utilization_percent": null,
+    "drives": 2,
+    "interval_seconds": 30.02
+  }
+}

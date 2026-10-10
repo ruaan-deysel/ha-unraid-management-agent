@@ -305,6 +305,18 @@
       "storage_slot_errors": {
         "default": "mdi:alert-circle-outline"
       },
+      "storage_read_throughput": {
+        "default": "mdi:download"
+      },
+      "storage_write_throughput": {
+        "default": "mdi:upload"
+      },
+      "storage_throughput": {
+        "default": "mdi:swap-vertical"
+      },
+      "storage_link_utilization": {
+        "default": "mdi:gauge"
+      },
       "alerts_firing": {
         "default": "mdi:bell-alert-outline"
       }

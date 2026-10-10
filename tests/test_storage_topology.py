@@ -9,7 +9,12 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE
+from homeassistant.const import (
+    STATE_OFF,
+    STATE_ON,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
@@ -32,6 +37,9 @@ from custom_components.unraid_management_agent.storage import (
     _attached_to,
     _pcie_link,
     _slot_errors,
+    _throughput_attrs,
+    _throughput_value,
+    _utilization_attrs,
     build_storage_device_info,
     current_storage_ids,
 )
@@ -487,3 +495,172 @@ def test_helpers_handle_missing_data() -> None:
         update={"media_errors": None, "other_errors": None}
     )
     assert _slot_errors(StorageContext(topology, topology.enclosures[0], drive)) is None
+
+
+THROUGHPUT_FIXTURE = Path(__file__).parent / "fixtures" / "storage_throughput.json"
+THROUGHPUT_KEYS = ("read_throughput", "write_throughput", "throughput")
+CTRL = "storage_controller_dlp9672282"
+
+
+def _add_throughput(data: dict[str, Any]) -> None:
+    """Add the agent's throughput to the controller, shelf 1 and the HighPoint card."""
+    throughput = json.loads(THROUGHPUT_FIXTURE.read_text())
+    for owner in [*data["controllers"], *data["enclosures"]]:
+        if owner["id"] in throughput:
+            owner["throughput"] = throughput[owner["id"]]
+
+
+def _throughput_keys(prefix: str) -> list[str]:
+    return [f"{prefix}_{key}" for key in (*THROUGHPUT_KEYS, "link_utilization")]
+
+
+@pytest.fixture
+def throughput_client(mock_async_unraid_client: MagicMock) -> MagicMock:
+    """Serve the two-shelf topology with throughput (second agent cycle on)."""
+    mock_async_unraid_client.get_storage_topology.return_value = _topology(
+        _add_throughput
+    )
+    return mock_async_unraid_client
+
+
+def test_throughput_model_is_optional() -> None:
+    """Older agents and the first collection cycle have no throughput."""
+    topology = _topology()
+    assert topology.controllers[0].throughput is None
+    assert all(e.throughput is None for e in topology.enclosures)
+
+    throughput = _topology(_add_throughput).enclosures[0].throughput
+    assert throughput is not None
+    assert throughput.read_bytes_per_sec == 262144000.0
+    assert throughput.drives == 22
+    assert throughput.interval_seconds == 30.02
+
+
+@pytest.mark.usefixtures("throughput_client", "mock_unraid_websocket_client_class")
+async def test_throughput_sensors(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry
+) -> None:
+    """Read, write and total throughput and link utilization, enabled by default."""
+    await _setup(hass, mock_config_entry)
+    shelf = f"storage_enclosure_{SHELF1}"
+
+    read = _state(hass, "sensor", f"{shelf}_read_throughput")
+    assert read.name == "NETAPP DS424IOM12A (e242) Read Throughput"
+    assert float(read.state) == pytest.approx(262.144)
+    assert read.attributes["unit_of_measurement"] == "MB/s"
+    assert read.attributes["device_class"] == "data_rate"
+    assert read.attributes["state_class"] == "measurement"
+    assert read.attributes["drives"] == 22
+    assert read.attributes["interval_seconds"] == 30.02
+    write = _state(hass, "sensor", f"{shelf}_write_throughput")
+    assert write.name == "NETAPP DS424IOM12A (e242) Write Throughput"
+    assert float(write.state) == pytest.approx(1.048576)
+    total = _state(hass, "sensor", f"{shelf}_throughput")
+    assert total.name == "NETAPP DS424IOM12A (e242) Throughput"
+    assert float(total.state) == pytest.approx(263.192576)
+    assert total.attributes["unit_of_measurement"] == "MB/s"
+
+    utilization = _state(hass, "sensor", f"{shelf}_link_utilization")
+    assert utilization.name == "NETAPP DS424IOM12A (e242) Link Utilization"
+    assert float(utilization.state) == pytest.approx(5.48317867)
+    assert utilization.attributes["unit_of_measurement"] == "%"
+    assert utilization.attributes["state_class"] == "measurement"
+    assert utilization.attributes["capacity_bytes_per_sec"] == 4800000000.0
+    assert utilization.attributes["drives"] == 22
+
+    assert float(_state(hass, "sensor", f"{CTRL}_throughput").state) == (
+        pytest.approx(450.0)
+    )
+    controller = _state(hass, "sensor", f"{CTRL}_link_utilization")
+    assert controller.name == "MegaRAID 9580-8i8e (c0) Link Utilization"
+    assert float(controller.state) == pytest.approx(2.856417418)
+
+    registry = er.async_get(hass)
+    for key in [*_throughput_keys(shelf), *_throughput_keys(CTRL)]:
+        entry = registry.async_get(_entity_id(hass, "sensor", key))
+        assert entry is not None
+        assert entry.disabled_by is None
+        assert entry.entity_category is None
+
+    # Shelf 2 reports no throughput, so it gets no throughput entities.
+    for key in _throughput_keys(f"storage_enclosure_{SHELF2}"):
+        assert (
+            registry.async_get_entity_id("sensor", DOMAIN, f"{ENTRY_ID}_{key}") is None
+        )
+
+
+@pytest.mark.usefixtures("throughput_client", "mock_unraid_websocket_client_class")
+async def test_link_utilization_unknown_without_capacity(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry
+) -> None:
+    """Utilization is unknown when the agent cannot work out the link capacity."""
+    await _setup(hass, mock_config_entry)
+    hpt = f"storage_enclosure_{HPT}"
+
+    utilization = _state(hass, "sensor", f"{hpt}_link_utilization")
+    assert utilization.state == STATE_UNKNOWN
+    assert utilization.attributes["capacity_bytes_per_sec"] is None
+    assert utilization.attributes["drives"] == 2
+    assert float(_state(hass, "sensor", f"{hpt}_read_throughput").state) == 0.0
+    assert float(_state(hass, "sensor", f"{hpt}_throughput").state) == (
+        pytest.approx(5.24288)
+    )
+
+
+@pytest.mark.usefixtures("storage_client", "mock_unraid_websocket_client_class")
+async def test_throughput_sensors_appear_after_the_first_cycle(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry
+) -> None:
+    """The first collection has no throughput; the sensors appear with the next."""
+    await _setup(hass, mock_config_entry)
+    registry = er.async_get(hass)
+    shelf = f"storage_enclosure_{SHELF1}"
+    keys = [*_throughput_keys(shelf), *_throughput_keys(CTRL)]
+    for key in keys:
+        assert (
+            registry.async_get_entity_id("sensor", DOMAIN, f"{ENTRY_ID}_{key}") is None
+        )
+
+    await _push(hass, mock_config_entry, _topology(_add_throughput))
+    for key in keys:
+        assert _state(hass, "sensor", key).state != STATE_UNAVAILABLE
+    assert float(_state(hass, "sensor", f"{shelf}_read_throughput").state) == (
+        pytest.approx(262.144)
+    )
+
+
+@pytest.mark.usefixtures("throughput_client", "mock_unraid_websocket_client_class")
+async def test_throughput_unavailable_when_it_disappears(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry
+) -> None:
+    """Throughput that is no longer reported is unavailable and survives cleanup."""
+    await _setup(hass, mock_config_entry)
+    shelf = f"storage_enclosure_{SHELF1}"
+    keys = [*_throughput_keys(shelf), *_throughput_keys(CTRL)]
+
+    # E.g. an agent downgrade: the controller and shelf are still reported.
+    await _push(hass, mock_config_entry, _topology())
+    for key in keys:
+        state = _state(hass, "sensor", key)
+        assert state.state == STATE_UNAVAILABLE
+        assert "drives" not in state.attributes
+    assert _state(hass, "binary_sensor", f"{shelf}_status").state == STATE_OFF
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+    async_cleanup_stale_entities(hass, mock_config_entry, coordinator)
+    for key in keys:
+        assert _entity_id(hass, "sensor", key)
+
+    await _push(hass, mock_config_entry, _topology(_add_throughput))
+    assert float(_state(hass, "sensor", f"{shelf}_throughput").state) == (
+        pytest.approx(263.192576)
+    )
+
+
+def test_throughput_helpers_without_throughput() -> None:
+    """Value and attribute helpers cope with an owner without throughput."""
+    topology = _topology()
+    ctx = StorageContext(topology, topology.enclosures[0], None)
+    assert _throughput_value("total_bytes_per_sec")(ctx) is None
+    assert _throughput_attrs(ctx) == {}
+    assert _utilization_attrs(ctx) == {}

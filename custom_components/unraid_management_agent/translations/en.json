@@ -390,6 +390,18 @@
       "storage_drive_other_errors": {
         "name": "Drive Other Errors"
       },
+      "storage_read_throughput": {
+        "name": "Read Throughput"
+      },
+      "storage_write_throughput": {
+        "name": "Write Throughput"
+      },
+      "storage_throughput": {
+        "name": "Throughput"
+      },
+      "storage_link_utilization": {
+        "name": "Link Utilization"
+      },
       "storage_temperature_sensor": {
         "name": "Temperature Sensor {index}"
       },

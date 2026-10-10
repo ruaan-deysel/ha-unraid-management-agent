@@ -7,7 +7,8 @@ behind them. Each controller and enclosure becomes a child device of the
 Unraid server.
 
 Entity design (kept small on purpose; a two-shelf system has ~45 enabled
-entities and the rest disabled by default):
+entities, plus four throughput sensors per controller and enclosure, and the
+rest disabled by default):
 
 - Problem binary sensors for what a user replaces or re-cables: one per power
   supply and I/O module, plus enclosure-wide ones for fans, cabling, path
@@ -17,6 +18,9 @@ entities and the rest disabled by default):
   rate and width, enclosure highest temperature and lowest fan speed, and
   per-enclosure drive error and link-rate counts whose attributes name the
   affected slots.
+- Read, write and total throughput and link utilization for each controller
+  and enclosure, once the agent reports throughput (from its second
+  collection cycle on).
 - Per-sensor readings (every temperature/fan/voltage/current element) and
   per-slot link rate and error counts are disabled by default.
 
@@ -41,6 +45,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import (
+    PERCENTAGE,
     REVOLUTIONS_PER_MINUTE,
     EntityCategory,
     UnitOfDataRate,
@@ -62,6 +67,7 @@ from .api.models import (
     StorageController,
     StorageDrive,
     StorageEnclosure,
+    StorageThroughput,
     StorageTopology,
 )
 from .cleanup import async_prune_seen_names
@@ -543,6 +549,43 @@ def _slot_error_attrs(ctx: StorageContext) -> dict[str, Any]:
     }
 
 
+def _throughput(ctx: StorageContext) -> StorageThroughput | None:
+    """Return the throughput of the context's controller or enclosure."""
+    throughput: StorageThroughput | None = ctx.owner.throughput
+    return throughput
+
+
+def _has_throughput(ctx: StorageContext) -> bool:
+    return _throughput(ctx) is not None
+
+
+def _throughput_value(field: str) -> Callable[[StorageContext], float | None]:
+    def value(ctx: StorageContext) -> float | None:
+        throughput = _throughput(ctx)
+        return getattr(throughput, field) if throughput else None
+
+    return value
+
+
+def _throughput_attrs(ctx: StorageContext) -> dict[str, Any]:
+    throughput = _throughput(ctx)
+    if throughput is None:
+        return {}
+    return {
+        "drives": throughput.drives,
+        "interval_seconds": throughput.interval_seconds,
+    }
+
+
+def _utilization_attrs(ctx: StorageContext) -> dict[str, Any]:
+    throughput = _throughput(ctx)
+    if throughput is None:
+        return {}
+    # The agent reports a capacity of 0 when it cannot work out the link speed.
+    capacity = throughput.capacity_bytes_per_sec or None
+    return {**_throughput_attrs(ctx), "capacity_bytes_per_sec": capacity}
+
+
 # =============================================================================
 # Entity descriptions
 # =============================================================================
@@ -554,6 +597,8 @@ class UnraidStorageSensorEntityDescription(SensorEntityDescription):
 
     value_fn: Callable[[StorageContext], StateType]
     attrs_fn: Callable[[StorageContext], dict[str, Any]] | None = None
+    # False makes the entity unavailable (data the owner no longer reports).
+    exists_fn: Callable[[StorageContext], bool] | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -563,6 +608,7 @@ class UnraidStorageBinarySensorEntityDescription(BinarySensorEntityDescription):
     device_class: BinarySensorDeviceClass | None = BinarySensorDeviceClass.PROBLEM
     is_on_fn: Callable[[StorageContext], bool]
     attrs_fn: Callable[[StorageContext], dict[str, Any]] | None = None
+    exists_fn: Callable[[StorageContext], bool] | None = None
 
 
 _CONTROLLER_TEMPERATURE = UnraidStorageSensorEntityDescription(
@@ -705,6 +751,45 @@ _SLOT_ERRORS = UnraidStorageSensorEntityDescription(
     attrs_fn=_slot_error_attrs,
 )
 
+
+def _throughput_description(
+    key: str, field: str
+) -> UnraidStorageSensorEntityDescription:
+    """Describe a read, write or total throughput sensor."""
+    return UnraidStorageSensorEntityDescription(
+        key=key,
+        translation_key=f"storage_{key}",
+        device_class=SensorDeviceClass.DATA_RATE,
+        native_unit_of_measurement=UnitOfDataRate.BYTES_PER_SECOND,
+        suggested_unit_of_measurement=UnitOfDataRate.MEGABYTES_PER_SECOND,
+        suggested_display_precision=1,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=_throughput_value(field),
+        attrs_fn=_throughput_attrs,
+        exists_fn=_has_throughput,
+    )
+
+
+_READ_THROUGHPUT = _throughput_description("read_throughput", "read_bytes_per_sec")
+_WRITE_THROUGHPUT = _throughput_description("write_throughput", "write_bytes_per_sec")
+_TOTAL_THROUGHPUT = _throughput_description("throughput", "total_bytes_per_sec")
+_LINK_UTILIZATION = UnraidStorageSensorEntityDescription(
+    key="link_utilization",
+    translation_key="storage_link_utilization",
+    native_unit_of_measurement=PERCENTAGE,
+    suggested_display_precision=1,
+    state_class=SensorStateClass.MEASUREMENT,
+    value_fn=_throughput_value("utilization_percent"),
+    attrs_fn=_utilization_attrs,
+    exists_fn=_has_throughput,
+)
+_THROUGHPUT_SENSORS = (
+    _READ_THROUGHPUT,
+    _WRITE_THROUGHPUT,
+    _TOTAL_THROUGHPUT,
+    _LINK_UTILIZATION,
+)
+
 _CONTROLLER_STATUS = UnraidStorageBinarySensorEntityDescription(
     key="status",
     translation_key="storage_status",
@@ -819,6 +904,8 @@ def storage_sensor_specs(topology: StorageTopology) -> list[StorageEntitySpec]:
         specs.append(ctrl(_CONTROLLER_FIRMWARE))
         if controller.pcie_link_speed:
             specs.append(ctrl(_CONTROLLER_PCIE))
+        if controller.throughput is not None:
+            specs.extend(ctrl(d) for d in _THROUGHPUT_SENSORS)
         for port in controller.ports:
             specs.append(ctrl(_PORT_LINK_RATE, ("port", port.port)))
             specs.append(ctrl(_PORT_WIDTH, ("port", port.port)))
@@ -841,6 +928,8 @@ def storage_sensor_specs(topology: StorageTopology) -> list[StorageEntitySpec]:
             specs.append(encl(_ENCLOSURE_TEMPERATURE))
         if any(f.rpm is not None for f in enclosure.fans):
             specs.append(encl(_ENCLOSURE_FAN_SPEED))
+        if enclosure.throughput is not None:
+            specs.extend(encl(d) for d in _THROUGHPUT_SENSORS)
         if enclosure_drives(topology, enclosure):
             specs.append(encl(_DRIVES_BELOW_MAX))
             specs.append(encl(_DRIVE_MEDIA_ERRORS))
@@ -926,7 +1015,11 @@ class UnraidStorageEntity(UnraidBaseEntity):
         topology = storage_topology(self.coordinator)
         if topology is None:
             return None
-        return resolve(topology, self._spec.kind, self._spec.owner_id, self._spec.item)
+        ctx = resolve(topology, self._spec.kind, self._spec.owner_id, self._spec.item)
+        exists_fn = self._spec.description.exists_fn
+        if ctx is None or (exists_fn is not None and not exists_fn(ctx)):
+            return None
+        return ctx
 
     @property
     def available(self) -> bool:

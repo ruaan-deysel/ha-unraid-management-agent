@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Storage throughput and link utilization sensors**:
+  - Each storage topology controller and enclosure (disk shelf) device gets **Read Throughput**, **Write Throughput** and **Throughput** (read + write) sensors (data rate, B/s shown as MB/s by default) and a **Link Utilization** sensor (%), from the optional `throughput` object the agent adds to `/storage/topology`.
+  - The sensors appear once the agent reports throughput (from its second collection cycle) and become unavailable if it stops. Link Utilization is unknown when the agent cannot work out the link capacity; its attributes include the drive count, the measurement interval and the capacity in B/s.
+  - Older agents without `throughput` are unaffected (no new entities).
+
 - **Governance parity with unraid-management-agent**:
   - Added a mandatory **Pre-Submission Governance** section to `.github/PULL_REQUEST_TEMPLATE.md` requiring explicit local verification, lint/test confirmation, duplicate-PR prevention, and human verification for AI-assisted PRs.
   - Updated `.github/workflows/pr-governance.yml` to enforce completion of every Pre-Submission Governance checkbox.

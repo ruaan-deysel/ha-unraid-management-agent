@@ -3189,6 +3189,29 @@ class StorageControllerPort(BaseModel):
     model_config = {"frozen": True, "extra": "allow"}
 
 
+class StorageThroughput(BaseModel):
+    """
+    I/O throughput of the drives behind a controller or in an enclosure.
+
+    The agent derives it from the kernel's per-disk counters between two
+    collection cycles, so it is absent on the first cycle and on older agents.
+    """
+
+    read_bytes_per_sec: CoercedFloat = Field(None, description="Read rate (B/s)")
+    write_bytes_per_sec: CoercedFloat = Field(None, description="Write rate (B/s)")
+    total_bytes_per_sec: CoercedFloat = Field(None, description="Read + write (B/s)")
+    capacity_bytes_per_sec: CoercedFloat = Field(
+        None, description="Usable link bandwidth (B/s); 0 when unknown"
+    )
+    utilization_percent: CoercedFloat = Field(
+        None, description="Total as a share of capacity; None when unknown"
+    )
+    drives: CoercedInt = Field(None, description="Drives included")
+    interval_seconds: CoercedFloat = Field(None, description="Measurement interval")
+
+    model_config = {"frozen": True, "extra": "allow"}
+
+
 class StorageController(BaseModel):
     """A storcli-managed RAID controller or HBA."""
 
@@ -3218,6 +3241,9 @@ class StorageController(BaseModel):
     physical_drives: CoercedInt = Field(None, description="Attached drives")
     ports: list[StorageControllerPort] = Field(
         default_factory=list, description="Connected ports"
+    )
+    throughput: StorageThroughput | None = Field(
+        None, description="I/O throughput of the controller's drives"
     )
 
     model_config = {"frozen": True, "extra": "allow"}
@@ -3354,6 +3380,9 @@ class StorageEnclosure(BaseModel):
     )
     redundancy: EnclosureRedundancy = Field(default_factory=EnclosureRedundancy)
     problems: list[str] = Field(default_factory=list, description="Current problems")
+    throughput: StorageThroughput | None = Field(
+        None, description="I/O throughput of the enclosure's drives"
+    )
 
     model_config = {"frozen": True, "extra": "allow"}
 
