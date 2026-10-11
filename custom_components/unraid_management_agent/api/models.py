@@ -176,7 +176,7 @@ class TemperatureInfo(BaseModel):
         """
         Return the hwmon channel ('temp1') or None if this is not a temperature.
 
-        Agents before the fix for ruaan-deysel/unraid-management-agent#177 also
+        Agents before the fix for tinkerologie/unraid-management-agent#177 also
         list voltage (inN), current (currN) and power (powerN) inputs here.
 
         Example:

@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Updated `.github/ISSUE_TEMPLATE/config.yml` to keep blank issues disabled and route support users to Discussions/community channels.
   - Added `.github/workflows/labels.yml` to sync labels from `.github/labels.yml` so required form labels stay present.
 
-- **Bundled Lovelace Dashboard Cards Suite** ([#150](https://github.com/ruaan-deysel/ha-unraid-management-agent/issues/150)):
+- **Bundled Lovelace Dashboard Cards Suite** ([#150](https://github.com/tinkerologie/ha-unraid-management-agent/issues/150)):
   - Shipped a complete suite of custom Lovelace cards bundled directly with the integration under `custom_components/unraid_management_agent/frontend/unraid-cards.js` (no separate manual HACS card installation required).
   - Automatically registered via `async_register_frontend` during `async_setup` with cache-busting URLs (`?v={version}-{digest}`) in Lovelace resource storage and YAML mode fallback.
   - Phase 1 & Phase 2 cards included:
@@ -66,13 +66,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added comprehensive tests for container and VM buttons, autostart switches, disk spin switches, and remote share switches, achieving 98% coverage on `button.py` and `switch.py`, and 95% on `binary_sensor.py`.
 - **PR governance workflow & HA standards enforcement** — added automated GitHub Actions workflow enforcing PR template completeness, Home Assistant Quality Scale compliance, static scanning for deprecated patterns (e.g., hass.data[DOMAIN], unit_of_measurement), mandatory CHANGELOG.md updates, issue linking checks, and bot/draft exemptions.
 - **Pull request template** — added `.github/PULL_REQUEST_TEMPLATE.md` with structured sections for description, changes made, Home Assistant Quality Scale verification, and quality checklist.
-- **Read-only option** ([#141](https://github.com/ruaan-deysel/ha-unraid-management-agent/pull/141), contributed by @davidcoulson):
+- **Read-only option** ([#141](https://github.com/tinkerologie/ha-unraid-management-agent/pull/141), contributed by @davidcoulson):
   A new **Read-only (sensors only)** option loads only the sensor, binary sensor
   and event platforms, removes switch, button and number entities created
   earlier, and makes integration actions targeting a read-only entry refuse
   with a `read_only_mode` validation error. Off by default.
-- **VMs as separate devices (optional)** ([#140](https://github.com/ruaan-deysel/ha-unraid-management-agent/pull/140), closes [#145](https://github.com/ruaan-deysel/ha-unraid-management-agent/issues/145)): A new **Show virtual machines as separate devices** option (off by default) gives each VM a child device of the Unraid server, keyed by its libvirt UUID. The device holds the VM's power switch and control buttons plus numeric sensors: state, CPU usage, vCPUs, memory allocated and network receive/send rates. Memory used, network totals, disk read/write rates and disk size are disabled by default. Rates are computed from the agent's cumulative counters, and new VMs get their device without a reload. When off, VM entities stay on the server device exactly as before. VM devices left without entities (VM deleted or option turned off) are removed, and a device whose VM is gone can be deleted from the UI. Requires Home Assistant 2026.9 or newer.
-- **Per-channel hwmon temperature sensors** ([#144](https://github.com/ruaan-deysel/ha-unraid-management-agent/pull/144), contributed by @davidcoulson):
+- **VMs as separate devices (optional)** ([#140](https://github.com/tinkerologie/ha-unraid-management-agent/pull/140), closes [#145](https://github.com/tinkerologie/ha-unraid-management-agent/issues/145)): A new **Show virtual machines as separate devices** option (off by default) gives each VM a child device of the Unraid server, keyed by its libvirt UUID. The device holds the VM's power switch and control buttons plus numeric sensors: state, CPU usage, vCPUs, memory allocated and network receive/send rates. Memory used, network totals, disk read/write rates and disk size are disabled by default. Rates are computed from the agent's cumulative counters, and new VMs get their device without a reload. When off, VM entities stay on the server device exactly as before. VM devices left without entities (VM deleted or option turned off) are removed, and a device whose VM is gone can be deleted from the UI. Requires Home Assistant 2026.9 or newer.
+- **Per-channel hwmon temperature sensors** ([#144](https://github.com/tinkerologie/ha-unraid-management-agent/pull/144), contributed by @davidcoulson):
   One sensor per lm-sensors `temp*_input` channel in the agent's `temperatures`
   list (for example a coolant probe on an Aquacomputer Octo, NVMe, NIC and CCD
   temperatures), named from the `sensors.conf` label. Disabled by default, since
@@ -81,9 +81,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   added without a reload, removed channels are cleaned up like other dynamic
   entities, and the sensors do not depend on the fan control option. Voltage,
   current and power readings that older agents list as temperatures are skipped.
-- **API token authentication** ([#143](https://github.com/ruaan-deysel/ha-unraid-management-agent/pull/143), contributed by @davidcoulson): An optional API token in the setup, Zeroconf and reconfigure forms is sent as a bearer token on REST requests and the websocket handshake, for agents with `API_TOKEN` set (v2026.08.02+). A rejected token shows "Invalid authentication", and a token rejected later starts Home Assistant's standard re-authentication flow. The token is redacted from diagnostics.
-- **Docker containers as separate devices (optional)** ([#142](https://github.com/ruaan-deysel/ha-unraid-management-agent/pull/142), closes [#147](https://github.com/ruaan-deysel/ha-unraid-management-agent/issues/147)): A new **Show Docker containers as separate devices** option (off by default) groups each container's run and autostart switches, restart button and metric sensors on a child device of the Unraid server, with short names (Running, Autostart, Restart, CPU, Memory, Memory usage, Restart count, Network RX/TX). Unique IDs are unchanged, so history is kept. When off, container entities stay on the server device exactly as before. Container devices left without entities are removed, and a device whose container is gone can be deleted from the UI. Requires Home Assistant 2026.9 or newer.
-- **SAS storage topology devices** ([#163](https://github.com/ruaan-deysel/ha-unraid-management-agent/issues/163), needs ruaan-deysel/unraid-management-agent#186, contributed by @davidcoulson):
+- **API token authentication** ([#143](https://github.com/tinkerologie/ha-unraid-management-agent/pull/143), contributed by @davidcoulson): An optional API token in the setup, Zeroconf and reconfigure forms is sent as a bearer token on REST requests and the websocket handshake, for agents with `API_TOKEN` set (v2026.08.02+). A rejected token shows "Invalid authentication", and a token rejected later starts Home Assistant's standard re-authentication flow. The token is redacted from diagnostics.
+- **Docker containers as separate devices (optional)** ([#142](https://github.com/tinkerologie/ha-unraid-management-agent/pull/142), closes [#147](https://github.com/tinkerologie/ha-unraid-management-agent/issues/147)): A new **Show Docker containers as separate devices** option (off by default) groups each container's run and autostart switches, restart button and metric sensors on a child device of the Unraid server, with short names (Running, Autostart, Restart, CPU, Memory, Memory usage, Restart count, Network RX/TX). Unique IDs are unchanged, so history is kept. When off, container entities stay on the server device exactly as before. Container devices left without entities are removed, and a device whose container is gone can be deleted from the UI. Requires Home Assistant 2026.9 or newer.
+- **SAS storage topology devices** ([#163](https://github.com/tinkerologie/ha-unraid-management-agent/issues/163), needs tinkerologie/unraid-management-agent#186, contributed by @davidcoulson):
   With an agent that provides `GET /api/v1/storage/topology` (storcli and/or
   sg_ses on the server), each RAID/HBA controller and each disk shelf or
   backplane becomes a child device of the Unraid server. Enabled by default:
@@ -100,8 +100,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the endpoint, or without storcli/SES devices, get no storage entities and
   no errors. Storage entities are not removed automatically when hardware
   disappears (they go unavailable); such a device can be deleted from the UI.
-- **Update entities for Unraid OS, plugins and containers** (closes [#156](https://github.com/ruaan-deysel/ha-unraid-management-agent/issues/156), contributed by @davidcoulson): A new `update` platform shows available updates on Home Assistant's Updates page, using data the integration already fetches (no extra polling). **Unraid OS** shows the installed and latest version and is display only (never installed from Home Assistant). Each **plugin** gets an entity with its installed and latest version; Install runs the agent's plugin update (not offered for the agent's own plugin, which restarts the agent mid-request). With **Enable container update checks** on, each **container** gets an entity whose versions are short image digests; Install pulls the new image and recreates the container through the agent, and the entity moves to the container's device when containers are shown as separate devices. New plugins and containers get entities without a reload, and stale ones are removed. In read-only mode the entities still show updates but do not offer Install. Installing updates for plugins whose `.plg` file name differs from their name (e.g. `disklocation`) needs agent fix [ruaan-deysel/unraid-management-agent#182](https://github.com/ruaan-deysel/unraid-management-agent/issues/182).
-- **Agent alert rules** ([#161](https://github.com/ruaan-deysel/ha-unraid-management-agent/pull/161), closes [#160](https://github.com/ruaan-deysel/ha-unraid-management-agent/issues/160), contributed by @davidcoulson):
+- **Update entities for Unraid OS, plugins and containers** (closes [#156](https://github.com/tinkerologie/ha-unraid-management-agent/issues/156), contributed by @davidcoulson): A new `update` platform shows available updates on Home Assistant's Updates page, using data the integration already fetches (no extra polling). **Unraid OS** shows the installed and latest version and is display only (never installed from Home Assistant). Each **plugin** gets an entity with its installed and latest version; Install runs the agent's plugin update (not offered for the agent's own plugin, which restarts the agent mid-request). With **Enable container update checks** on, each **container** gets an entity whose versions are short image digests; Install pulls the new image and recreates the container through the agent, and the entity moves to the container's device when containers are shown as separate devices. New plugins and containers get entities without a reload, and stale ones are removed. In read-only mode the entities still show updates but do not offer Install. Installing updates for plugins whose `.plg` file name differs from their name (e.g. `disklocation`) needs agent fix [tinkerologie/unraid-management-agent#182](https://github.com/tinkerologie/unraid-management-agent/issues/182).
+- **Agent alert rules** ([#161](https://github.com/tinkerologie/ha-unraid-management-agent/pull/161), closes [#160](https://github.com/tinkerologie/ha-unraid-management-agent/issues/160), contributed by @davidcoulson):
   The agent's alerting engine (agent v2026.03.00+) is now visible in Home
   Assistant. Each alert rule gets a problem binary sensor that is on while the
   rule fires, with its severity, state (ok, pending or firing), since,
@@ -114,7 +114,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   polls is not seen. New rules are added without a reload and deleted rules
   are cleaned up like other dynamic entities. Agents without the alerting
   endpoints get no alert entities.
-- **ZFS pool scrub, error and problem entities** ([#162](https://github.com/ruaan-deysel/ha-unraid-management-agent/issues/162), contributed by @davidcoulson):
+- **ZFS pool scrub, error and problem entities** ([#162](https://github.com/tinkerologie/ha-unraid-management-agent/issues/162), contributed by @davidcoulson):
   Each ZFS pool gets a **Problem** binary sensor plus two diagnostic sensors:
   **Scrub Status** (Never run, Scrubbing, Scrub paused/finished/canceled,
   Resilvering, Resilver finished/canceled) and **Last Scrub** (timestamp).
@@ -126,8 +126,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   into the pool row, and the sensors list the devices with errors. ZFS keeps
   only the last scan's statistics, so after a resilver these describe the
   resilver. Agents up to 2026.09.01 report zero scrub times, which show as
-  unknown (fixed in [unraid-management-agent#185](https://github.com/ruaan-deysel/unraid-management-agent/issues/185)).
-- **System service running sensors** ([#166](https://github.com/ruaan-deysel/ha-unraid-management-agent/issues/166), [#175](https://github.com/ruaan-deysel/ha-unraid-management-agent/issues/175), contributed by @davidcoulson):
+  unknown (fixed in [unraid-management-agent#185](https://github.com/tinkerologie/unraid-management-agent/issues/185)).
+- **System service running sensors** ([#166](https://github.com/tinkerologie/ha-unraid-management-agent/issues/166), [#175](https://github.com/tinkerologie/ha-unraid-management-agent/issues/175), contributed by @davidcoulson):
   One `<name> Service` binary sensor (device class running, diagnostic) per
   service in the agent's `/services` list that the network service sensors do
   not already cover: today Docker, Libvirt and Nginx. Docker and Libvirt are
@@ -137,7 +137,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reload, removed ones are cleaned up like other dynamic entities, and agents
   without the endpoint (before v2026.02.02) simply get none. Read-only: no
   start/stop controls.
-- **GPU VRAM sensors** ([#169](https://github.com/ruaan-deysel/ha-unraid-management-agent/issues/169), contributed by @davidcoulson):
+- **GPU VRAM sensors** ([#169](https://github.com/tinkerologie/ha-unraid-management-agent/issues/169), contributed by @davidcoulson):
   Each GPU that reports video memory gets **VRAM Used** (shown in MiB),
   **VRAM Total** (diagnostic, shown in GiB) and **VRAM Usage** (used / total, %)
   sensors from the agent's existing `memory_used_bytes` and `memory_total_bytes`.
@@ -148,15 +148,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **hwmon temperature and fan sensors of USB controllers survive reconnects and a second identical controller**: lm-sensors names USB HID chips (Aquacomputer Octo, Corsair Commander, ...) `<driver>-hid-<bus>-<hid id>`, and the HID id changes every time the device re-enumerates on USB. Temperature sensors were keyed by that name, so a reconnect removed the sensor (stale cleanup) and created a new, disabled one. They are now keyed by the controller's `device_id` (USB serial, reported by agents with [ruaan-deysel/unraid-management-agent#216](https://github.com/ruaan-deysel/unraid-management-agent/pull/216)), or by driver and bus type with older agents. Fans with a `device_id` are keyed by it as well, so two identical controllers keep separate fan sensors and adding a second one leaves the first one's sensors in place. Existing entities are moved to the new unique IDs (entity ID, name and settings kept) when each sensor is created, including at runtime and for a controller that was unplugged at startup, and only when it is unambiguous which controller they belonged to. Fans are now created as they appear, like temperatures. A device-keyed fan becomes unavailable when its controller is missing and never takes `fan_control` data matched only by fan number; no fan takes `fan_control` data by number when it is missing from the agent's fan list, and a duplicate fan name keeps its suffix so it cannot match another fan's control device.
+- **hwmon temperature and fan sensors of USB controllers survive reconnects and a second identical controller**: lm-sensors names USB HID chips (Aquacomputer Octo, Corsair Commander, ...) `<driver>-hid-<bus>-<hid id>`, and the HID id changes every time the device re-enumerates on USB. Temperature sensors were keyed by that name, so a reconnect removed the sensor (stale cleanup) and created a new, disabled one. They are now keyed by the controller's `device_id` (USB serial, reported by agents with [tinkerologie/unraid-management-agent#216](https://github.com/tinkerologie/unraid-management-agent/pull/216)), or by driver and bus type with older agents. Fans with a `device_id` are keyed by it as well, so two identical controllers keep separate fan sensors and adding a second one leaves the first one's sensors in place. Existing entities are moved to the new unique IDs (entity ID, name and settings kept) when each sensor is created, including at runtime and for a controller that was unplugged at startup, and only when it is unambiguous which controller they belonged to. Fans are now created as they appear, like temperatures. A device-keyed fan becomes unavailable when its controller is missing and never takes `fan_control` data matched only by fan number; no fan takes `fan_control` data by number when it is missing from the agent's fan list, and a duplicate fan name keeps its suffix so it cannot match another fan's control device.
 
-- **UPS readings the UPS does not report** ([#179](https://github.com/ruaan-deysel/ha-unraid-management-agent/issues/179)):
+- **UPS readings the UPS does not report** ([#179](https://github.com/tinkerologie/ha-unraid-management-agent/issues/179)):
   The UPS Energy sensor showed `0.000 kWh` for a UPS without a power reading. It is now
   unknown while UPS power is unknown, adds no energy during that time, and starts a new
   integration series when power returns instead of interpolating across the gap. The
   accumulated total is still saved for restarts. UPS Load, Power, Battery and Runtime are
   unknown when the agent sends `null` or leaves the field out (agent fix
-  [ruaan-deysel/unraid-management-agent#204](https://github.com/ruaan-deysel/unraid-management-agent/issues/204));
+  [tinkerologie/unraid-management-agent#204](https://github.com/tinkerologie/unraid-management-agent/issues/204));
   older agents that send `0` still show 0.
 - **Dashboard card accessibility, entity platform scoping, and slugification**:
   - Replaced ad-hoc regex with Home Assistant compliant NFKD slugification (`slugifyDeviceName`) across base card device matches.
@@ -164,27 +164,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Scoped fan and control entities in `unraid-fans-card` strictly to `unraid_management_agent` and `unraid` platforms.
   - Prioritized device registry linking in `unraid-gpu-card` and normalized parity cancel action icon to `mdiStop`.
   - Normalized array status parsing in `unraid-server-card` and entity grouping keys in remote shares and unassigned devices cards.
-- **WebSocket keepalive ping timeouts** ([#138](https://github.com/ruaan-deysel/ha-unraid-management-agent/pull/138), fixes [#135](https://github.com/ruaan-deysel/ha-unraid-management-agent/issues/135)): Disabled client-initiated keepalive pings (`ping_interval=None`) to prevent spurious `1011` keepalive timeout disconnects every ~30 seconds; the Unraid agent server manages connection keepalive directly.
-- **WebSocket disconnect close metadata** ([#138](https://github.com/ruaan-deysel/ha-unraid-management-agent/pull/138), fixes [#135](https://github.com/ruaan-deysel/ha-unraid-management-agent/issues/135)): Extracted and surfaced close code and reason metadata from `ConnectionClosed` frames on disconnect instead of dropping close context.
-- **ZFS pool usage always Unknown** ([#139](https://github.com/ruaan-deysel/ha-unraid-management-agent/issues/139)):
+- **WebSocket keepalive ping timeouts** ([#138](https://github.com/tinkerologie/ha-unraid-management-agent/pull/138), fixes [#135](https://github.com/tinkerologie/ha-unraid-management-agent/issues/135)): Disabled client-initiated keepalive pings (`ping_interval=None`) to prevent spurious `1011` keepalive timeout disconnects every ~30 seconds; the Unraid agent server manages connection keepalive directly.
+- **WebSocket disconnect close metadata** ([#138](https://github.com/tinkerologie/ha-unraid-management-agent/pull/138), fixes [#135](https://github.com/tinkerologie/ha-unraid-management-agent/issues/135)): Extracted and surfaced close code and reason metadata from `ConnectionClosed` frames on disconnect instead of dropping close context.
+- **ZFS pool usage always Unknown** ([#139](https://github.com/tinkerologie/ha-unraid-management-agent/issues/139)):
   The agent reports pool usage as `allocated_bytes` (zpool ALLOC), but the
   integration only read `used_bytes`, so every "ZFS Pool … Usage" sensor was
   Unknown. The ZFS pool model now accepts both.
-- **WebSocket events overwrote UPS, system and collector data** ([#152](https://github.com/ruaan-deysel/ha-unraid-management-agent/issues/152)): `nut_status_update` (NUTInfo) and `hardware_update` (HardwareFullInfo) events were stored in `data.ups` and `data.system`, and a `collector_state_change` (one collector) replaced the full collector status, until the next poll. The NUT and hardware events are now ignored (no entity uses them), and collector events update just that collector.
-- **Syslog network service sensor never created** ([#167](https://github.com/ruaan-deysel/ha-unraid-management-agent/issues/167), contributed by @davidcoulson):
+- **WebSocket events overwrote UPS, system and collector data** ([#152](https://github.com/tinkerologie/ha-unraid-management-agent/issues/152)): `nut_status_update` (NUTInfo) and `hardware_update` (HardwareFullInfo) events were stored in `data.ups` and `data.system`, and a `collector_state_change` (one collector) replaced the full collector status, until the next poll. The NUT and hardware events are now ignored (no entity uses them), and collector events update just that collector.
+- **Syslog network service sensor never created** ([#167](https://github.com/tinkerologie/ha-unraid-management-agent/issues/167), contributed by @davidcoulson):
   The agent reports the syslog service as `syslog_server`, but the integration
   only read `syslog`, so there was no "Syslog Service" binary sensor next to
   the other network services. Both keys are now accepted.
-- **Container Updates Available sensor deleted by stale cleanup** ([#158](https://github.com/ruaan-deysel/ha-unraid-management-agent/issues/158), contributed by @davidcoulson): its key starts with the dynamic `container_` prefix, so cleanup removed it about 10 minutes after setup. It is now allowlisted, and a new test fails if any static entity key ever collides with a dynamic prefix again.
-- **ZFS pools unavailable once the agent reports corrupted files** ([#172](https://github.com/ruaan-deysel/ha-unraid-management-agent/issues/172), contributed by @davidcoulson):
+- **Container Updates Available sensor deleted by stale cleanup** ([#158](https://github.com/tinkerologie/ha-unraid-management-agent/issues/158), contributed by @davidcoulson): its key starts with the dynamic `container_` prefix, so cleanup removed it about 10 minutes after setup. It is now allowlisted, and a new test fails if any static entity key ever collides with a dynamic prefix again.
+- **ZFS pools unavailable once the agent reports corrupted files** ([#172](https://github.com/tinkerologie/ha-unraid-management-agent/issues/172), contributed by @davidcoulson):
   The agent sends `corrupted_files` as the list of paths from `zpool status -v`,
   but the integration typed it as a number. One pool with permanent errors
   failed validation of the whole pool list, so every ZFS pool entity lost its
   data. The model now accepts the list (or a bare count). The
   "<pool> Corrupted Files" sensor shows the number of files, and its `files`
   attribute lists the first 10 paths. The attribute is not recorded in history.
-  Agents up to 2026.09.01 never fill the list (ruaan-deysel/unraid-management-agent#190).
-- **WebSocket events were never applied** ([#185](https://github.com/ruaan-deysel/ha-unraid-management-agent/issues/185), contributed by @davidcoulson):
+  Agents up to 2026.09.01 never fill the list (tinkerologie/unraid-management-agent#190).
+- **WebSocket events were never applied** ([#185](https://github.com/tinkerologie/ha-unraid-management-agent/issues/185), contributed by @davidcoulson):
   The agent wraps every websocket message as `{"event": ..., "timestamp": ..., "data": ...}`,
   but the integration looked for payload fields on the wrapper. Every event except
   `source_status_changed` was dropped, so entities only changed on the 30-second poll.
@@ -197,22 +197,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Less polling of unused and slow-changing data** ([#183](https://github.com/ruaan-deysel/ha-unraid-management-agent/issues/183)): ZFS datasets and snapshots are no longer fetched on every 30-second poll, because no entity uses them (WebSocket updates still fill them). Parity history, used only by the _Last parity check_ sensor, is fetched on the first poll and then at most every 15 minutes; a failed fetch keeps the previous value and is retried on the next poll. This saves 356 requests an hour and, on servers with many ZFS snapshots, megabytes of JSON an hour.
+- **Less polling of unused and slow-changing data** ([#183](https://github.com/tinkerologie/ha-unraid-management-agent/issues/183)): ZFS datasets and snapshots are no longer fetched on every 30-second poll, because no entity uses them (WebSocket updates still fill them). Parity history, used only by the _Last parity check_ sensor, is fetched on the first poll and then at most every 15 minutes; a failed fetch keeps the previous value and is retried on the next poll. This saves 356 requests an hour and, on servers with many ZFS snapshots, megabytes of JSON an hour.
 - **CI test & Codecov workflow** — updated `.github/workflows/test.yml` to target `custom_components/unraid_management_agent`, provision dependencies via `uv pip install -e ".[dev,test]"`, upload coverage reports to Codecov via `codecov/codecov-action@v5`, and added concurrency cancellation.
 - **Codecov configuration** — updated `.codecov.yml` with `auto` coverage targets and clean comment formatting.
-- **WebSocket disconnect log rate limiting** ([#138](https://github.com/ruaan-deysel/ha-unraid-management-agent/pull/138), fixes [#135](https://github.com/ruaan-deysel/ha-unraid-management-agent/issues/135)): Rate-limited disconnect logs to warn once per session with close metadata, demoting repeated disconnects to `DEBUG` until successfully reconnected.
+- **WebSocket disconnect log rate limiting** ([#138](https://github.com/tinkerologie/ha-unraid-management-agent/pull/138), fixes [#135](https://github.com/tinkerologie/ha-unraid-management-agent/issues/135)): Rate-limited disconnect logs to warn once per session with close metadata, demoting repeated disconnects to `DEBUG` until successfully reconnected.
 - **Documentation refresh** — updated `README.md` with comprehensive guides for the bundled Lovelace custom dashboard cards suite, all newly merged entity platforms (update, SAS storage topology, alert rules, system services, ZFS scrub/errors), and configuration options.
-- **VM devices are named `VM · <name>`** ([#177](https://github.com/ruaan-deysel/ha-unraid-management-agent/issues/177)): With **Show virtual machines as separate devices** on, each VM's child device is now named `VM · <name>` (for example `VM · Windows 11`), so VMs can be told apart from container devices. Child devices can't carry a model or icon, so the name is the only place to show it. The name comes from a device-name translation (`device.vm` in `strings.json`), and existing VM devices are renamed on the next start. Entity IDs of existing entities don't change. VM entities registered for the first time get `vm_` in their entity ID (`sensor.<server>_vm_windows_11_cpu_usage`), which matches the VM switch's entity ID when the option is off. A device name set by the user is kept. Container devices are unchanged.
+- **VM devices are named `VM · <name>`** ([#177](https://github.com/tinkerologie/ha-unraid-management-agent/issues/177)): With **Show virtual machines as separate devices** on, each VM's child device is now named `VM · <name>` (for example `VM · Windows 11`), so VMs can be told apart from container devices. Child devices can't carry a model or icon, so the name is the only place to show it. The name comes from a device-name translation (`device.vm` in `strings.json`), and existing VM devices are renamed on the next start. Entity IDs of existing entities don't change. VM entities registered for the first time get `vm_` in their entity ID (`sensor.<server>_vm_windows_11_cpu_usage`), which matches the VM switch's entity ID when the option is off. A device name set by the user is kept. Container devices are unchanged.
 - **Brand assets refreshed from Home Assistant brands** — replaced local `brand/icon.png` and `brand/logo.png` with the official assets from `home-assistant/brands` and added high-resolution variants `brand/icon@2x.png` and `brand/logo@2x.png`.
 
 ## [2026.6.5] — 2026-06-17
 
 ### Fixed
 
-- **Network rate sensor flapping to 0** ([#94](https://github.com/ruaan-deysel/ha-unraid-management-agent/pull/94), contributed by @mdinic):
+- **Network rate sensor flapping to 0** ([#94](https://github.com/tinkerologie/ha-unraid-management-agent/pull/94), contributed by @mdinic):
   Stabilized rate calculations so transient API updates do not force network
   throughput sensors to briefly report `0` between valid samples.
-- **Uptime boot timestamp flapping** ([#95](https://github.com/ruaan-deysel/ha-unraid-management-agent/pull/95), contributed by @mdinic):
+- **Uptime boot timestamp flapping** ([#95](https://github.com/tinkerologie/ha-unraid-management-agent/pull/95), contributed by @mdinic):
   Prevented the uptime/boot-time sensor path from repeatedly changing the boot
   timestamp value when the underlying uptime update jittered.
 
@@ -267,7 +267,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     it was previously read as a Python weekday (0=Monday), shifting the predicted
     check by a day
   - With Unraid Management Agent **v2026.06.05+** (which resolved
-    [unraid-management-agent#124](https://github.com/ruaan-deysel/unraid-management-agent/issues/124)),
+    [unraid-management-agent#124](https://github.com/tinkerologie/unraid-management-agent/issues/124)),
     the sensor now prefers the new `check_cron` field — the exact cron entry Unraid
     runs from `parity-check.cron` — making the next-check time exact for every
     schedule mode (daily/weekly/monthly/yearly/custom). The `month` field is also
@@ -282,7 +282,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `coordinator_health` section (last successful update timestamp, consecutive failed
   updates, WebSocket connection state, reboot grace period state) to help distinguish
   integration issues from agent-side stalls (upstream investigation:
-  [unraid-management-agent#123](https://github.com/ruaan-deysel/unraid-management-agent/issues/123))
+  [unraid-management-agent#123](https://github.com/tinkerologie/unraid-management-agent/issues/123))
 
 ## [2026.6.3] — 2026-06-08
 
