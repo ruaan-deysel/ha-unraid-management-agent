@@ -103,3 +103,11 @@
 - name: help wanted
   color: "008672"
   description: "Community contributions are welcome"
+
+- name: stale
+  color: "ededed"
+  description: "No recent activity; closes automatically unless updated"
+
+- name: conflicts
+  color: "e99695"
+  description: "Has merge conflicts with the default branch"
