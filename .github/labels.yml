@@ -111,3 +111,23 @@
 - name: conflicts
   color: "e99695"
   description: "Has merge conflicts with the default branch"
+
+- name: "pinned"
+  color: "006b75"
+  description: "Pinned; exempt from stale handling"
+
+- name: "security"
+  color: "b60205"
+  description: "Security issue; exempt from stale handling"
+
+- name: "work-in-progress"
+  color: "fbca04"
+  description: "Actively being worked on; exempt from stale handling"
+
+- name: "priority: critical"
+  color: "b60205"
+  description: "Critical priority; exempt from stale handling"
+
+- name: "priority: high"
+  color: "d93f0b"
+  description: "High priority; exempt from stale handling"
