@@ -9,10 +9,15 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # OIDC is unavailable to fork and Dependabot PRs; those fall back to tokenless uploads.
+  CODECOV_OIDC: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) && github.actor != 'dependabot[bot]' }}
 
 jobs:
   test:
@@ -48,7 +53,8 @@ jobs:
           files: ./coverage.xml
           flags: unittests
           name: ha-unraid-management-agent
-          fail_ci_if_error: false
+          use_oidc: ${{ env.CODECOV_OIDC == 'true' }}
+          fail_ci_if_error: ${{ env.CODECOV_OIDC == 'true' }}
 
   frontend:
     name: Frontend test & build
