@@ -1,13 +1,13 @@
 # Unraid Management Agent Home Assistant Integration
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
-[![GitHub Release](https://img.shields.io/github/release/ruaan-deysel/ha-unraid-management-agent.svg)](https://github.com/ruaan-deysel/ha-unraid-management-agent/releases)
-[![codecov](https://codecov.io/gh/ruaan-deysel/ha-unraid-management-agent/branch/main/graph/badge.svg)](https://codecov.io/gh/ruaan-deysel/ha-unraid-management-agent)
+[![GitHub Release](https://img.shields.io/github/release/tinkerologie/ha-unraid-management-agent.svg)](https://github.com/tinkerologie/ha-unraid-management-agent/releases)
+[![codecov](https://codecov.io/gh/tinkerologie/ha-unraid-management-agent/branch/main/graph/badge.svg)](https://codecov.io/gh/tinkerologie/ha-unraid-management-agent)
 [![Community Forum](https://img.shields.io/badge/Community-Forum-blue)](https://community.home-assistant.io/t/unraid-integration)
-[![License](https://img.shields.io/github/license/ruaan-deysel/ha-unraid-management-agent.svg)](https://github.com/ruaan-deysel/ha-unraid-management-agent/blob/main/LICENSE)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ruaan-deysel/ha-unraid-management-agent)
+[![License](https://img.shields.io/github/license/tinkerologie/ha-unraid-management-agent.svg)](https://github.com/tinkerologie/ha-unraid-management-agent/blob/main/LICENSE)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/tinkerologie/ha-unraid-management-agent)
 
-This custom integration connects Home Assistant to the [Unraid Management Agent](https://github.com/ruaan-deysel/unraid-management-agent) (UMA) running on your Unraid server. It delivers comprehensive monitoring, interactive controls, dynamic entity discovery, real-time WebSocket telemetry, and a bundled suite of custom Lovelace dashboard cards.
+This custom integration connects Home Assistant to the [Unraid Management Agent](https://github.com/tinkerologie/unraid-management-agent) (UMA) running on your Unraid server. It delivers comprehensive monitoring, interactive controls, dynamic entity discovery, real-time WebSocket telemetry, and a bundled suite of custom Lovelace dashboard cards.
 
 ---
 
@@ -195,18 +195,18 @@ A healthy agent responds with JSON status `{"status":"ok",...}`.
 
 ### Method 1: Via HACS (Recommended)
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=ruaan-deysel&repository=ha-unraid-management-agent&category=integration)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=tinkerologie&repository=ha-unraid-management-agent&category=integration)
 
 1. Open **HACS** in Home Assistant.
 2. Navigate to **Integrations**.
 3. Click the three-dot menu in the upper-right corner and select **Custom repositories**.
-4. Enter `https://github.com/ruaan-deysel/ha-unraid-management-agent` and select category **Integration**.
+4. Enter `https://github.com/tinkerologie/ha-unraid-management-agent` and select category **Integration**.
 5. Click **Add**, find **Unraid Management Agent**, and click **Download**.
 6. Restart Home Assistant.
 
 ### Method 2: Manual Installation
 
-1. Download the latest release archive from the [GitHub Releases](https://github.com/ruaan-deysel/ha-unraid-management-agent/releases) page.
+1. Download the latest release archive from the [GitHub Releases](https://github.com/tinkerologie/ha-unraid-management-agent/releases) page.
 2. Extract the `custom_components/unraid_management_agent` folder into your Home Assistant `<config>/custom_components/` directory.
 3. Restart Home Assistant.
 
@@ -445,7 +445,7 @@ Contributions are welcome! Please ensure:
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](https://github.com/ruaan-deysel/ha-unraid-management-agent/blob/main/LICENSE) for details.
+This project is licensed under the MIT License. See [LICENSE](https://github.com/tinkerologie/ha-unraid-management-agent/blob/main/LICENSE) for details.
 
 ## Trademark Notice
 

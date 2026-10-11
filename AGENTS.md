@@ -27,7 +27,7 @@ This is a Home Assistant custom integration for monitoring and controlling Unrai
 - **Domain:** `unraid_management_agent`
 - **Title:** Unraid Management Agent
 - **Class prefix:** `Unraid`
-- **Repository:** ruaan-deysel/ha-unraid-management-agent
+- **Repository:** tinkerologie/ha-unraid-management-agent
 - **IoT class:** `local_push` (polling + WebSocket real-time updates)
 - **Integration type:** `device`
 - **Quality target:** Platinum on the [HA Integration Quality Scale](https://developers.home-assistant.io/docs/core/integration-quality-scale/)

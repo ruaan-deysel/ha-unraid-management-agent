@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Updated repository and documentation URLs to `tinkerologie` organization
 - Configured Codecov GitHub Actions workflow for tokenless coverage uploads
 
 ### Added
@@ -1083,6 +1084,6 @@ For future releases, use this format:
 
 ---
 
-[Unreleased]: https://github.com/ruaan-deysel/ha-unraid-management-agent/compare/v2025.11.1...HEAD
-[2025.11.1]: https://github.com/ruaan-deysel/ha-unraid-management-agent/compare/v2025.10.3...v2025.11.1
-[2025.10.3]: https://github.com/ruaan-deysel/ha-unraid-management-agent/releases/tag/v2025.10.3
+[Unreleased]: https://github.com/tinkerologie/ha-unraid-management-agent/compare/v2025.11.1...HEAD
+[2025.11.1]: https://github.com/tinkerologie/ha-unraid-management-agent/compare/v2025.10.3...v2025.11.1
+[2025.10.3]: https://github.com/tinkerologie/ha-unraid-management-agent/releases/tag/v2025.10.3

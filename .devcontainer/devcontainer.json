@@ -1,5 +1,5 @@
 {
-    "name": "ruaan-deysel/ha-unraid-management-agent",
+    "name": "tinkerologie/ha-unraid-management-agent",
     "image": "mcr.microsoft.com/devcontainers/python:3.14",
     "postCreateCommand": "./script/setup/setup",
     "forwardPorts": [

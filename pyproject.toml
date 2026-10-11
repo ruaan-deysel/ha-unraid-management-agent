@@ -43,10 +43,10 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ruaan-deysel/ha-unraid-management-agent"
-Documentation = "https://github.com/ruaan-deysel/ha-unraid-management-agent#readme"
-Repository = "https://github.com/ruaan-deysel/ha-unraid-management-agent"
-Issues = "https://github.com/ruaan-deysel/ha-unraid-management-agent/issues"
+Homepage = "https://github.com/tinkerologie/ha-unraid-management-agent"
+Documentation = "https://github.com/tinkerologie/ha-unraid-management-agent#readme"
+Repository = "https://github.com/tinkerologie/ha-unraid-management-agent"
+Issues = "https://github.com/tinkerologie/ha-unraid-management-agent/issues"
 
 [build-system]
 requires = ["hatchling"]

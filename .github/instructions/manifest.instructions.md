@@ -14,10 +14,10 @@ applyTo: "**/manifest.json"
   "name": "Unraid Management Agent",
   "codeowners": ["@ruaan-deysel"],
   "config_flow": true,
-  "documentation": "https://github.com/ruaan-deysel/ha-unraid-management-agent",
+  "documentation": "https://github.com/tinkerologie/ha-unraid-management-agent",
   "integration_type": "device",
   "iot_class": "local_push",
-  "issue_tracker": "https://github.com/ruaan-deysel/ha-unraid-management-agent/issues",
+  "issue_tracker": "https://github.com/tinkerologie/ha-unraid-management-agent/issues",
   "requirements": [],
   "version": "2026.2.2"
 }
