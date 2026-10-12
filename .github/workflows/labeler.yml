@@ -8,7 +8,7 @@ on:
       - .github/labels.yml
       - .github/workflows/labels.yml
       - .github/labeler.yml
-  pull_request_target:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] -- no PR code is checked out or run
     types:
       - opened
       - synchronize

@@ -3,7 +3,7 @@ name = "ha-unraid-management-agent"
 version = "2026.1.0"
 description = "Home Assistant custom integration for Unraid server monitoring and management"
 readme = "README.md"
-license = { text = "MIT" }
+license = {text = "Apache-2.0"}
 requires-python = ">=3.14.2"
 authors = [
     { name = "Ruaan Deysel" }
@@ -11,7 +11,7 @@ authors = [
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: End Users/Desktop",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.14",

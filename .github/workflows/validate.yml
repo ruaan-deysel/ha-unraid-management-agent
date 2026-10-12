@@ -7,6 +7,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
   schedule:
     - cron: 0 0 * * *
+      timezone: Australia/Brisbane
   workflow_dispatch:
 
 permissions: {}
@@ -31,7 +32,7 @@ jobs:
     name: Hassfest
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: read # check out the repository
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
