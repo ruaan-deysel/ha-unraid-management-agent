@@ -109,3 +109,6 @@ frontend/node_modules/
 frontend/test-results/
 frontend/.vitest/
 playwright-report/
+
+# Local Home Assistant core checkout created by the dev setup
+.local/ha-core/
