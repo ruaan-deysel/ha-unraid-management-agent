@@ -13,7 +13,7 @@ permissions:
 jobs:
   label:
     name: Label
-    uses: tinkerologie/.github/.github/workflows/pr-labeler.yml@da77559b9b410c60a80c5adce2c45f7159bf2591 # v1.5.1
+    uses: tinkerologie/.github/.github/workflows/pr-labeler.yml@900fa98bc5142dc064a6c04455a0e9aa99f0746c # v1.5.2
     permissions:
       contents: read # read the labeler configuration
       issues: write # add and remove labels

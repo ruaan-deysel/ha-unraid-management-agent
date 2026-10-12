@@ -1,5 +1,5 @@
 # Path labels (actions/labeler). The bug/enhancement type label is applied by the shared
-# PR labeler workflow (tinkerologie/.github pr-labeler.yml), which picks exactly one type.
+# PR labeler workflow (tinkerologie/.github pr-labeler.yml), which applies at most one.
 integration:
   - changed-files:
       - any-glob-to-any-file:
