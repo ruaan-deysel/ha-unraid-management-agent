@@ -7,13 +7,12 @@ on:
   pull_request_target: # zizmor: ignore[dangerous-triggers] -- no PR code is checked out or run
     types: [opened, synchronize, reopened, ready_for_review, edited]
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   label:
     name: Label
-    uses: tinkerologie/.github/.github/workflows/pr-labeler.yml@900fa98bc5142dc064a6c04455a0e9aa99f0746c # v1.5.2
+    uses: tinkerologie/.github/.github/workflows/pr-labeler.yml@76e6d83c0207e8a22e28fdc64045045ba6addc3a # v1.5.3
     permissions:
       contents: read # read the labeler configuration
       issues: write # add and remove labels
