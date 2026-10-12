@@ -1,9 +1,5 @@
-enhancement:
-  - head-branch: ['^(?:feat|feature)(?:\/|-).*$', '^enhancement(?:\/|-).*$']
-
-bug:
-  - head-branch: ['^(?:bug)?fix(?:\/|-).*$', '^hotfix(?:\/|-).*$']
-
+# Path labels. The bug/enhancement type label is applied by the second step of
+# .github/workflows/labeler.yml, which picks exactly one type.
 integration:
   - changed-files:
       - any-glob-to-any-file:
@@ -63,13 +59,15 @@ tests:
 documentation:
   - changed-files:
       - any-glob-to-any-file:
-          - CHANGELOG.md
-          - README.md
           - docs/**
           - .github/ISSUE_TEMPLATE/**
           - .github/prompts/**
           - .github/instructions/**
+  # Any Markdown file except CHANGELOG.md, which every pull request updates.
+  - changed-files:
+      - all-globs-to-any-file:
           - "**/*.md"
+          - "!CHANGELOG.md"
 
 dependencies:
   - changed-files:
