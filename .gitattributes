@@ -1,10 +1,13 @@
-# Ensure "git config --global core.autocrlf input" before you clone
-*       text eol=lf
-
-# Python files - show proper diffs and enforce no trailing whitespace
-*.py    diff=python whitespace=error
-
-*.ico   binary
-*.jpg   binary
-*.png   binary
-*.zip   binary
+# Git attributes (tinkerologie standard)
+* text=auto eol=lf
+*.py diff=python
+*.go diff=golang
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.zip binary
+*.gz binary
+*.woff binary
+*.woff2 binary
