@@ -126,8 +126,8 @@
 
 - name: "priority: critical"
   color: "b60205"
-  description: "Critical priority; exempt from stale handling"
+  description: "Critical priority; exempts issues (not PRs) from stale handling"
 
 - name: "priority: high"
   color: "d93f0b"
-  description: "High priority; exempt from stale handling"
+  description: "High priority; exempts issues (not PRs) from stale handling"
