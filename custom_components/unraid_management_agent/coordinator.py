@@ -170,6 +170,17 @@ class UnraidRuntimeData:
 type UnraidConfigEntry = ConfigEntry[UnraidRuntimeData]
 
 
+def array_reports_no_parity(data: UnraidData | None) -> bool:
+    """
+    Return True only when the agent explicitly reports zero parity disks.
+
+    Missing array data or a missing count is "unknown", so a failed fetch never
+    hides parity entities. Pool-only servers (e.g. ZFS only) report 0.
+    """
+    array = data.array if data is not None else None
+    return array is not None and getattr(array, "num_parity_disks", None) == 0
+
+
 def _merge_collector_state(
     status: CollectorStatus | None, details: CollectorDetails
 ) -> CollectorStatus | None:

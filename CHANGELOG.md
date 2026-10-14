@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Parity sensors on servers without a parity disk, and the wrong next parity check date**:
+  - The next/last parity check, parity progress and parity check scheduled entities are no longer created when the agent reports `num_parity_disks: 0` (for example pool-only/ZFS servers with a leftover parity cron). Missing array data still counts as unknown, so a failed fetch never hides them.
+  - The next parity check no longer lands on any matching weekday for Unraid's "first week" schedules (e.g. first Friday of Jan/Apr/Jul/Oct). Unraid's `[[ $(date +%e) -le 7 ]]` guard is not part of `check_cron`, so it is re-applied for month-based schedules with a weekday and a wildcard day-of-month.
 - **Clean up Docker and VMs group devices when options are disabled**:
   - The **<hostname> Docker** and **<hostname> VMs** group devices are now cleanly removed from the device registry when "Show Docker containers as separate devices" (`enable_container_devices`) or "Show virtual machines as separate devices" (`enable_vm_devices`) is disabled in integration options.
   - All associated entities (Docker CPU, memory, vDisk, container updates, system services for docker/libvirt, and container/VM switches and buttons) are safely reparented under the main server device when the group devices are disabled.

@@ -75,7 +75,7 @@ from .const import (
     DEFAULT_ENABLE_FAN_CONTROL,
     DOMAIN,
 )
-from .coordinator import UnraidData
+from .coordinator import UnraidData, array_reports_no_parity
 from .entity import (
     DOCKER_DEVICE,
     UnraidBaseEntity,
@@ -931,15 +931,55 @@ def _get_plugins_with_updates_attrs(data: UnraidData) -> dict[str, Any]:
 # =============================================================================
 
 
-def _next_cron_occurrence(cron_expr: str) -> datetime | None:
-    """Compute the next occurrence of a cron expression in local time."""
+# Upper bound on cron occurrences scanned when applying the first-week guard
+# (a guarded schedule matches at most a few times a year).
+_FIRST_WEEK_MAX_ITERATIONS = 500
+
+
+def _next_cron_occurrence(
+    cron_expr: str, *, first_week_only: bool = False
+) -> datetime | None:
+    """
+    Compute the next occurrence of a cron expression in local time.
+
+    With ``first_week_only`` only occurrences on day-of-month <= 7 count,
+    mirroring Unraid's ``[[ $(date +%e) -le 7 ]] &&`` guard.
+    """
     try:
         from cronsim import CronSim
 
-        return next(CronSim(cron_expr, dt_util.now()))
+        occurrences = CronSim(cron_expr, dt_util.now())
+        if not first_week_only:
+            return next(occurrences)
+        for _ in range(_FIRST_WEEK_MAX_ITERATIONS):
+            occurrence = next(occurrences)
+            if occurrence.day <= 7:
+                return occurrence
     except Exception:
         _LOGGER.debug("Could not compute next run for cron expression %r", cron_expr)
         return None
+    _LOGGER.debug("No first-week occurrence found for cron expression %r", cron_expr)
+    return None
+
+
+def _is_first_week_schedule(schedule: Any) -> bool:
+    """
+    Return True when Unraid's generated cron carries the first-week guard.
+
+    Unraid writes "first <weekday> of the month" schedules as
+    ``m h * <months> <dow> [[ $(date +%e) -le 7 ]] && mdcmd check ...`` and the
+    agent only exposes the five cron fields. A month-based schedule with a
+    weekday and a wildcard day-of-month can only come from that option, so the
+    guard is re-applied. Weekly/daily schedules and raw custom crons are left
+    untouched.
+    """
+    mode = (schedule.mode or "").lower()
+    if mode not in ("monthly", "yearly", "custom"):
+        return False
+    if mode == "custom" and schedule.cron:
+        return False
+    fields = (schedule.check_cron or "").split()
+    return len(fields) == 5 and fields[2] == "*" and fields[4] != "*"
 
 
 def _get_next_parity_check(data: UnraidData) -> datetime | None:
@@ -953,7 +993,9 @@ def _get_next_parity_check(data: UnraidData) -> datetime | None:
     # (parity-check.cron, exposed by agent >= 2026.06.05); it is exact for
     # every scheduled mode including custom (issue #68).
     if schedule.check_cron:
-        next_check = _next_cron_occurrence(schedule.check_cron)
+        next_check = _next_cron_occurrence(
+            schedule.check_cron, first_week_only=_is_first_week_schedule(schedule)
+        )
         if next_check is not None:
             return next_check
 
@@ -1447,6 +1489,7 @@ ARRAY_SENSOR_DESCRIPTIONS: tuple[UnraidSensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=_get_parity_progress,
         extra_state_attributes_fn=_get_parity_attrs,
+        supported_fn=lambda data: not array_reports_no_parity(data),
     ),
 )
 
@@ -1584,7 +1627,11 @@ PARITY_SCHEDULE_SENSOR_DESCRIPTIONS: tuple[UnraidSensorEntityDescription, ...] =
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=_get_next_parity_check,
         extra_state_attributes_fn=_get_next_parity_check_attrs,
-        supported_fn=lambda data: data is not None and data.parity_schedule is not None,
+        supported_fn=lambda data: (
+            data is not None
+            and data.parity_schedule is not None
+            and not array_reports_no_parity(data)
+        ),
     ),
     UnraidSensorEntityDescription(
         key="last_parity_check",
@@ -1599,6 +1646,7 @@ PARITY_SCHEDULE_SENSOR_DESCRIPTIONS: tuple[UnraidSensorEntityDescription, ...] =
             and data.parity_history is not None
             and data.parity_history.records is not None
             and len(data.parity_history.records or []) > 0
+            and not array_reports_no_parity(data)
         ),
     ),
 )
@@ -4871,7 +4919,8 @@ async def async_setup_entry(
 
     # Array sensors
     for description in ARRAY_SENSOR_DESCRIPTIONS:
-        entities.append(UnraidSensorEntity(coordinator, description))
+        if description.supported_fn(data):
+            entities.append(UnraidSensorEntity(coordinator, description))
 
     # GPU sensors - only if gpu collector is enabled
     if coordinator.is_collector_enabled("gpu") and data and data.gpu:

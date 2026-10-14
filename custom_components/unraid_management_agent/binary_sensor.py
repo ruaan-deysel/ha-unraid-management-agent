@@ -29,6 +29,7 @@ from .alerts import (
 from .api.models import ShareInfo, SystemService
 from .cleanup import async_prune_seen_names
 from .const import ATTR_PARITY_CHECK_STATUS
+from .coordinator import array_reports_no_parity
 from .entity import (
     DOCKER_DEVICE,
     VMS_DEVICE,
@@ -310,7 +311,11 @@ def _is_parity_check_scheduled(coordinator: UnraidDataUpdateCoordinator) -> bool
 def _has_parity_schedule(coordinator: UnraidDataUpdateCoordinator) -> bool:
     """Return true if parity schedule data is available."""
     data = coordinator.data
-    return data is not None and data.parity_schedule is not None
+    return (
+        data is not None
+        and data.parity_schedule is not None
+        and not array_reports_no_parity(data)
+    )
 
 
 def _parity_schedule_attributes(
