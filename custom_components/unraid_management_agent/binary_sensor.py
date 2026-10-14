@@ -36,6 +36,7 @@ from .entity import (
     UnraidEntityDescription,
     UnraidZFSPoolEntity,
     build_group_device_info,
+    is_group_device_enabled,
 )
 from .nic import (
     NICEntitySpec,
@@ -80,7 +81,11 @@ _SYSTEM_SERVICE_DEVICE_GROUPS: Final = {"docker": DOCKER_DEVICE, "libvirt": VMS_
 # Display names for the services named in their sensor (the Docker and VMs
 # devices name the docker and libvirt services); services added to the agent
 # later fall back to their raw name.
-_SYSTEM_SERVICE_DISPLAY_NAMES: Final[dict[str, str]] = {"nginx": "Nginx"}
+_SYSTEM_SERVICE_DISPLAY_NAMES: Final[dict[str, str]] = {
+    "docker": "Docker",
+    "libvirt": "VMs",
+    "nginx": "Nginx",
+}
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -928,7 +933,9 @@ class UnraidSystemServiceBinarySensor(UnraidBaseEntity, BinarySensorEntity):
         self._attr_entity_registry_enabled_default = (
             service_name in _SYSTEM_SERVICES_ENABLED_BY_DEFAULT
         )
-        if group := _SYSTEM_SERVICE_DEVICE_GROUPS.get(service_name):
+        if (
+            group := _SYSTEM_SERVICE_DEVICE_GROUPS.get(service_name)
+        ) and is_group_device_enabled(coordinator, group):
             # The Docker or VMs device already names the service
             self._attr_translation_key = "group_service"
             self._attr_device_info = build_group_device_info(coordinator, group)

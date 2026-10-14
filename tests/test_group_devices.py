@@ -359,8 +359,9 @@ async def test_upgrade_with_device_options_off(hass: HomeAssistant) -> None:
     devices = dr.async_get(hass)
     assert devices.async_get_child_device_by_identifier(WIN10, ENTRY_ID) is None
     assert devices.async_get_device_by_identifier(VMS, ENTRY_ID) is None
-    # The Docker device keeps the Docker sensors
-    assert _device(hass, DOCKER).via_device_id == server.id
+    # With container devices off, the Docker device is also removed and docker entities reparent to server
+    assert devices.async_get_device_by_identifier(DOCKER, ENTRY_ID) is None
+    assert entities.async_get(before["docker_cpu"].entity_id).device_id == server.id
 
 
 @pytest.mark.usefixtures(
@@ -392,8 +393,8 @@ async def test_upgrade_in_read_only_mode(hass: HomeAssistant) -> None:
     "mock_unraid_client_class", "mock_unraid_websocket_client_class"
 )
 async def test_devices_only_for_what_the_server_runs(hass: HomeAssistant) -> None:
-    """Default options: a Docker device for the Docker sensors, no VMs device."""
-    entry = _entry(hass)
+    """When container devices enabled but VM devices disabled: Docker device exists, no VMs device."""
+    entry = _entry(hass, **{CONF_ENABLE_CONTAINER_DEVICES: True})
     await _setup(hass, entry)
 
     server = _device(hass, SERVER)
@@ -410,12 +411,139 @@ async def test_devices_only_for_what_the_server_runs(hass: HomeAssistant) -> Non
         f"{ENTRY_ID}_docker_cpu_usage",
         f"{ENTRY_ID}_docker_memory_usage",
     }
-    switch = entities.async_get("switch.unraid_test_container_plex")
+    plex = _child(hass, PLEX)
+    assert plex.parent_device_id == docker.id
+    switch = entities.async_get("switch.unraid_test_docker_plex_running")
     assert switch is not None
-    assert switch.device_id == server.id
+    assert switch.device_id == plex.id
     # Neither the server nor the Docker device can be deleted by the user
     assert not await async_remove_config_entry_device(hass, entry, server)
     assert not await async_remove_config_entry_device(hass, entry, docker)
+
+
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class", "mock_unraid_websocket_client_class"
+)
+async def test_default_options_only_server_device(hass: HomeAssistant) -> None:
+    """Default options: neither Docker nor VMs device exists; all entities on server."""
+    entry = _entry(hass)
+    await _setup(hass, entry)
+
+    server = _device(hass, SERVER)
+    devices = dr.async_get(hass)
+    assert devices.async_get_device_by_identifier(DOCKER, ENTRY_ID) is None
+    assert devices.async_get_device_by_identifier(VMS, ENTRY_ID) is None
+    entities = er.async_get(hass)
+    switch = entities.async_get("switch.unraid_test_container_plex")
+    assert switch is not None
+    assert switch.device_id == server.id
+    docker_cpu = entities.async_get("sensor.unraid_test_cpu_usage_2")
+    assert docker_cpu is not None
+    assert docker_cpu.device_id == server.id
+    assert not await async_remove_config_entry_device(hass, entry, server)
+
+
+@pytest.mark.usefixtures(
+    "mock_unraid_client_class", "mock_unraid_websocket_client_class"
+)
+async def test_toggling_group_devices_options_cleans_up_and_restores(
+    hass: HomeAssistant,
+) -> None:
+    """Disabling container/VM options cleans up Docker/VMs devices and reparents entities to server; re-enabling restores them."""
+    entry = _all_devices_on(hass)
+    await _setup(hass, entry)
+
+    devices = dr.async_get(hass)
+    entities = er.async_get(hass)
+    server = _device(hass, SERVER)
+    docker = _device(hass, DOCKER)
+    vms = _device(hass, VMS)
+    plex = _child(hass, PLEX)
+    win10 = _child(hass, WIN10)
+
+    assert docker.via_device_id == server.id
+    assert vms.via_device_id == server.id
+    assert plex.parent_device_id == docker.id
+    assert win10.parent_device_id == vms.id
+
+    docker_cpu = entities.async_get("sensor.unraid_test_docker_cpu_usage")
+    assert docker_cpu is not None
+    assert docker_cpu.device_id == docker.id
+
+    plex_switch = entities.async_get("switch.unraid_test_docker_plex_running")
+    assert plex_switch is not None
+    assert plex_switch.device_id == plex.id
+
+    win10_switch = entities.async_get("switch.unraid_test_vms_windows_10_power")
+    assert win10_switch is not None
+    assert win10_switch.device_id == win10.id
+
+    # 1. Disable container and VM devices in options and reload
+    hass.config_entries.async_update_entry(
+        entry,
+        options={
+            **entry.options,
+            CONF_ENABLE_CONTAINER_DEVICES: False,
+            CONF_ENABLE_VM_DEVICES: False,
+        },
+    )
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Docker and VMs devices and child devices are removed
+    assert devices.async_get_device_by_identifier(DOCKER, ENTRY_ID) is None
+    assert devices.async_get_device_by_identifier(VMS, ENTRY_ID) is None
+    assert devices.async_get_child_device_by_identifier(PLEX, ENTRY_ID) is None
+    assert devices.async_get_child_device_by_identifier(WIN10, ENTRY_ID) is None
+
+    # Entities are reparented to the server device
+    docker_cpu = entities.async_get("sensor.unraid_test_docker_cpu_usage")
+    assert docker_cpu is not None
+    assert docker_cpu.device_id == server.id
+
+    plex_switch = entities.async_get("switch.unraid_test_docker_plex_running")
+    assert plex_switch is not None
+    assert plex_switch.device_id == server.id
+
+    win10_switch = entities.async_get("switch.unraid_test_vms_windows_10_power")
+    assert win10_switch is not None
+    assert win10_switch.device_id == server.id
+
+    # 2. Re-enable container and VM devices in options and reload
+    hass.config_entries.async_update_entry(
+        entry,
+        options={
+            **entry.options,
+            CONF_ENABLE_CONTAINER_DEVICES: True,
+            CONF_ENABLE_VM_DEVICES: True,
+        },
+    )
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Docker and VMs devices and child devices reappear
+    docker = _device(hass, DOCKER)
+    vms = _device(hass, VMS)
+    plex = _child(hass, PLEX)
+    win10 = _child(hass, WIN10)
+
+    assert docker.via_device_id == server.id
+    assert vms.via_device_id == server.id
+    assert plex.parent_device_id == docker.id
+    assert win10.parent_device_id == vms.id
+
+    # Entities are restored to their group and child devices
+    docker_cpu = entities.async_get("sensor.unraid_test_docker_cpu_usage")
+    assert docker_cpu is not None
+    assert docker_cpu.device_id == docker.id
+
+    plex_switch = entities.async_get("switch.unraid_test_docker_plex_running")
+    assert plex_switch is not None
+    assert plex_switch.device_id == plex.id
+
+    win10_switch = entities.async_get("switch.unraid_test_vms_windows_10_power")
+    assert win10_switch is not None
+    assert win10_switch.device_id == win10.id
 
 
 @pytest.mark.usefixtures(
@@ -438,7 +566,11 @@ async def test_docker_vdisk_and_updates_sensors_on_the_docker_device(
     updates.containers = []
     updates.updates_available = 0
     mock_async_unraid_client.check_all_container_updates.return_value = updates
-    entry = _entry(hass, enable_container_updates=True)
+    entry = _entry(
+        hass,
+        enable_container_updates=True,
+        **{CONF_ENABLE_CONTAINER_DEVICES: True},
+    )
     await _setup(hass, entry)
 
     docker = _device(hass, DOCKER)
@@ -578,7 +710,7 @@ async def test_without_server_device_entities_stay_on_the_server(
 
 async def test_group_device_named_unraid_without_hostname(hass: HomeAssistant) -> None:
     """Before the first update the Docker device is named after "Unraid"."""
-    entry = _entry(hass)
+    entry = _entry(hass, **{CONF_ENABLE_CONTAINER_DEVICES: True})
     await async_get_translations(hass, "en", "device", {DOMAIN})
     server = dr.async_get(hass).async_get_or_create(
         config_entry_id=ENTRY_ID, identifiers={SERVER}, name="unraid-test"

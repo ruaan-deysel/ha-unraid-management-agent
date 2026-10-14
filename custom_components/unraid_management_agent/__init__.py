@@ -50,7 +50,9 @@ from .entity import (
     async_get_or_create_group_device,
     gpu_device_identifier,
     gpu_device_keys,
+    group_device_identifier,
     hwmon_controller_identifier,
+    is_group_device_enabled,
     zfs_pool_device_identifier,
 )
 from .frontend import async_register_frontend
@@ -340,16 +342,21 @@ def _async_cleanup_disabled_option_devices(
     if server is None:
         return
 
-    # 1. Container devices option disabled: reparent container entities to server device, remove container devices
+    # 1. Container devices option disabled: reparent container and Docker group entities to server device, remove devices
     if not coordinator.is_container_devices_enabled():
         container_prefix = f"{entry.entry_id}_container_"
+        docker_group_identifier = group_device_identifier(entry.entry_id, DOCKER_DEVICE)
         for device in dr.async_entries_for_config_entry(
             device_registry, entry.entry_id
         ):
             if device.id == server.id:
                 continue
             if any(
-                domain == DOMAIN and identifier.startswith(container_prefix)
+                domain == DOMAIN
+                and (
+                    identifier.startswith(container_prefix)
+                    or identifier == docker_group_identifier
+                )
                 for domain, identifier in device.identifiers
             ):
                 for entity in er.async_entries_for_device(
@@ -360,9 +367,10 @@ def _async_cleanup_disabled_option_devices(
                     )
                 device_registry.async_remove_device(device.id)
 
-    # 2. VM devices option disabled: remove per-VM sensors, reparent VM switches/buttons to server, remove VM devices
+    # 2. VM devices option disabled: remove per-VM sensors, reparent VM switches/buttons and VMs group entities to server, remove devices
     if not coordinator.is_vm_devices_enabled():
         vm_prefix = f"{entry.entry_id}_vm_"
+        vms_group_identifier = group_device_identifier(entry.entry_id, VMS_DEVICE)
         for entity in er.async_entries_for_config_entry(
             entity_registry, entry.entry_id
         ):
@@ -375,7 +383,11 @@ def _async_cleanup_disabled_option_devices(
             if device.id == server.id:
                 continue
             if any(
-                domain == DOMAIN and identifier.startswith(vm_prefix)
+                domain == DOMAIN
+                and (
+                    identifier.startswith(vm_prefix)
+                    or identifier == vms_group_identifier
+                )
                 for domain, identifier in device.identifiers
             ):
                 for entity in er.async_entries_for_device(
@@ -452,6 +464,8 @@ def _async_move_child_devices_to_groups(
         (DOCKER_DEVICE, f"{entry.entry_id}_container_"),
         (VMS_DEVICE, f"{entry.entry_id}_vm_"),
     ):
+        if not is_group_device_enabled(coordinator, group):
+            continue
         to_move = [
             child
             for child in children
@@ -464,7 +478,7 @@ def _async_move_child_devices_to_groups(
             continue
         parent = async_get_or_create_group_device(coordinator, group)
         if parent is None:
-            return
+            continue
         for child in to_move:
             if child.parent_device_id == parent.id:
                 continue

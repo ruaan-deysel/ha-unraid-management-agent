@@ -27,7 +27,11 @@ from custom_components.unraid_management_agent.cleanup import (
     _build_valid_dynamic_entity_keys,
     _unavailable_data_prefixes,
 )
-from custom_components.unraid_management_agent.const import DOMAIN
+from custom_components.unraid_management_agent.const import (
+    CONF_ENABLE_CONTAINER_DEVICES,
+    CONF_ENABLE_VM_DEVICES,
+    DOMAIN,
+)
 from custom_components.unraid_management_agent.coordinator import UnraidData
 
 from .const import MOCK_CONFIG, MOCK_OPTIONS
@@ -64,12 +68,12 @@ def _services(*services: tuple[str | None, bool]) -> SystemServiceList:
     )
 
 
-def _entry(hass: HomeAssistant) -> MockConfigEntry:
+def _entry(hass: HomeAssistant, **options: bool) -> MockConfigEntry:
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Unraid (unraid-test)",
         data=MOCK_CONFIG,
-        options=MOCK_OPTIONS,
+        options={**MOCK_OPTIONS, **options},
         entry_id=ENTRY_ID,
     )
     entry.add_to_hass(hass)
@@ -85,10 +89,10 @@ def _service_entities(registry: er.EntityRegistry) -> dict[str, er.RegistryEntry
 
 
 async def _setup(
-    hass: HomeAssistant, *, enable: tuple[str, ...] = ()
+    hass: HomeAssistant, *, enable: tuple[str, ...] = (), **options: bool
 ) -> MockConfigEntry:
     """Set up the entry, enabling the given disabled-by-default sensors."""
-    entry = _entry(hass)
+    entry = _entry(hass, **options)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     if enable:
@@ -112,7 +116,13 @@ async def test_sensors_only_for_services_without_network_service_sensor(
     mock_async_unraid_client.list_services.return_value = (
         SystemServiceList.model_validate(LIVE_RESPONSE)
     )
-    await _setup(hass)
+    await _setup(
+        hass,
+        **{
+            CONF_ENABLE_CONTAINER_DEVICES: True,
+            CONF_ENABLE_VM_DEVICES: True,
+        },
+    )
 
     entities = _service_entities(entity_registry)
     assert set(entities) == {"docker", "libvirt", "nginx"}
@@ -142,6 +152,42 @@ async def test_sensors_only_for_services_without_network_service_sensor(
     assert entities["nginx"].device_id == server.id
     assert entities["docker"].entity_id == "binary_sensor.unraid_test_docker_service"
     assert entities["libvirt"].entity_id == "binary_sensor.unraid_test_vms_service"
+
+
+@pytest.mark.usefixtures("mock_unraid_websocket_client_class")
+async def test_sensors_on_server_when_group_devices_disabled(
+    hass: HomeAssistant,
+    entity_registry: er.EntityRegistry,
+    device_registry: dr.DeviceRegistry,
+    mock_async_unraid_client: MagicMock,
+) -> None:
+    """When group devices are disabled, docker and libvirt sit on the server device."""
+    mock_async_unraid_client.list_services.return_value = (
+        SystemServiceList.model_validate(LIVE_RESPONSE)
+    )
+    await _setup(hass)
+
+    entities = _service_entities(entity_registry)
+    server = device_registry.async_get_device_by_identifier(
+        (DOMAIN, ENTRY_ID), ENTRY_ID
+    )
+    assert server is not None
+    assert (
+        device_registry.async_get_device_by_identifier(
+            (DOMAIN, f"{ENTRY_ID}_docker"), ENTRY_ID
+        )
+        is None
+    )
+    assert (
+        device_registry.async_get_device_by_identifier(
+            (DOMAIN, f"{ENTRY_ID}_vms"), ENTRY_ID
+        )
+        is None
+    )
+    assert entities["docker"].device_id == server.id
+    assert entities["docker"].translation_key == "system_service"
+    assert entities["libvirt"].device_id == server.id
+    assert entities["libvirt"].translation_key == "system_service"
 
 
 @pytest.mark.usefixtures("mock_unraid_websocket_client_class")

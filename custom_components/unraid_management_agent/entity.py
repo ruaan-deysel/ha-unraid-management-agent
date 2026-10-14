@@ -115,6 +115,17 @@ def vm_devices_enabled(coordinator: UnraidDataUpdateCoordinator) -> bool:
     )
 
 
+def is_group_device_enabled(
+    coordinator: UnraidDataUpdateCoordinator, group: str
+) -> bool:
+    """Return True if the specified group device is enabled in options."""
+    if group == DOCKER_DEVICE:
+        return container_devices_enabled(coordinator)
+    if group == VMS_DEVICE:
+        return vm_devices_enabled(coordinator)
+    return False
+
+
 def group_device_identifier(entry_id: str, group: str) -> str:
     """Return the device registry identifier of the Docker or VMs device."""
     return f"{entry_id}_{group}"
@@ -135,8 +146,10 @@ def async_get_or_create_group_device(
     server's area with its labels, which container and VM devices then
     inherit, so area and label targets that reached them through the server
     keep doing so, and is disabled if the server is. Returns None if the
-    server device is missing.
+    server device is missing or the group device option is disabled.
     """
+    if not is_group_device_enabled(coordinator, group):
+        return None
     entry = coordinator.config_entry
     registry = dr.async_get(coordinator.hass)
     # The server device is registered during setup, before the platforms load.
@@ -181,8 +194,11 @@ def build_group_device_info(
 ) -> DeviceInfo:
     """Build device info putting an entity on the Docker or VMs device."""
     entry_id = coordinator.config_entry.entry_id
-    if async_get_or_create_group_device(coordinator, group) is None:
-        # Keep the entity on the server device if it is somehow missing.
+    if (
+        not is_group_device_enabled(coordinator, group)
+        or async_get_or_create_group_device(coordinator, group) is None
+    ):
+        # Keep the entity on the server device if disabled or missing.
         return DeviceInfo(identifiers={(DOMAIN, entry_id)})
     return DeviceInfo(identifiers={(DOMAIN, group_device_identifier(entry_id, group))})
 
@@ -527,6 +543,7 @@ __all__ = [
     "group_device_identifier",
     "hwmon_controller_identifier",
     "hwmon_devices_enabled",
+    "is_group_device_enabled",
     "read_only_enabled",
     "vm_devices_enabled",
     "zfs_pool_device_identifier",

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Clean up Docker and VMs group devices when options are disabled**:
+  - The **<hostname> Docker** and **<hostname> VMs** group devices are now cleanly removed from the device registry when "Show Docker containers as separate devices" (`enable_container_devices`) or "Show virtual machines as separate devices" (`enable_vm_devices`) is disabled in integration options.
+  - All associated entities (Docker CPU, memory, vDisk, container updates, system services for docker/libvirt, and container/VM switches and buttons) are safely reparented under the main server device when the group devices are disabled.
+  - When the options are re-enabled, the Docker and VMs devices and child container/VM devices reappear, and entities are restored under their respective group and child devices.
+
 ### Changed
 
 - Dependabot also updates the frontend's npm dependencies (`frontend/`). The deprecated `reviewers` setting is removed; CODEOWNERS requests the review.
