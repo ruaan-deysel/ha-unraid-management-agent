@@ -346,8 +346,9 @@ def _async_cleanup_disabled_option_devices(
     if not coordinator.is_container_devices_enabled():
         container_prefix = f"{entry.entry_id}_container_"
         docker_group_identifier = group_device_identifier(entry.entry_id, DOCKER_DEVICE)
-        for device in dr.async_entries_for_config_entry(
-            device_registry, entry.entry_id
+        for device in (
+            *dr.async_child_entries_for_config_entry(device_registry, entry.entry_id),
+            *dr.async_entries_for_config_entry(device_registry, entry.entry_id),
         ):
             if device.id == server.id:
                 continue
@@ -377,8 +378,9 @@ def _async_cleanup_disabled_option_devices(
             if entity.domain == "sensor" and entity.unique_id.startswith(vm_prefix):
                 entity_registry.async_remove(entity.entity_id)
 
-        for device in dr.async_entries_for_config_entry(
-            device_registry, entry.entry_id
+        for device in (
+            *dr.async_child_entries_for_config_entry(device_registry, entry.entry_id),
+            *dr.async_entries_for_config_entry(device_registry, entry.entry_id),
         ):
             if device.id == server.id:
                 continue

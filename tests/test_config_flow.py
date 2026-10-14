@@ -13,7 +13,16 @@ from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from custom_components.unraid_management_agent.api import UnraidConnectionError
 from custom_components.unraid_management_agent.const import (
+    CONF_ENABLE_CONTAINER_DEVICES,
+    CONF_ENABLE_CONTAINER_UPDATES,
+    CONF_ENABLE_FAN_CONTROL,
+    CONF_ENABLE_GPU_DEVICES,
+    CONF_ENABLE_HWMON_DEVICES,
+    CONF_ENABLE_NIC_DEVICES,
+    CONF_ENABLE_VM_DEVICES,
     CONF_ENABLE_WEBSOCKET,
+    CONF_ENABLE_ZFS_POOL_DEVICES,
+    CONF_READ_ONLY,
     DOMAIN,
     ERROR_CANNOT_CONNECT,
     ERROR_TIMEOUT,
@@ -231,6 +240,18 @@ async def test_options_flow(
 
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == "init"
+    assert [k.schema for k in result["data_schema"].schema] == [
+        CONF_ENABLE_CONTAINER_UPDATES,
+        CONF_ENABLE_FAN_CONTROL,
+        CONF_READ_ONLY,
+        CONF_ENABLE_WEBSOCKET,
+        CONF_ENABLE_CONTAINER_DEVICES,
+        CONF_ENABLE_GPU_DEVICES,
+        CONF_ENABLE_NIC_DEVICES,
+        CONF_ENABLE_HWMON_DEVICES,
+        CONF_ENABLE_VM_DEVICES,
+        CONF_ENABLE_ZFS_POOL_DEVICES,
+    ]
 
     with (
         patch(

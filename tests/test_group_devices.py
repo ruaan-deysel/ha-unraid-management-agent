@@ -34,6 +34,7 @@ from custom_components.unraid_management_agent.entity import (
     build_container_device_info,
     build_group_device_info,
     build_vm_device_info,
+    is_group_device_enabled,
 )
 
 from .const import MOCK_CONFIG, MOCK_OPTIONS
@@ -684,11 +685,12 @@ async def test_without_server_device_entities_stay_on_the_server(
     hass: HomeAssistant,
 ) -> None:
     """Without the server device nothing is grouped or moved."""
-    entry = _entry(hass)
+    entry = _all_devices_on(hass)
     coordinator = MagicMock(hass=hass, config_entry=entry, data=None)
     registry = dr.async_get(hass)
     server_info = {"identifiers": {SERVER}}
 
+    assert is_group_device_enabled(coordinator, "nonexistent") is False
     assert async_get_or_create_group_device(coordinator, DOCKER_DEVICE) is None
     assert build_group_device_info(coordinator, VMS_DEVICE) == server_info
     assert build_container_device_info(coordinator, "plex") == server_info

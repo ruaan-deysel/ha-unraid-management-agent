@@ -58,28 +58,28 @@
         "title": "Unraid Management Agent Options",
         "description": "Configure integration features",
         "data": {
-          "enable_websocket": "Enable WebSocket for real-time updates",
-          "enable_fan_control": "Enable fan control entities",
           "enable_container_updates": "Enable container update checks",
-          "read_only": "Read-only (sensors only)",
-          "enable_vm_devices": "Show virtual machines as separate devices",
+          "enable_fan_control": "Enable fan control entities",
+          "read_only": "Enable read-only mode (sensors only)",
+          "enable_websocket": "Enable WebSocket for real-time updates",
+          "enable_container_devices": "Show Docker containers as separate devices",
           "enable_gpu_devices": "Show GPUs as separate devices",
           "enable_nic_devices": "Show network cards as separate devices",
-          "enable_container_devices": "Show Docker containers as separate devices",
           "enable_hwmon_devices": "Show USB sensor controllers as separate devices",
+          "enable_vm_devices": "Show virtual machines as separate devices",
           "enable_zfs_pool_devices": "Show ZFS pools as separate devices"
         },
         "data_description": {
-          "enable_websocket": "WebSocket provides instant updates instead of polling. When disabled, data is polled every 30 seconds.",
+          "enable_container_updates": "Periodically check Docker containers for available image updates. This may slow down polling and use additional network requests. Also creates an update entity for each container, from which its image update can be installed.",
           "enable_fan_control": "Create fan speed sensor and control entities. Disable if your system does not have controllable fans.",
-          "enable_container_updates": "Periodically check Docker containers for available image updates. This may slow down polling and uses additional network requests. Also creates an update entity for each container, from which its image update can be installed.",
-          "read_only": "Only create sensors. Switches, buttons and number controls are not created (existing ones are removed), and the integration's actions refuse to run, so Home Assistant cannot start, stop or reboot anything on the server. Update entities still show available updates but do not offer to install them.",
-          "enable_vm_devices": "Give each VM its own device under the server's VMs device, holding its power switch, control buttons and metric sensors (CPU, memory, network and disk rates). When off, VM switches and buttons stay on the server device and no VM sensors are created.",
-          "enable_gpu_devices": "Give each GPU its own device under the server, holding its utilization, temperature, power, energy and VRAM sensors with short names. When off, GPU sensors stay on the server device, named after the GPU.",
-          "enable_nic_devices": "Give each PCI network card its own device under the server, with its ASIC, PHY and MAC temperatures, and per port the link speed and the plugged optic's diagnostics (module temperature and voltage, RX and TX power, alarm and warning flags, vendor and part number). Needs an agent that reports network cards. When off, no network card entities are created (existing ones are removed).",
-          "enable_container_devices": "Give each container its own device under the server's Docker device, holding its switches, restart button and metric sensors with short names (Running, CPU, Memory). When off, container entities stay on the server device, named after the container.",
+          "read_only": "Only create sensors. Switches, buttons, and number controls are not created (existing ones are removed), and the integration's actions refuse to run, so Home Assistant cannot start, stop, or reboot anything on the server. Update entities still show available updates but do not offer to install them.",
+          "enable_websocket": "WebSocket provides instant updates instead of polling. When disabled, data is polled every 30 seconds.",
+          "enable_container_devices": "Give each container its own device under the server's Docker device, holding its switches, restart button, and metric sensors with short names (Running, CPU, Memory). When off, container entities stay on the server device, named after the container.",
+          "enable_gpu_devices": "Give each GPU its own device under the server, holding its utilization, temperature, power, energy, and VRAM sensors with short names. When off, GPU sensors stay on the server device, named after the GPU.",
+          "enable_nic_devices": "Give each PCI network card its own device under the server, with its ASIC, PHY, and MAC temperatures, and per port the link speed and the plugged optic's diagnostics (module temperature and voltage, RX and TX power, alarm and warning flags, vendor and part number). Needs an agent that reports network cards. When off, no network card entities are created (existing ones are removed).",
           "enable_hwmon_devices": "Give each USB sensor controller the agent identifies (for example an Aquacomputer Octo) its own device under the server, holding its fan and temperature sensors named by their lm-sensors labels (\"Array Fan1\", \"Coolant Temp\"). Entity IDs are kept. When off, these sensors stay on the server device. A channel labelled as flow in sensors.conf (\"Coolant Flow\") is shown as a flow channel either way; it still reports RPM.",
-          "enable_zfs_pool_devices": "Give each ZFS pool its own device under the server, holding its usage, health, scrub and error sensors with short names, plus drive health roll-ups: hottest drive temperature, worst NVMe wear, media errors, failing drives and a drive count with per-drive details. Drive health needs agent 2026.10 or later. When off, pool entities stay on the server device, named after the pool."
+          "enable_vm_devices": "Give each VM its own device under the server's VMs device, holding its power switch, control buttons, and metric sensors (CPU, memory, network, and disk rates). When off, VM switches and buttons stay on the server device, and no VM sensors are created.",
+          "enable_zfs_pool_devices": "Give each ZFS pool its own device under the server, holding its usage, health, scrub, and error sensors with short names, plus drive health roll-ups: hottest drive temperature, worst NVMe wear, media errors, failing drives, and a drive count with per-drive details. Drive health needs agent 2026.10 or later. When off, pool entities stay on the server device, named after the pool."
         }
       }
     }

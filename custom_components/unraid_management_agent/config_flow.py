@@ -321,15 +321,28 @@ class UnraidOptionsFlowHandler(OptionsFlowWithReload):
             data_schema=vol.Schema(
                 {
                     vol.Optional(
-                        CONF_ENABLE_WEBSOCKET,
+                        CONF_ENABLE_CONTAINER_UPDATES,
                         default=self.config_entry.options.get(
-                            CONF_ENABLE_WEBSOCKET, DEFAULT_ENABLE_WEBSOCKET
+                            CONF_ENABLE_CONTAINER_UPDATES,
+                            DEFAULT_ENABLE_CONTAINER_UPDATES,
                         ),
                     ): cv.boolean,
                     vol.Optional(
                         CONF_ENABLE_FAN_CONTROL,
                         default=self.config_entry.options.get(
                             CONF_ENABLE_FAN_CONTROL, DEFAULT_ENABLE_FAN_CONTROL
+                        ),
+                    ): cv.boolean,
+                    vol.Optional(
+                        CONF_READ_ONLY,
+                        default=self.config_entry.options.get(
+                            CONF_READ_ONLY, DEFAULT_READ_ONLY
+                        ),
+                    ): cv.boolean,
+                    vol.Optional(
+                        CONF_ENABLE_WEBSOCKET,
+                        default=self.config_entry.options.get(
+                            CONF_ENABLE_WEBSOCKET, DEFAULT_ENABLE_WEBSOCKET
                         ),
                     ): cv.boolean,
                     vol.Optional(
@@ -340,28 +353,15 @@ class UnraidOptionsFlowHandler(OptionsFlowWithReload):
                         ),
                     ): cv.boolean,
                     vol.Optional(
-                        CONF_ENABLE_CONTAINER_UPDATES,
-                        default=self.config_entry.options.get(
-                            CONF_ENABLE_CONTAINER_UPDATES,
-                            DEFAULT_ENABLE_CONTAINER_UPDATES,
-                        ),
-                    ): cv.boolean,
-                    vol.Optional(
-                        CONF_READ_ONLY,
-                        default=self.config_entry.options.get(
-                            CONF_READ_ONLY, DEFAULT_READ_ONLY
-                        ),
-                    ): cv.boolean,
-                    vol.Optional(
-                        CONF_ENABLE_VM_DEVICES,
-                        default=self.config_entry.options.get(
-                            CONF_ENABLE_VM_DEVICES, DEFAULT_ENABLE_VM_DEVICES
-                        ),
-                    ): cv.boolean,
-                    vol.Optional(
                         CONF_ENABLE_GPU_DEVICES,
                         default=self.config_entry.options.get(
                             CONF_ENABLE_GPU_DEVICES, DEFAULT_ENABLE_GPU_DEVICES
+                        ),
+                    ): cv.boolean,
+                    vol.Optional(
+                        CONF_ENABLE_NIC_DEVICES,
+                        default=self.config_entry.options.get(
+                            CONF_ENABLE_NIC_DEVICES, DEFAULT_ENABLE_NIC_DEVICES
                         ),
                     ): cv.boolean,
                     vol.Optional(
@@ -371,9 +371,9 @@ class UnraidOptionsFlowHandler(OptionsFlowWithReload):
                         ),
                     ): cv.boolean,
                     vol.Optional(
-                        CONF_ENABLE_NIC_DEVICES,
+                        CONF_ENABLE_VM_DEVICES,
                         default=self.config_entry.options.get(
-                            CONF_ENABLE_NIC_DEVICES, DEFAULT_ENABLE_NIC_DEVICES
+                            CONF_ENABLE_VM_DEVICES, DEFAULT_ENABLE_VM_DEVICES
                         ),
                     ): cv.boolean,
                     vol.Optional(
