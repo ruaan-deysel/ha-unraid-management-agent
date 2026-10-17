@@ -90,6 +90,7 @@ from .models import (
     UPSInfo,
     UserScript,
     UserScriptExecuteResponse,
+    VMGuestInfo,
     VMInfo,
     VMSettings,
     VMSnapshotList,
@@ -889,6 +890,20 @@ class UnraidClient:
         """
         data = await self._request("GET", "/vm")
         return [VMInfo.model_validate(v) for v in data]
+
+    async def get_vm_guest(self) -> list[VMGuestInfo]:
+        """
+        Get data read from inside the configured VMs through the guest agent.
+
+        Requires an agent with the vm_guest_agent feature; older agents answer
+        404 (UnraidNotFoundError). Readings are null while a VM is off.
+
+        Returns:
+            One entry per configured VM (empty when none is configured)
+
+        """
+        data = await self._request("GET", "/vm/guest")
+        return [VMGuestInfo.model_validate(v) for v in data or []]
 
     async def get_vm(self, vm_id: str) -> VMInfo:
         """

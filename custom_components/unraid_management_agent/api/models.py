@@ -3889,6 +3889,75 @@ class NICList(BaseModel):
     model_config = ConfigDict(frozen=True, extra="allow")
 
 
+class VMGuestFilesystem(BaseModel):
+    """A mounted filesystem inside a guest."""
+
+    mountpoint: str | None = Field(None, description="Mount point, e.g. C:\\")
+    type: str | None = Field(None, description="Filesystem type")
+    total_bytes: CoercedInt = Field(None, description="Total size in bytes")
+    used_bytes: CoercedInt = Field(None, description="Used bytes")
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+
+class VMGuestGPU(BaseModel):
+    """An NVIDIA GPU passed through to a guest; readings are null when unknown."""
+
+    index: int | None = Field(None, description="GPU index inside the guest")
+    name: str | None = Field(None, description="GPU model")
+    temperature_celsius: CoercedFloat = None
+    utilization_percent: CoercedFloat = None
+    memory_used_bytes: CoercedInt = None
+    memory_total_bytes: CoercedInt = None
+    power_watts: CoercedFloat = None
+    fan_percent: CoercedFloat = None
+    clock_mhz: CoercedFloat = None
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+
+class VMGuestDisk(BaseModel):
+    """A physical disk seen by a guest; readings are null when unknown."""
+
+    model: str | None = Field(None, description="Disk model")
+    serial: str | None = Field(None, description="Disk serial number")
+    bus: str | None = Field(None, description="Bus type, e.g. NVMe")
+    temperature_celsius: CoercedFloat = None
+    temperature_max_celsius: CoercedFloat = None
+    wear_percent: CoercedFloat = None
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+
+class VMGuestSensor(BaseModel):
+    """Output of a custom command run inside a guest."""
+
+    name: str | None = Field(None, description="Sensor name from the agent config")
+    value: str | None = Field(None, description="Trimmed output, null when unknown")
+    updated_at: str | None = Field(None, description="Time of the last run")
+    error: str | None = Field(None, description="Error of the last run")
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+
+class VMGuestInfo(BaseModel):
+    """Data read from inside a VM through the QEMU guest agent (GET /vm/guest)."""
+
+    vm_name: str | None = Field(None, description="VM name")
+    running: bool | None = Field(None, description="VM is running")
+    agent_connected: bool | None = Field(None, description="Guest agent responded")
+    hostname: str | None = Field(None, description="Guest hostname")
+    os_name: str | None = Field(None, description="Guest operating system")
+    filesystems: list[VMGuestFilesystem] | None = None
+    gpus: list[VMGuestGPU] | None = None
+    disks: list[VMGuestDisk] | None = None
+    sensors: list[VMGuestSensor] | None = None
+    error: str | None = Field(None, description="Last error")
+    timestamp: str | None = Field(None, description="Collection time")
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+
 def fan_sensor_keys(fans: Any) -> list[tuple[str, str, str, Any]]:
     """
     Return (key, name, display name, fan) for each fan.

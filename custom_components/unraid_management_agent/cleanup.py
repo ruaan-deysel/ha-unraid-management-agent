@@ -50,6 +50,11 @@ from .nut import (
     nut_device_key,
     secondary_nut_device_names,
 )
+from .vm_guest import (
+    VM_GUEST_KEY_PREFIX,
+    vm_guest_descriptions,
+    vm_guest_offline_prefixes,
+)
 from .zfs_drives import retained_roll_up_keys
 
 if TYPE_CHECKING:
@@ -71,6 +76,7 @@ STALE_REMOVAL_GRACE: Final[timedelta] = timedelta(minutes=10)
 _DYNAMIC_KEY_PREFIXES: tuple[str, ...] = (
     "container_",
     "vm_",
+    VM_GUEST_KEY_PREFIX,  # "vmguest_": guest agent sensors on VM devices
     "disk_",
     "fan_",  # covers fan_{name} sensors and fan_speed_{id} numbers
     "temperature_",  # per-channel hwmon temperature sensors
@@ -178,6 +184,8 @@ def _build_valid_dynamic_entity_keys(
         from .sensor import VM_SENSOR_DESCRIPTIONS
 
         vm_sensor_keys = tuple(d.key for d in VM_SENSOR_DESCRIPTIONS)
+    if vm_devices:
+        keys.update(d.key for d in vm_guest_descriptions(data))
     for vm in data.vms or []:
         vm_id = getattr(vm, "id", None) or getattr(vm, "name", None)
         vm_name = getattr(vm, "name", None)
@@ -418,6 +426,10 @@ def _unavailable_data_prefixes(data: UnraidData) -> set[str]:
         prefixes.add("container_")
     if data.vms is None:
         prefixes.add("vm_")
+    if data.vms is None or data.vm_guest is None:
+        prefixes.add(VM_GUEST_KEY_PREFIX)
+    else:
+        prefixes.update(vm_guest_offline_prefixes(data))
     if data.disks is None:
         prefixes.add("disk_")
     # fan_ covers fan_{name} (from system.fans) and fan_speed_{id} (from

@@ -63,6 +63,7 @@ from .hwmon import hid_drivers_without_ids, hwmon_controller_of
 from .nic import async_remove_nic_devices, current_card_ids
 from .nic import device_identifier as nic_device_identifier
 from .storage import CONTROLLER, ENCLOSURE, current_storage_ids, device_identifier
+from .vm_guest import VM_GUEST_KEY_PREFIX
 
 # Service field constants
 ATTR_CONTAINER_ID: Final = "container_id"
@@ -374,11 +375,14 @@ def _async_cleanup_disabled_option_devices(
     # 2. VM devices option disabled: remove per-VM sensors, reparent VM switches/buttons and VMs group entities to server, remove devices
     if not coordinator.is_vm_devices_enabled():
         vm_prefix = f"{entry.entry_id}_vm_"
+        vm_guest_prefix = f"{entry.entry_id}_{VM_GUEST_KEY_PREFIX}"
         vms_group_identifier = group_device_identifier(entry.entry_id, VMS_DEVICE)
         for entity in er.async_entries_for_config_entry(
             entity_registry, entry.entry_id
         ):
-            if entity.domain == "sensor" and entity.unique_id.startswith(vm_prefix):
+            if entity.domain == "sensor" and entity.unique_id.startswith(
+                (vm_prefix, vm_guest_prefix)
+            ):
                 entity_registry.async_remove(entity.entity_id)
 
         for device in (

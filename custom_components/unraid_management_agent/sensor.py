@@ -122,6 +122,11 @@ from .storage import (
     async_setup_storage_entities,
     storage_sensor_specs,
 )
+from .vm_guest import (
+    UnraidVMGuestSensorEntityDescription,
+    parse_number,
+    vm_guest_descriptions,
+)
 from .zfs_drives import (
     drive_details,
     drive_locations,
@@ -4749,6 +4754,72 @@ class UnraidVMSensor(UnraidBaseEntity, SensorEntity):
         }
 
 
+class UnraidVMGuestSensor(UnraidBaseEntity, SensorEntity):
+    """A reading from inside a VM (guest agent), attached to that VM's device."""
+
+    entity_description: UnraidVMGuestSensorEntityDescription
+
+    def __init__(
+        self,
+        coordinator: UnraidDataUpdateCoordinator,
+        description: UnraidVMGuestSensorEntityDescription,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, description.key)
+        self.entity_description = description
+        self._attr_device_info = build_vm_device_info(
+            coordinator, description.vm_identifier, description.vm_name
+        )
+
+    def _guest(self) -> Any | None:
+        """Find this VM's guest agent data (the VM may have been renamed)."""
+        data = self.coordinator.data
+        description = self.entity_description
+        # Match by identifier only: a new VM reusing a removed VM's name must
+        # not feed its readings to the removed VM's sensors
+        vm = next(
+            (
+                v
+                for v in (data.vms if data else None) or []
+                if (getattr(v, "id", None) or getattr(v, "name", None))
+                == description.vm_identifier
+            ),
+            None,
+        )
+        name = getattr(vm, "name", None)
+        return next(
+            (g for g in (data.vm_guest if data else None) or [] if g.vm_name == name),
+            None,
+        )
+
+    @property
+    def available(self) -> bool:
+        """Stay available while the VM is off; only an unreachable agent is not."""
+        return super().available and self._guest() is not None
+
+    @property
+    def native_value(self) -> Any:
+        """Return the reading, None while the VM is off or it is unknown."""
+        guest = self._guest()
+        return self.entity_description.value_fn(guest) if guest else None
+
+    @property
+    def state_class(self) -> SensorStateClass | None:
+        """Custom sensors are measurements while their output is a number."""
+        if self.entity_description.parse_number and (
+            parse_number(self.native_value) is not None
+        ):
+            return SensorStateClass.MEASUREMENT
+        return super().state_class
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return the details of the reading."""
+        guest = self._guest()
+        attributes_fn = self.entity_description.attributes_fn
+        return attributes_fn(guest) if guest and attributes_fn else None
+
+
 class UnraidStorageSensor(UnraidStorageEntity, SensorEntity):
     """A measurement of a storage controller, enclosure or drive slot."""
 
@@ -5215,6 +5286,41 @@ async def async_setup_entry(
             async_add_entities(new_entities)
 
     _add_vm_sensors()
+
+    # Guest agent sensors on the VM devices - created as the agent reports
+    # them (a VM that is off keeps the entries seen last)
+    seen_vm_guest: set[str] = set()
+
+    def _add_vm_guest_sensors() -> None:
+        if not (
+            vm_devices_enabled(coordinator)
+            and coordinator.is_collector_enabled("vm")
+            and coordinator.is_vm_enabled()
+        ):
+            return
+        descriptions = vm_guest_descriptions(coordinator.data)
+        if not descriptions:
+            return
+        # Allow re-creation of entities removed from the registry (see #83)
+        async_prune_seen_names(
+            hass,
+            "sensor",
+            seen_vm_guest,
+            lambda key: f"{entry.entry_id}_{key}",
+        )
+        new_entities: list[SensorEntity] = []
+        for description in descriptions:
+            if description.key not in seen_vm_guest:
+                seen_vm_guest.add(description.key)
+                new_entities.append(UnraidVMGuestSensor(coordinator, description))
+        if new_entities:
+            async_add_entities(new_entities)
+
+    _add_vm_guest_sensors()
+
+    entry.async_on_unload(
+        coordinator.async_add_listener(callback(_add_vm_guest_sensors))
+    )
 
     entry.async_on_unload(coordinator.async_add_listener(callback(_add_vm_sensors)))
 

@@ -43,6 +43,7 @@ from .models import (
     ShareInfo,
     SystemInfo,
     UPSInfo,
+    VMGuestInfo,
     VMInfo,
     ZFSArcStats,
     ZFSDataset,
@@ -99,6 +100,13 @@ class VMListUpdateEvent(WebSocketEvent):
 
     event_type: EventType = EventType.VM_LIST_UPDATE
     data: list[VMInfo]
+
+
+class VMGuestUpdateEvent(WebSocketEvent):
+    """VM guest agent data update event."""
+
+    event_type: EventType = EventType.VM_GUEST_UPDATE
+    data: list[VMGuestInfo]
 
 
 class NetworkListUpdateEvent(WebSocketEvent):
@@ -357,6 +365,7 @@ _LIST_EVENTS = frozenset(
         EventType.DISK_LIST_UPDATE,
         EventType.CONTAINER_LIST_UPDATE,
         EventType.VM_LIST_UPDATE,
+        EventType.VM_GUEST_UPDATE,
         EventType.NETWORK_LIST_UPDATE,
         EventType.SHARE_LIST_UPDATE,
         EventType.GPU_UPDATE,
@@ -492,6 +501,10 @@ def parse_event(data: Any) -> WebSocketEvent:
         case EventType.VM_LIST_UPDATE:
             vms = [VMInfo.model_validate(v) for v in payload]
             return VMListUpdateEvent(data=vms)
+
+        case EventType.VM_GUEST_UPDATE:
+            guests = [VMGuestInfo.model_validate(g) for g in payload]
+            return VMGuestUpdateEvent(data=guests)
 
         case EventType.NETWORK_LIST_UPDATE:
             interfaces = [NetworkInterface.model_validate(n) for n in payload]

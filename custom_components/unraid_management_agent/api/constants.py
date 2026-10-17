@@ -41,6 +41,7 @@ class EventType(StrEnum):
     DISK_LIST_UPDATE = "disk_list_update"
     CONTAINER_LIST_UPDATE = "container_list_update"
     VM_LIST_UPDATE = "vm_list_update"
+    VM_GUEST_UPDATE = "vm_guest_update"
     NETWORK_LIST_UPDATE = "network_list_update"
     SHARE_LIST_UPDATE = "share_list_update"
     UPS_STATUS_UPDATE = "ups_status_update"

@@ -59,6 +59,7 @@ from .api.models import (
     UpdateStatus,
     UPSInfo,
     UserScript,
+    VMGuestInfo,
     VMInfo,
     VMSettings,
     ZFSArcStats,
@@ -148,6 +149,10 @@ class UnraidData:
     # None when network card devices are off, the agent has no /network/cards
     # endpoint, or the fetch failed
     network_cards: NICList | None = None
+    # Data read inside configured VMs through the guest agent (/vm/guest).
+    # None when VM devices are off, the agent has no such endpoint (404), or
+    # the fetch failed; readings inside an entry are None while the VM is off.
+    vm_guest: list[VMGuestInfo] | None = None
     # Alerting engine (agent /alerts/rules and /alerts/status). None when the
     # agent does not provide them (older agents: 404) or the fetch failed.
     alert_rules: list[AlertRule] | None = None
@@ -549,6 +554,14 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
             "network cards", self.client.get_network_cards, suppress_404=True
         )
 
+    async def _fetch_vm_guest(self) -> list[VMGuestInfo] | None:
+        """Fetch guest agent data, only when VMs are shown as devices."""
+        if not self.is_vm_devices_enabled():
+            return None
+        return await self._fetch(
+            "VM guest data", self.client.get_vm_guest, suppress_404=True
+        )
+
     async def _fetch_parity_history(self) -> ParityHistory | None:
         """
         Return parity history, fetching it at most once per interval.
@@ -654,6 +667,7 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
                 ),
                 self._fetch("NUT status", self.client.get_nut_info, suppress_404=True),
                 self._fetch_network_cards(),
+                self._fetch_vm_guest(),
             )
 
             # Unpack results with proper types (gather loses individual type info).
@@ -697,6 +711,7 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
             storage_topology: StorageTopology | None = results[33]
             nut: NUTInfo | None = results[34]
             network_cards: NICList | None = results[35]
+            vm_guest: list[VMGuestInfo] | None = results[36]
 
             # If the core endpoints are all unreachable, treat the whole update
             # as failed instead of returning an empty snapshot. This flips
@@ -829,6 +844,7 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
                 else None,
                 storage_topology=storage_topology,
                 network_cards=network_cards,
+                vm_guest=vm_guest,
             )
 
             # Check for issues and create repair flows
@@ -904,6 +920,10 @@ class UnraidDataUpdateCoordinator(DataUpdateCoordinator[UnraidData]):
             )
         elif event.event_type == EventType.VM_LIST_UPDATE:
             self.data.vms = event.data if isinstance(event.data, list) else [event.data]
+        elif event.event_type == EventType.VM_GUEST_UPDATE:
+            self.data.vm_guest = (
+                event.data if isinstance(event.data, list) else [event.data]
+            )
         elif event.event_type == EventType.SHARE_LIST_UPDATE:
             self.data.shares = (
                 event.data if isinstance(event.data, list) else [event.data]
